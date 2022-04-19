@@ -4,68 +4,82 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
+// TODO: Properly handle OBS websocket responses. This might be worthwhile
+// to split into a separate Go project entirely, since current OBS websocket
+// libraries mostly appear unmaintained.
+
 type OBSClient struct {
-    c *websocket.Conn
+	active bool
+	conn   *websocket.Conn
+	mx     sync.Mutex
 }
 
 func NewClient(port uint16, password string) (*OBSClient, error) {
-    // setup websocket connection
-    url := fmt.Sprintf("ws://localhost:%d", port)
+	// setup websocket connection
+	url := fmt.Sprintf("ws://localhost:%d", port)
 
-    c, _, err := websocket.DefaultDialer.Dial(url, nil)
-    if err != nil {
-        c.Close()
-        return nil, err
-    }
-    
-    client := OBSClient{
-        c,
-    }
+	c, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		c.Close()
+		return nil, err
+	}
 
-    // authenticate
-    c.WriteJSON(GetAuthRequiredRequest())
+	client := OBSClient{
+		active: true,
+		conn:   c,
+		mx:     sync.Mutex{},
+	}
 
-    res := ResGetAuthRequired{}
-    err = c.ReadJSON(&res)
-    if err != nil {
-        c.Close()
-        return nil, err
-    }
+	// authenticate
+	c.WriteJSON(GetAuthRequiredRequest())
 
-    if res.ID != "ok" {
-        return nil, fmt.Errorf(res.Error)
-    }
+	res := ResGetAuthRequired{}
+	if err = c.ReadJSON(&res); err != nil {
+		c.Close()
+		return nil, err
+	}
 
-    // if we don't need to authenticate, we can return
-    if !res.AuthRequired {
-        return &client, nil
-    }
+	if res.Status != "ok" {
+		return nil, fmt.Errorf(res.Error)
+	}
 
-    // otherwise, authenticate
-    saltpwd := password + res.Salt
-    salthash := sha256.Sum256([]byte(saltpwd))
-    secret := base64.StdEncoding.EncodeToString(salthash[:])
-    
-    sec := secret + res.Challenge
-    sechash := sha256.Sum256([]byte(sec))
-    sec_res := base64.StdEncoding.EncodeToString(sechash[:])
+	// if we don't need to authenticate, we can return
+	if !res.AuthRequired {
+		return &client, nil
+	}
 
-    c.WriteJSON(AuthenticateRequest(sec_res))
+	// otherwise, authenticate
+	saltpwd := password + res.Salt
+	salthash := sha256.Sum256([]byte(saltpwd))
+	secret := base64.StdEncoding.EncodeToString(salthash[:])
 
-    res_auth := ResAuthenticate{}
-    err = c.ReadJSON(&res_auth)
-    if err != nil {
-        c.Close()
-        return nil, err
-    }
+	sec := secret + res.Challenge
+	sechash := sha256.Sum256([]byte(sec))
+	secRes := base64.StdEncoding.EncodeToString(sechash[:])
 
-    if res_auth.ID != "ok" {
-        return nil, fmt.Errorf(res_auth.Error)
-    }
+	c.WriteJSON(AuthenticateRequest(secRes))
 
-    return &client, nil
+	resAuth := ResAuthenticate{}
+	if err = c.ReadJSON(&resAuth); err != nil {
+		c.Close()
+		return nil, err
+	}
+
+	if resAuth.Status != "ok" {
+		return nil, fmt.Errorf(resAuth.Error)
+	}
+
+	return &client, nil
+}
+
+func (c *OBSClient) SetCurrentScene(scene string) error {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
+	return c.conn.WriteJSON(SetCurrentSceneRequest(scene))
 }
