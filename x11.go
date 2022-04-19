@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -10,7 +11,7 @@ import (
 
 type Attributes struct {
 	pid   uint32
-	class string
+	class []string
 }
 
 type Key struct {
@@ -87,18 +88,25 @@ func (c *XClient) GetPropertyInt(win xproto.Window, name string) (uint32, error)
 	return binary.LittleEndian.Uint32(bytes), nil
 }
 
-func (c *XClient) GetPropertyString(win xproto.Window, name string) (string, error) {
+func (c *XClient) GetPropertyString(win xproto.Window, name string) ([]string, error) {
 	reply, err := xproto.InternAtom(c.x, false, uint16(len(name)), name).Reply()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	bytes, err := c.GetProperty(win, reply.Atom, xproto.AtomString)
+	rawprop, err := c.GetProperty(win, reply.Atom, xproto.AtomString)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(bytes), nil
+	substrings := bytes.Split(rawprop, []byte{0})
+	strings := []string{}
+
+	for _, substr := range substrings {
+		strings = append(strings, string(substr))
+	}
+
+	return strings, nil
 }
 
 func (c *XClient) GetWindowAttributes(win xproto.Window) (*Attributes, error) {
