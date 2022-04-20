@@ -94,19 +94,19 @@ func GetInstances(x *XClient) ([]Instance, error) {
 
 		// get instance version
 		verstr := strings.Split(attrs.class[0], " ")[1]
+        verstr = strings.Split(verstr, ".")[1]
 		var version McVersion
 
-		// TODO: make this more robust and allow other subversions
-		switch verstr {
-		case "1.7.10":
+        switch verstr {
+		case "7":
 			version = Version1_7
-		case "1.8.9":
+		case "8":
 			version = Version1_8
-		case "1.14.4":
+		case "14":
 			version = Version1_14
-		case "1.15.2":
+		case "15":
 			version = Version1_15
-		case "1.16.1":
+		case "16":
 			version = Version1_16
 		default:
 			fmt.Println("warn: invalid version", verstr)
