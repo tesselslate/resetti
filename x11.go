@@ -34,7 +34,7 @@ type Key struct {
 }
 
 type XClient struct {
-	x    *xgb.Conn
+	conn *xgb.Conn
 	root xproto.Window
 	keys []Key
 	ch   chan Key
@@ -50,7 +50,7 @@ func NewXClient() (*XClient, error) {
 	ch := make(chan Key)
 
 	client := XClient{
-		x:    x,
+		conn: x,
 		root: root,
 		keys: []Key{},
 		ch:   ch,
@@ -64,7 +64,7 @@ func (c *XClient) GetProperty(win xproto.Window, atom xproto.Atom, atype xproto.
 	buf := []byte{}
 
 	for {
-		reply, err := xproto.GetProperty(c.x, false, win, atom, atype, offset, 8).Reply()
+		reply, err := xproto.GetProperty(c.conn, false, win, atom, atype, offset, 8).Reply()
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +89,7 @@ func (c *XClient) GetProperty(win xproto.Window, atom xproto.Atom, atype xproto.
 }
 
 func (c *XClient) GetPropertyInt(win xproto.Window, name string) (uint32, error) {
-	reply, err := xproto.InternAtom(c.x, false, uint16(len(name)), name).Reply()
+	reply, err := xproto.InternAtom(c.conn, false, uint16(len(name)), name).Reply()
 	if err != nil {
 		return 0, err
 	}
@@ -103,7 +103,7 @@ func (c *XClient) GetPropertyInt(win xproto.Window, name string) (uint32, error)
 }
 
 func (c *XClient) GetPropertyString(win xproto.Window, name string) ([]string, error) {
-	reply, err := xproto.InternAtom(c.x, false, uint16(len(name)), name).Reply()
+	reply, err := xproto.InternAtom(c.conn, false, uint16(len(name)), name).Reply()
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (c *XClient) GetWindowAttributes(win xproto.Window) (*Attributes, error) {
 }
 
 func (c *XClient) GetWindowList(win xproto.Window) ([]xproto.Window, error) {
-	reply, err := xproto.QueryTree(c.x, win).Reply()
+	reply, err := xproto.QueryTree(c.conn, win).Reply()
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (c *XClient) GetWindowList(win xproto.Window) ([]xproto.Window, error) {
 }
 
 func (c *XClient) GrabKey(key Key) {
-	xproto.GrabKey(c.x, true, c.root, uint16(key.mod), key.code, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(c.conn, true, c.root, uint16(key.mod), key.code, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	c.keys = append(c.keys, key)
 }
 
@@ -184,17 +184,17 @@ func (c *XClient) SendKey(press bool, win xproto.Window, key xproto.Keycode, mod
 	}
 
 	if press {
-		reply := xproto.SendEventChecked(c.x, true, win, xproto.EventMaskKeyPress, string(evt.Bytes()))
+		reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyPress, string(evt.Bytes()))
 		return reply.Check()
 	} else {
 		evt := xproto.KeyReleaseEvent(evt)
-		reply := xproto.SendEventChecked(c.x, true, win, xproto.EventMaskKeyRelease, string(evt.Bytes()))
+		reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyRelease, string(evt.Bytes()))
 		return reply.Check()
 	}
 }
 
 func (c *XClient) UngrabKey(key Key) {
-	xproto.UngrabKey(c.x, key.code, c.root, uint16(key.mod))
+	xproto.UngrabKey(c.conn, key.code, c.root, uint16(key.mod))
 
 	i := 0
 	for _, v := range c.keys {

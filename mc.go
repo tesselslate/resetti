@@ -94,10 +94,10 @@ func GetInstances(x *XClient) ([]Instance, error) {
 
 		// get instance version
 		verstr := strings.Split(attrs.class[0], " ")[1]
-        verstr = strings.Split(verstr, ".")[1]
+		verstr = strings.Split(verstr, ".")[1]
 		var version McVersion
 
-        switch verstr {
+		switch verstr {
 		case "7":
 			version = Version1_7
 		case "8":
