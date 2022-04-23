@@ -14,15 +14,15 @@ import (
 // to split into a separate Go project entirely, since current OBS websocket
 // libraries mostly appear unmaintained.
 
-// OBSClient maintains an OBS websocket connection.
-type OBSClient struct {
+// Client maintains an OBS websocket connection.
+type Client struct {
 	active bool
 	conn   *websocket.Conn
 	mx     sync.Mutex
 }
 
 // NewClient creates a new OBSClient and connects to the OBS websocket server.
-func NewClient(port uint16, password string) (*OBSClient, error) {
+func NewClient(port uint16, password string) (*Client, error) {
 	// Setup websocket connection.
 	url := fmt.Sprintf("ws://localhost:%d", port)
 
@@ -32,7 +32,7 @@ func NewClient(port uint16, password string) (*OBSClient, error) {
 		return nil, err
 	}
 
-	client := OBSClient{
+	client := Client{
 		active: true,
 		conn:   c,
 		mx:     sync.Mutex{},
@@ -82,7 +82,7 @@ func NewClient(port uint16, password string) (*OBSClient, error) {
 }
 
 // SetCurrentScene sets the current scene being recorded in OBS.
-func (c *OBSClient) SetCurrentScene(scene string) error {
+func (c *Client) SetCurrentScene(scene string) error {
 	c.mx.Lock()
 	defer c.mx.Unlock()
 
