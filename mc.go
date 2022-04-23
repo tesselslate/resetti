@@ -12,10 +12,10 @@ import (
 type InstanceState int
 
 const (
-	StateUnknown InstanceState = 0
-	StateIdle
-	StateIngame
-	StateGenerating
+	StateUnknown    InstanceState = 0
+	StateIdle       InstanceState = 1
+	StateIngame     InstanceState = 2
+	StateGenerating InstanceState = 3
 )
 
 type McVersion int
@@ -30,12 +30,12 @@ const (
 )
 
 type Instance struct {
-	id      int
-	window  xproto.Window
-	dir     string
-	pid     uint32
-	state   InstanceState
-	version McVersion
+	Id      int
+	Window  xproto.Window
+	Dir     string
+	Pid     uint32
+	State   InstanceState
+	Version McVersion
 }
 
 func GetInstances(x *XClient) ([]Instance, error) {
@@ -56,6 +56,16 @@ func GetInstances(x *XClient) ([]Instance, error) {
 		if !strings.Contains(attrs.class[0], "Minecraft") {
 			continue
 		}
+
+		// TODO: This could be made better. MultiMC and its forks omit
+		// the --gameDir argument (I believe the vanilla launcher uses
+		// it, perhaps more do?)
+		//
+		// It is also possible to parse the file `/proc/$pid/environ`
+		// for INST_DIR, INST_MC_DIR, e.t.c. I would have to
+		// investigate vanilla launcher behavior to determine the best
+		// method for getting the game directory (although nobody should
+		// be using the vanilla launcher, it's pretty bad...)
 
 		// get instance path
 		argbytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", attrs.pid))
@@ -114,12 +124,12 @@ func GetInstances(x *XClient) ([]Instance, error) {
 		}
 
 		instance := Instance{
-			id:      id,
-			window:  win,
-			dir:     dir,
-			pid:     attrs.pid,
-			state:   StateUnknown,
-			version: version,
+			Id:      id,
+			Window:  win,
+			Dir:     dir,
+			Pid:     attrs.pid,
+			State:   StateUnknown,
+			Version: version,
 		}
 
 		instances = append(instances, instance)

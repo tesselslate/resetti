@@ -19,6 +19,18 @@ type Config struct {
 	DataPath string `yaml:"data_path"`
 }
 
+type McSettings struct {
+	Fov        uint8 `yaml:"fov"`
+	Render     uint8 `yaml:"rd"`
+	Sensitivty uint8 `yaml:"sensitivity"`
+}
+
+type ResetSettings struct {
+	LowRd       bool
+	Mc          *McSettings
+	SetSettings bool
+}
+
 func GetConfig() (*Config, error) {
 	// get configuration path
 	cfgDir, err := os.UserConfigDir()
