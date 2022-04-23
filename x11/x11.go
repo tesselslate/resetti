@@ -38,37 +38,47 @@ type Key struct {
 	Mod  Keymod
 }
 
-// XClient managaes an active X connection.
-type XClient struct {
-	Root xproto.Window
-
-	conn *xgb.Conn
-	keys []Key
-	ch   chan Key
+// KeyEvent represents a single key event.
+type KeyEvent struct {
+	Key   Key
+	State KeyState
 }
 
-// NewXClient creates a new XClient instance.
-func NewXClient() (*XClient, error) {
+// KeyState represents the state of a keypress.
+type KeyState int
+
+const (
+	KeyUp    KeyState = 0
+	KeyDown  KeyState = 1
+	KeyPress KeyState = 2
+)
+
+// Client managaes an active X connection.
+type Client struct {
+	Root xproto.Window
+	conn *xgb.Conn
+	keys []Key
+}
+
+// NewClient creates a new Client instance.
+func NewClient() (*Client, error) {
 	x, err := xgb.NewConn()
 	if err != nil {
 		return nil, err
 	}
 
 	root := xproto.Setup(x).DefaultScreen(x).Root
-	ch := make(chan Key)
-
-	client := XClient{
-		conn: x,
+	client := Client{
 		Root: root,
+		conn: x,
 		keys: []Key{},
-		ch:   ch,
 	}
 
 	return &client, nil
 }
 
 // getProperty returns the raw bytes of a window property, if it exists.
-func (c *XClient) getProperty(win xproto.Window, atom xproto.Atom, atype xproto.Atom) ([]byte, error) {
+func (c *Client) getProperty(win xproto.Window, atom xproto.Atom, atype xproto.Atom) ([]byte, error) {
 	var offset uint32 = 0
 	buf := []byte{}
 
@@ -98,7 +108,7 @@ func (c *XClient) getProperty(win xproto.Window, atom xproto.Atom, atype xproto.
 }
 
 // GetPropertyInt gets a window property and returns it as an integer.
-func (c *XClient) GetPropertyInt(win xproto.Window, name string) (uint32, error) {
+func (c *Client) GetPropertyInt(win xproto.Window, name string) (uint32, error) {
 	reply, err := xproto.InternAtom(c.conn, false, uint16(len(name)), name).Reply()
 	if err != nil {
 		return 0, err
@@ -113,7 +123,7 @@ func (c *XClient) GetPropertyInt(win xproto.Window, name string) (uint32, error)
 }
 
 // GetPropertyString gets a window property and returns it as a string.
-func (c *XClient) GetPropertyString(win xproto.Window, name string) ([]string, error) {
+func (c *Client) GetPropertyString(win xproto.Window, name string) ([]string, error) {
 	reply, err := xproto.InternAtom(c.conn, false, uint16(len(name)), name).Reply()
 	if err != nil {
 		return nil, err
@@ -135,7 +145,7 @@ func (c *XClient) GetPropertyString(win xproto.Window, name string) ([]string, e
 }
 
 // GetWindowAttributes returns the attributes (PID, class) of the given window.
-func (c *XClient) GetWindowAttributes(win xproto.Window) (*Attributes, error) {
+func (c *Client) GetWindowAttributes(win xproto.Window) (*Attributes, error) {
 	pid, err := c.GetPropertyInt(win, "_NET_WM_PID")
 	if err != nil {
 		return nil, err
@@ -156,7 +166,7 @@ func (c *XClient) GetWindowAttributes(win xproto.Window) (*Attributes, error) {
 
 // GetWindowList gets a list of all windows which are beneath the given window
 // by recursively searching the window tree.
-func (c *XClient) GetWindowList(win xproto.Window) ([]xproto.Window, error) {
+func (c *Client) GetWindowList(win xproto.Window) ([]xproto.Window, error) {
 	reply, err := xproto.QueryTree(c.conn, win).Reply()
 	if err != nil {
 		return nil, err
@@ -178,16 +188,32 @@ func (c *XClient) GetWindowList(win xproto.Window) ([]xproto.Window, error) {
 
 // GrabKey "grabs" a key from the X server so that all instances of that key
 // being pressed are routed to resetti.
-func (c *XClient) GrabKey(key Key) {
+func (c *Client) GrabKey(key Key) {
 	xproto.GrabKey(c.conn, true, c.Root, uint16(key.Mod), key.Code, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	c.keys = append(c.keys, key)
 }
 
 // SendKey sends a synthetic keypress to the given window.
-func (c *XClient) SendKey(press bool, win xproto.Window, key xproto.Keycode, mod Keymod, timestamp xproto.Timestamp) error {
+func (c *Client) SendKey(press KeyEvent, win xproto.Window, timestamp xproto.Timestamp) error {
+	if press.State == KeyPress {
+		newPress := press
+		newPress.State = KeyDown
+
+		if err := c.SendKey(newPress, win, timestamp); err != nil {
+			return err
+		}
+
+		newPress.State = KeyUp
+		if err := c.SendKey(newPress, win, timestamp+1); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	evt := xproto.KeyPressEvent{
 		Sequence:   0,
-		Detail:     key,
+		Detail:     press.Key.Code,
 		Time:       timestamp,
 		Root:       win,
 		Event:      win,
@@ -196,22 +222,28 @@ func (c *XClient) SendKey(press bool, win xproto.Window, key xproto.Keycode, mod
 		RootY:      0,
 		EventX:     0,
 		EventY:     0,
-		State:      uint16(mod),
+		State:      uint16(press.Key.Mod),
 		SameScreen: true,
 	}
 
-	if press {
+	// TODO: See how fast SendEventChecked is. Events *need* to be sent sequentially for
+	// resetti to work properly, but it would be nice to see if they can all be sent at
+	// once and still arrive to GLFW in the correct order.
+	switch press.State {
+	case KeyDown:
 		reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyPress, string(evt.Bytes()))
 		return reply.Check()
-	} else {
+	case KeyUp:
 		evt := xproto.KeyReleaseEvent(evt)
 		reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyRelease, string(evt.Bytes()))
 		return reply.Check()
+	default:
+		panic("invalid keypress state")
 	}
 }
 
 // UngrabKey returns a key to the X server after previously grabbing it.
-func (c *XClient) UngrabKey(key Key) {
+func (c *Client) UngrabKey(key Key) {
 	xproto.UngrabKey(c.conn, key.Code, c.Root, uint16(key.Mod))
 
 	i := 0
