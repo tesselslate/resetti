@@ -42,10 +42,12 @@ type Instance struct {
 	Pid     uint32
 	State   InstanceState
 	Version McVersion
+	HasWp   bool // Whether or not the instance has WorldPreview.
 }
 
 // GetInstances returns a list of running Minecraft instances.
-func GetInstances(x *x11.XClient) ([]Instance, error) {
+// TODO: Parse log file and set the HasWp member.
+func GetInstances(x *x11.Client) ([]Instance, error) {
 	windows, err := x.GetWindowList(x.Root)
 	if err != nil {
 		return nil, err

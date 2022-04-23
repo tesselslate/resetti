@@ -1,4 +1,4 @@
-// Package config provides the various configuration types used by resetti,
+// Package cfg provides the various configuration types used by resetti,
 // along with functionality for reading and writing resetti's configuration
 // file.
 package cfg
@@ -26,9 +26,9 @@ type Config struct {
 // McSettings contains the user's preferred Minecraft settings for
 // automatically adjusting them when resetting.
 type McSettings struct {
-	Fov        uint8 `yaml:"fov"`
-	Render     uint8 `yaml:"rd"`
-	Sensitivty uint8 `yaml:"sensitivity"`
+	Fov         uint8 `yaml:"fov"`
+	Render      uint8 `yaml:"rd"`
+	Sensitivity uint8 `yaml:"sensitivity"`
 }
 
 // ResetSettings contains the user's settings for resetting instances.
@@ -36,6 +36,8 @@ type ResetSettings struct {
 	LowRd       bool        // Whether or not to keep instances on low render distance while paused.
 	Mc          *McSettings // The Minecraft settings to use.
 	SetSettings bool        // Whether or not Minecraft settings should be reset automatically.
+	Delay       uint16      // Delay (in milliseconds) between menu switches.
+	HideMenu    bool        // Whether or not to hide the menu (F3+Esc) when resetting.
 }
 
 // GetConfig attempts to read the user's configuration file and return it

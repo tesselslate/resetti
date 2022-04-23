@@ -20,18 +20,6 @@ type Attributes struct {
 // Keymod represents modifiers held down for a keypress.
 type Keymod uint16
 
-const (
-	ModShift Keymod = 1 << 0
-	ModLock         = 1 << 1
-	ModCtrl         = 1 << 2
-	Mod1            = 1 << 3
-	Mod2            = 1 << 4
-	Mod3            = 1 << 5
-	Mod4            = 1 << 6
-	Mod5            = 1 << 7
-	ModNone         = 0
-)
-
 // Key represents the contents of a keypress.
 type Key struct {
 	Code xproto.Keycode
@@ -46,12 +34,6 @@ type KeyEvent struct {
 
 // KeyState represents the state of a keypress.
 type KeyState int
-
-const (
-	KeyUp    KeyState = 0
-	KeyDown  KeyState = 1
-	KeyPress KeyState = 2
-)
 
 // Client managaes an active X connection.
 type Client struct {
@@ -193,18 +175,47 @@ func (c *Client) GrabKey(key Key) {
 	c.keys = append(c.keys, key)
 }
 
-// SendKey sends a synthetic keypress to the given window.
-func (c *Client) SendKey(press KeyEvent, win xproto.Window, timestamp xproto.Timestamp) error {
+// Loop starts a goroutine which will listen for keypress events from
+// the X server.
+func (c *Client) Loop() (chan error, chan xproto.KeyReleaseEvent) {
+	errch := make(chan error)
+	keych := make(chan xproto.KeyReleaseEvent)
+
+	go func() {
+		for {
+			evt, err := c.conn.WaitForEvent()
+			if err == nil && evt == nil {
+				errch <- fmt.Errorf("connection died")
+				return
+			}
+
+			if err != nil {
+				errch <- err
+				continue
+			}
+
+			switch evt := evt.(type) {
+			case xproto.KeyReleaseEvent:
+				keych <- evt
+			}
+		}
+	}()
+
+	return errch, keych
+}
+
+// sendKey sends a synthetic keypress to the given window.
+func (c *Client) sendKey(press KeyEvent, win xproto.Window, timestamp xproto.Timestamp) error {
 	if press.State == KeyPress {
 		newPress := press
 		newPress.State = KeyDown
 
-		if err := c.SendKey(newPress, win, timestamp); err != nil {
+		if err := c.sendKey(newPress, win, timestamp); err != nil {
 			return err
 		}
 
 		newPress.State = KeyUp
-		if err := c.SendKey(newPress, win, timestamp+1); err != nil {
+		if err := c.sendKey(newPress, win, timestamp+1); err != nil {
 			return err
 		}
 
@@ -222,24 +233,84 @@ func (c *Client) SendKey(press KeyEvent, win xproto.Window, timestamp xproto.Tim
 		RootY:      0,
 		EventX:     0,
 		EventY:     0,
-		State:      uint16(press.Key.Mod),
 		SameScreen: true,
 	}
 
-	// TODO: See how fast SendEventChecked is. Events *need* to be sent sequentially for
-	// resetti to work properly, but it would be nice to see if they can all be sent at
-	// once and still arrive to GLFW in the correct order.
-	switch press.State {
-	case KeyDown:
-		reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyPress, string(evt.Bytes()))
-		return reply.Check()
-	case KeyUp:
-		evt := xproto.KeyReleaseEvent(evt)
-		reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyRelease, string(evt.Bytes()))
-		return reply.Check()
-	default:
-		panic("invalid keypress state")
+	bytes := evt.Bytes()
+	if press.State == KeyUp {
+		bytes[0] = 3
 	}
+
+	reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyPress, string(bytes))
+	return reply.Check()
+}
+
+// SendKeyDown sends a keydown event with the given parameters.
+func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) error {
+	evt := KeyEvent{
+		Key: Key{
+			Code: code,
+		},
+		State: KeyDown,
+	}
+
+	// We only adjust the timestamp to deal with GLFW's timestamp checks (which
+	// exist to work around buggy X behavior. What a surprise.)
+	//
+	// See:
+	// https://github.com/glfw/glfw/blob/master/src/x11_window.c#L1218
+
+	err := c.sendKey(evt, win, *timestamp)
+	*timestamp += 1
+	return err
+}
+
+// SendKeyUp sends a keyup event with the given parameters.
+func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) error {
+	evt := KeyEvent{
+		Key: Key{
+			Code: code,
+		},
+		State: KeyUp,
+	}
+
+	err := c.sendKey(evt, win, *timestamp)
+	*timestamp += 1
+	return err
+}
+
+// SendKeyPress sends a keydown and keyup event with the given parameters.
+func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) error {
+	evt := KeyEvent{
+		Key: Key{
+			Code: code,
+		},
+		State: KeyPress,
+	}
+
+	// These shenanigans warrant a bit of explaining for anyone who reads this
+	// and wonders why an extraneous backslash is sent.
+	//
+	// GLFW will reject any key-up events which have the same keycode as the very
+	// next X event and are within 20ms of that next event. We are sending key
+	// events with 1ms timestamp differences, so sending lots of keypresses
+	// quickly will trigger the check and drop inputs.
+	//
+	// Sending the backslash key event makes sure that the next event in the queue
+	// has a different keycode, thus the check will not be triggered and key events
+	// can be sent at a stupid rate.
+	//
+	// See:
+	// https://github.com/glfw/glfw/blob/master/src/x11_window.c#L1295
+
+	err := c.sendKey(evt, win, *timestamp)
+	*timestamp += 2
+
+	evt.Key.Code = KeyBackslash
+	_ = c.sendKey(evt, win, *timestamp)
+	*timestamp += 2
+
+	return err
 }
 
 // UngrabKey returns a key to the X server after previously grabbing it.
