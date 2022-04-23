@@ -1,3 +1,4 @@
+// Package obs provides a basic OBS websocket client implementation.
 package obs
 
 import (
@@ -13,14 +14,16 @@ import (
 // to split into a separate Go project entirely, since current OBS websocket
 // libraries mostly appear unmaintained.
 
+// OBSClient maintains an OBS websocket connection.
 type OBSClient struct {
 	active bool
 	conn   *websocket.Conn
 	mx     sync.Mutex
 }
 
+// NewClient creates a new OBSClient and connects to the OBS websocket server.
 func NewClient(port uint16, password string) (*OBSClient, error) {
-	// setup websocket connection
+	// Setup websocket connection.
 	url := fmt.Sprintf("ws://localhost:%d", port)
 
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
@@ -35,7 +38,7 @@ func NewClient(port uint16, password string) (*OBSClient, error) {
 		mx:     sync.Mutex{},
 	}
 
-	// authenticate
+	// Authenticate with OBS, if needed.
 	c.WriteJSON(GetAuthRequiredRequest())
 
 	res := ResGetAuthRequired{}
@@ -48,12 +51,13 @@ func NewClient(port uint16, password string) (*OBSClient, error) {
 		return nil, fmt.Errorf(res.Error)
 	}
 
-	// if we don't need to authenticate, we can return
+	// If we don't need to authenticate, we can return early.
 	if !res.AuthRequired {
 		return &client, nil
 	}
 
-	// otherwise, authenticate
+	// Otherwise, we authenticate. Refer to the OBS websocket protocol
+	// documentation for more information on how the auth flow works.
 	saltpwd := password + res.Salt
 	salthash := sha256.Sum256([]byte(saltpwd))
 	secret := base64.StdEncoding.EncodeToString(salthash[:])
@@ -77,6 +81,7 @@ func NewClient(port uint16, password string) (*OBSClient, error) {
 	return &client, nil
 }
 
+// SetCurrentScene sets the current scene being recorded in OBS.
 func (c *OBSClient) SetCurrentScene(scene string) error {
 	c.mx.Lock()
 	defer c.mx.Unlock()

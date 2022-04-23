@@ -1,10 +1,15 @@
-package main
+// Package affinity provides simple functions for querying and modifying
+// the affinity of a process. This can give a minor performance boost
+// when running multiple instances by assigning specific instances to
+// certain CPU cores.
+package affinity
 
 // #include "affinity.c"
 // #cgo LDFLAGS: -Wl,--allow-multiple-definition
 import "C"
 import "fmt"
 
+// GetProcAffinity returns the affinity/CPU mask of the given process.
 func GetProcAffinity(pid uint64) (uint64, error) {
 	res := C.get_proc_affinity(C.ulong(pid))
 
@@ -16,10 +21,12 @@ func GetProcAffinity(pid uint64) (uint64, error) {
 	return uint64(res), nil
 }
 
+// GetProcCount returns the number of available CPU cores.
 func GetProcCount() uint64 {
 	return uint64(C.get_proc_count())
 }
 
+// SetProcAffinity sets the affinity/CPU mask of the given process.
 func SetProcAffinity(pid uint64, cpus uint64) error {
 	res := C.set_proc_affinity(C.ulong(pid), C.ulong(cpus))
 

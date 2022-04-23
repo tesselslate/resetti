@@ -1,45 +1,52 @@
-package main
+// Package mc provides facilities for representing Minecraft instances
+// and their state, as well as managing and resetting them.
+package mc
 
 import (
 	"fmt"
 	"os"
+	"resetti/x11"
 	"strconv"
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
 )
 
+// InstanceState represents the state of a given instance.
 type InstanceState int
 
 const (
-	StateUnknown    InstanceState = 0
-	StateIdle       InstanceState = 1
-	StateIngame     InstanceState = 2
-	StateGenerating InstanceState = 3
+	StateUnknown    InstanceState = 0 // The instance's state is unknown; no actions have been performed yet.
+	StateIdle       InstanceState = 1 // The instance is currently idle and paused following world generation.
+	StateIngame     InstanceState = 2 // The instance is currently being played on.
+	StateGenerating InstanceState = 3 // The instance is currently generating a world.
 )
 
+// McVersion represents the Minecraft version of an instance.
 type McVersion int
 
 const (
-	VersionUnknown McVersion = 0
-	Version1_7     McVersion = 7
-	Version1_8     McVersion = 8
-	Version1_14    McVersion = 14
-	Version1_15    McVersion = 15
-	Version1_16    McVersion = 16
+	VersionUnknown McVersion = 0  // The instance's version is not supported.
+	Version1_7     McVersion = 7  // 1.7.x
+	Version1_8     McVersion = 8  // 1.8.x
+	Version1_14    McVersion = 14 // 1.14.x
+	Version1_15    McVersion = 15 // 1.15.x
+	Version1_16    McVersion = 16 // 1.16.x
 )
 
+// Instance contains the state and metadata of a Minecraft instance.
 type Instance struct {
-	Id      int
+	Id      int // The identifier/number of the instance.
 	Window  xproto.Window
-	Dir     string
+	Dir     string // The instance's `.minecraft` directory.
 	Pid     uint32
 	State   InstanceState
 	Version McVersion
 }
 
-func GetInstances(x *XClient) ([]Instance, error) {
-	windows, err := x.GetWindowList(x.root)
+// GetInstances returns a list of running Minecraft instances.
+func GetInstances(x *x11.XClient) ([]Instance, error) {
+	windows, err := x.GetWindowList(x.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -47,13 +54,13 @@ func GetInstances(x *XClient) ([]Instance, error) {
 	instances := []Instance{}
 
 	for _, win := range windows {
-		// check if window is Minecraft
+		// Check if the window is a Minecraft window.
 		attrs, err := x.GetWindowAttributes(win)
 		if err != nil {
 			continue
 		}
 
-		if !strings.Contains(attrs.class[0], "Minecraft") {
+		if !strings.Contains(attrs.Class[0], "Minecraft") {
 			continue
 		}
 
@@ -67,8 +74,8 @@ func GetInstances(x *XClient) ([]Instance, error) {
 		// method for getting the game directory (although nobody should
 		// be using the vanilla launcher, it's pretty bad...)
 
-		// get instance path
-		argbytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", attrs.pid))
+		// Get the path to the instance.
+		argbytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", attrs.Pid))
 		if err != nil {
 			continue
 		}
@@ -89,7 +96,7 @@ func GetInstances(x *XClient) ([]Instance, error) {
 			continue
 		}
 
-		// get instance number
+		// Get the instance ID/number.
 		var id int
 
 		numbytes, err := os.ReadFile(fmt.Sprintf("%s/instance_num", dir))
@@ -102,8 +109,8 @@ func GetInstances(x *XClient) ([]Instance, error) {
 			id = -1
 		}
 
-		// get instance version
-		verstr := strings.Split(attrs.class[0], " ")[1]
+		// Get the instance version.
+		verstr := strings.Split(attrs.Class[0], " ")[1]
 		verstr = strings.Split(verstr, ".")[1]
 		var version McVersion
 
@@ -127,7 +134,7 @@ func GetInstances(x *XClient) ([]Instance, error) {
 			Id:      id,
 			Window:  win,
 			Dir:     dir,
-			Pid:     attrs.pid,
+			Pid:     attrs.Pid,
 			State:   StateUnknown,
 			Version: version,
 		}

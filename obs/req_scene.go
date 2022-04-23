@@ -2,6 +2,7 @@ package obs
 
 import "github.com/google/uuid"
 
+// SetCurrentSceneRequest creates a new SetCurrentScene request.
 func SetCurrentSceneRequest(scene string) ReqSetCurrentScene {
 	return ReqSetCurrentScene{
 		ID:   uuid.New().String(),
@@ -10,20 +11,18 @@ func SetCurrentSceneRequest(scene string) ReqSetCurrentScene {
 	}
 }
 
+// ReqSetCurrentScene represents a server-bound request to set
+// the current OBS scene.
 type ReqSetCurrentScene struct {
-	// boilerplate fields
 	ID   string `json:"message-id"`
 	Type string `json:"request-type"`
-
-	// request fields
 	Name string `json:"scene-name"`
 }
 
+// ResSetCurrentScene represents a client-bound response to
+// tell if the SetCurrentScene request was successful.
 type ResSetCurrentScene struct {
-	// boilerplate fields
 	ID     string `json:"message-id"`
 	Status string `json:"status"`
 	Error  string `json:"error"`
-
-	// response fields
 }
