@@ -28,7 +28,7 @@ type Watcher struct {
 // Watch spawns a goroutine to watch the log file of an instance and
 // notify of any necessary state updates. State updates should be discarded
 // while the instance is currently being played.
-func Watch(i *mc.Instance, errch chan WatchError, updatech chan WatchUpdate) (*Watcher, error) {
+func Watch(i mc.Instance, errch chan WatchError, updatech chan WatchUpdate) (*Watcher, error) {
 	// Setup the log watcher.
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

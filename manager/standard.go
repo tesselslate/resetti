@@ -20,7 +20,7 @@ func (m *Manager) RunStandard() (chan bool, chan error) {
 
 	// Setup log watchers and zero all timestamps.
 	for j, i := range m.Instances {
-		watcher, err := Watch(&i, werr, wevt)
+		watcher, err := Watch(i, werr, wevt)
 		if err != nil {
 			errch <- err
 			return stopch, errch
@@ -59,39 +59,55 @@ func (m *Manager) RunStandard() (chan bool, chan error) {
 						errch <- err
 					}
 				case cfg.KeyReset:
-					// Calculate next instance.
-					next := (m.Active + 1) % len(m.Instances)
+					go func() {
+						// Calculate next instance.
+						next := (m.Active + 1) % len(m.Instances)
 
-					// Reset current instance.
-					time, err := m.Instances[m.Active].Reset(&m.Settings, m.x, evt.Time)
-					if err != nil {
-						errch <- err
-						return
-					}
-					m.lastTimestamps[m.Active] = time
+						// Reset current instance.
+						time, err := m.Instances[m.Active].Reset(&m.Settings, m.x, evt.Time)
+						if err != nil {
+							errch <- err
+							return
+						}
 
-					// If we have more than one instance:
-					if m.Active != next {
-						// Switch to next instance.
-						m.Active = next
+						// Lock mutex.
+						m.mx.Lock()
+						defer m.mx.Unlock()
 
-						// Update new instance's state to ingame.
-						m.Instances[m.Active].State = mc.StateIngame
+						// Update timestamp.
+						m.lastTimestamps[m.Active] = time
 
-						go func() {
-							// Focus the next instance's window.
-							err = m.x.FocusWindowSync(m.Instances[next].Window)
-							if err != nil {
-								errch <- err
-								return
-							}
+						// If we have more than one instance:
+						if m.Active != next {
+							// Switch to next instance.
+							m.Active = next
 
-							// If the next instance is ready, unpause it.
+							// Spawn an additional goroutine to allow the mutex
+							// to unlock while waiting for the window to focus.
+							go func() {
+								// Focus the next instance's window.
+								err = m.x.FocusWindowSync(m.Instances[m.Active].Window)
+								if err != nil {
+									errch <- err
+									return
+								}
+
+								// If OBS is enabled, switch scenes.
+								if m.obs != nil {
+									err := m.obs.SetCurrentScene(fmt.Sprintf("Instance %v", m.Active))
+									if err != nil {
+										errch <- err
+									}
+								}
+							}()
+
+							// Update new instance's state to ingame.
 							if m.Instances[m.Active].State == mc.StatePaused {
+								m.Instances[m.Active].State = mc.StateIngame
 								m.x.SendKeyPress(x11.KeyEscape, m.Instances[m.Active].Window, &evt.Time)
 							}
-						}()
-					}
+						}
+					}()
 				}
 			case err := <-xerr:
 				// Handle X connection error.
@@ -101,55 +117,65 @@ func (m *Manager) RunStandard() (chan bool, chan error) {
 				}
 			case evt := <-wevt:
 				// Handle watcher state update.
-				inst := m.Instances[evt.Id]
+				go func() {
+					// Lock mutex.
+					m.mx.Lock()
+					defer m.mx.Unlock()
 
-				// Discard the state update if the instance is ingame and just paused.
-				if inst.State == mc.StateIngame && evt.State == mc.StatePaused {
-					continue
-				}
+					inst := m.Instances[evt.Id]
 
-				// If the state didn't actually update, then discard the update.
-				if inst.State == evt.State {
-					continue
-				}
+					// Discard the state update if the instance is ingame and just paused.
+					if inst.State == mc.StateIngame && evt.State == mc.StatePaused {
+						return
+					}
 
-				// Get the last timestamp for the updated instance.
-				timestamp, ok := m.lastTimestamps[evt.Id]
-				if !ok {
-					errch <- fmt.Errorf("invalid watch update (no last timestamp)")
-					return
-				}
+					// If the state didn't actually update, then discard the update.
+					if inst.State == evt.State {
+						return
+					}
 
-				// Update instance state.
-				inst.State = evt.State
-				m.Instances[evt.Id] = inst
+					// Get the last timestamp for the updated instance.
+					timestamp, ok := m.lastTimestamps[evt.Id]
+					if !ok {
+						errch <- fmt.Errorf("invalid watch update (no last timestamp)")
+						return
+					}
 
-				// If HideMenu is enabled, press F3+Escape.
-				// If the instance is active and "paused", don't pause.
-				if !m.Settings.HideMenu {
-					continue
-				}
-
-				activeWin, err := m.x.GetActiveWindow()
-				if err != nil {
-					errch <- err
-				}
-
-				isPreview := inst.State == mc.StatePreview
-				isPaused := inst.State == mc.StatePaused
-				isActive := activeWin == inst.Window
-				if isActive && isPaused {
-					inst.State = mc.StateIngame
+					// Update instance state.
+					inst.State = evt.State
 					m.Instances[evt.Id] = inst
-					continue
-				}
 
-				if isPreview || isPaused {
-					time.Sleep(time.Duration(m.Settings.Delay) * time.Millisecond)
-					m.x.SendKeyDown(x11.KeyF3, inst.Window, &timestamp)
-					m.x.SendKeyPress(x11.KeyEscape, inst.Window, &timestamp)
-					m.x.SendKeyUp(x11.KeyF3, inst.Window, &timestamp)
-				}
+					// If HideMenu is enabled, press F3+Escape.
+					// If the instance is active and "paused", don't pause.
+					if !m.Settings.HideMenu {
+						return
+					}
+
+					activeWin, err := m.x.GetActiveWindow()
+					if err != nil {
+						errch <- err
+					}
+
+					isPreview := inst.State == mc.StatePreview
+					isPaused := inst.State == mc.StatePaused
+					isActive := activeWin == inst.Window
+					if isActive && isPaused {
+						inst.State = mc.StateIngame
+						m.Instances[evt.Id] = inst
+						return
+					}
+
+					if isPreview || isPaused {
+						// Spawn an additional goroutine to allow the mutex to
+						// unlock without waiting unnecessarily long.
+						go func() {
+							time.Sleep(time.Duration(m.Settings.Delay) * time.Millisecond * 2)
+							m.x.SendKeyDown(x11.KeyF3, inst.Window, &timestamp)
+							m.x.SendKeyPress(x11.KeyEscape, inst.Window, &timestamp)
+							m.x.SendKeyUp(x11.KeyF3, inst.Window, &timestamp)
+						}()
+					}
+				}()
 			case err := <-werr:
 				// Handle watcher error.
 				errch <- err.Err
@@ -162,7 +188,7 @@ func (m *Manager) RunStandard() (chan bool, chan error) {
 
 					success := false
 					for j := 0; j < 10; j++ {
-						watcher, err2 := Watch(&inst, werr, wevt)
+						watcher, err2 := Watch(inst, werr, wevt)
 						if err2 != nil {
 							time.Sleep(10 * time.Millisecond)
 							continue

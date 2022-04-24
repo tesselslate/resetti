@@ -9,6 +9,8 @@ import (
 	"resetti/mc"
 	"resetti/obs"
 	"resetti/x11"
+	"sort"
+	"sync"
 
 	"github.com/jezek/xgb/xproto"
 )
@@ -24,6 +26,8 @@ type Manager struct {
 	lastTimestamps map[int]xproto.Timestamp
 	x              *x11.Client
 	obs            *obs.Client
+
+	mx sync.Mutex
 }
 
 // NewManager creates a new Manager instance.
@@ -37,6 +41,13 @@ func NewManager(x *x11.Client, o *obs.Client, settings cfg.Config) (*Manager, er
 	if len(instances) == 0 {
 		return nil, fmt.Errorf("no instances found")
 	}
+
+	sort.Slice(instances, func(i, j int) bool {
+		a := instances[i].Id
+		b := instances[j].Id
+
+		return a < b
+	})
 
 	// Setup hotkey map.
 	keys := make(map[x11.Key]int)
@@ -56,6 +67,8 @@ func NewManager(x *x11.Client, o *obs.Client, settings cfg.Config) (*Manager, er
 		lastTimestamps: make(map[int]xproto.Timestamp),
 		x:              x,
 		obs:            o,
+
+		mx: sync.Mutex{},
 	}
 
 	return &manager, nil
