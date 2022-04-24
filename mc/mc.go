@@ -17,9 +17,10 @@ type InstanceState int
 
 const (
 	StateUnknown    InstanceState = 0 // The instance's state is unknown; no actions have been performed yet.
-	StateIdle       InstanceState = 1 // The instance is currently idle and paused following world generation.
+	StatePaused     InstanceState = 1 // The instance is currently idle and paused following world generation.
 	StateIngame     InstanceState = 2 // The instance is currently being played on.
 	StateGenerating InstanceState = 3 // The instance is currently generating a world.
+	StatePreview    InstanceState = 4 // The instance is currently on the world preview.
 )
 
 // McVersion represents the Minecraft version of an instance.
@@ -29,7 +30,6 @@ const (
 	VersionUnknown McVersion = 0  // The instance's version is not supported.
 	Version1_7     McVersion = 7  // 1.7.x
 	Version1_8     McVersion = 8  // 1.8.x
-	Version1_14    McVersion = 14 // 1.14.x
 	Version1_15    McVersion = 15 // 1.15.x
 	Version1_16    McVersion = 16 // 1.16.x
 )
@@ -42,11 +42,9 @@ type Instance struct {
 	Pid     uint32
 	State   InstanceState
 	Version McVersion
-	HasWp   bool // Whether or not the instance has WorldPreview.
 }
 
 // GetInstances returns a list of running Minecraft instances.
-// TODO: Parse log file and set the HasWp member.
 func GetInstances(x *x11.Client) ([]Instance, error) {
 	windows, err := x.GetWindowList(x.Root)
 	if err != nil {
@@ -121,14 +119,11 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 			version = Version1_7
 		case "8":
 			version = Version1_8
-		case "14":
-			version = Version1_14
 		case "15":
 			version = Version1_15
 		case "16":
 			version = Version1_16
 		default:
-			fmt.Println("warn: invalid version", verstr)
 			version = VersionUnknown
 		}
 

@@ -28,7 +28,6 @@ func NewClient(port uint16, password string) (*Client, error) {
 
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		c.Close()
 		return nil, err
 	}
 

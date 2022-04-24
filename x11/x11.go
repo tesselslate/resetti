@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
@@ -40,6 +41,7 @@ type Client struct {
 	Root xproto.Window
 	conn *xgb.Conn
 	keys []Key
+	loop bool
 }
 
 // NewClient creates a new Client instance.
@@ -54,39 +56,110 @@ func NewClient() (*Client, error) {
 		Root: root,
 		conn: x,
 		keys: []Key{},
+		loop: false,
 	}
 
 	return &client, nil
 }
 
-// getProperty returns the raw bytes of a window property, if it exists.
-func (c *Client) getProperty(win xproto.Window, atom xproto.Atom, atype xproto.Atom) ([]byte, error) {
-	var offset uint32 = 0
-	buf := []byte{}
+// FocusWindow sets the given window as the active window.
+func (c *Client) FocusWindow(win xproto.Window) error {
+	const ACTIVE_WINDOW string = "_NET_ACTIVE_WINDOW"
 
-	for {
-		reply, err := xproto.GetProperty(c.conn, false, win, atom, atype, offset, 8).Reply()
-		if err != nil {
-			return nil, err
-		}
-
-		if reply.Format == 0 {
-			return nil, fmt.Errorf("format of 0")
-		}
-
-		buf = append(buf, reply.Value...)
-		if err != nil {
-			return nil, err
-		}
-
-		if reply.BytesAfter == 0 {
-			break
-		}
-
-		offset += 8
+	// Get root window of target window.
+	geo, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
+	if err != nil {
+		return err
 	}
 
-	return buf, nil
+	// Activate target activeWin.
+	activeWin, err := xproto.InternAtom(c.conn, false, uint16(len(ACTIVE_WINDOW)), ACTIVE_WINDOW).Reply()
+	if err != nil {
+		return err
+	}
+
+	// Create X request.
+	data := make([]uint32, 5)
+	data[0] = 2
+	data[1] = 0
+
+	evt := xproto.ClientMessageEvent{
+		Format: 32,
+		Window: win,
+		Type:   activeWin.Atom,
+		Data:   xproto.ClientMessageDataUnionData32New(data),
+	}
+
+	// Send request.
+	err = xproto.SendEventChecked(
+		c.conn,
+		true,
+		geo.Root,
+		xproto.EventMaskSubstructureNotify|xproto.EventMaskSubstructureRedirect,
+		string(evt.Bytes()),
+	).Check()
+
+	return err
+}
+
+// FocusWindowSync focuses the given window and waits until it becomes
+// before returning.
+func (c *Client) FocusWindowSync(win xproto.Window) error {
+	// Focus the window.
+	err := c.FocusWindow(win)
+	if err != nil {
+		return err
+	}
+
+	// Loop 1000 times at 1 microsecond intervals until the window is focused.
+	for cycles := 0; cycles < 1000; cycles++ {
+		active, err := c.GetActiveWindow()
+		if err != nil {
+			return err
+		}
+
+		if win == active {
+			return nil
+		}
+
+		time.Sleep(1 * time.Microsecond)
+	}
+
+	return fmt.Errorf("window did not activate on time")
+}
+
+// GetActiveWindow returns the currently activated window.
+func (c *Client) GetActiveWindow() (xproto.Window, error) {
+	const ACTIVE_WINDOW string = "_NET_ACTIVE_WINDOW"
+	activeWin, err := xproto.InternAtom(c.conn, false, uint16(len(ACTIVE_WINDOW)), ACTIVE_WINDOW).Reply()
+	if err != nil {
+		return 0, err
+	}
+
+	winBytes, err := c.getProperty(c.Root, activeWin.Atom, xproto.AtomWindow)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(winBytes) == 0 {
+		return 0, fmt.Errorf("no response")
+	}
+
+	return xproto.Window(binary.LittleEndian.Uint32(winBytes)), nil
+}
+
+// getProperty returns the raw bytes of a window property, if it exists.
+func (c *Client) getProperty(win xproto.Window, atom xproto.Atom, atype xproto.Atom) ([]byte, error) {
+	reply, err := xproto.GetProperty(c.conn, false, win, atom, atype, 0, (1<<32)-1).Reply()
+	if err != nil {
+		return nil, err
+	}
+
+	if reply.Format == 0 {
+		return nil, fmt.Errorf("format of 0")
+	}
+
+	return reply.Value, nil
 }
 
 // GetPropertyInt gets a window property and returns it as an integer.
@@ -99,6 +172,10 @@ func (c *Client) GetPropertyInt(win xproto.Window, name string) (uint32, error) 
 	bytes, err := c.getProperty(win, reply.Atom, xproto.AtomCardinal)
 	if err != nil {
 		return 0, err
+	}
+
+	if len(bytes) != 4 {
+		return 0, fmt.Errorf("no response")
 	}
 
 	return binary.LittleEndian.Uint32(bytes), nil
@@ -178,11 +255,12 @@ func (c *Client) GrabKey(key Key) {
 // Loop starts a goroutine which will listen for keypress events from
 // the X server.
 func (c *Client) Loop() (chan error, chan xproto.KeyReleaseEvent) {
-	errch := make(chan error)
-	keych := make(chan xproto.KeyReleaseEvent)
+	errch := make(chan error, 16)
+	keych := make(chan xproto.KeyReleaseEvent, 16)
+	c.loop = true
 
 	go func() {
-		for {
+		for c.loop {
 			evt, err := c.conn.WaitForEvent()
 			if err == nil && evt == nil {
 				errch <- fmt.Errorf("connection died")
@@ -202,6 +280,11 @@ func (c *Client) Loop() (chan error, chan xproto.KeyReleaseEvent) {
 	}()
 
 	return errch, keych
+}
+
+// LoopStop stops any active loop goroutine.
+func (c *Client) LoopStop() {
+	c.loop = false
 }
 
 // sendKey sends a synthetic keypress to the given window.
