@@ -1,152 +1,101 @@
 package manager
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"resetti/mc"
-	"strings"
 
 	"github.com/fsnotify/fsnotify"
 )
 
+// WatchError represents an error encountered by a file watcher.
 type WatchError struct {
 	Err   error
 	Fatal bool
-	Id    int
 }
 
-type WatchUpdate struct {
-	Id    int
-	State mc.InstanceState
-}
-
+// Watcher sends notifications whenever a file is updated.
 type Watcher struct {
-	ch chan bool
+	Errors  chan WatchError
+	Updates chan fsnotify.Event
+
+	active  bool
+	file    string
+	stopch  chan bool
+	watcher *fsnotify.Watcher
 }
 
-// Watch spawns a goroutine to watch the log file of an instance and
-// notify of any necessary state updates. State updates should be discarded
-// while the instance is currently being played.
-func Watch(i mc.Instance, errch chan WatchError, updatech chan WatchUpdate) (*Watcher, error) {
-	// Setup the log watcher.
+// NewWatcher creates a new Watcher.
+func NewWatcher(file string) Watcher {
+	return Watcher{
+		Errors:  make(chan WatchError, 32),
+		Updates: make(chan fsnotify.Event, 32),
+
+		active:  false,
+		file:    file,
+		stopch:  make(chan bool, 1),
+		watcher: nil,
+	}
+}
+
+// Watch spawns a goroutine which will send a notification whenever the
+// file it is watching is updated.
+func (w *Watcher) Watch() error {
+	if w.active {
+		return fmt.Errorf("watcher is already running")
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	logfile := i.Dir + "/logs/latest.log"
+	w.watcher = watcher
 
-	err = watcher.Add(logfile)
+	err = w.watcher.Add(w.file)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// Open the log file.
-	file, err := os.Open(logfile)
-	if err != nil {
-		return nil, err
-	}
-
-	reader := bufio.NewReader(file)
-
-	// Read the log file to the end to get the current instance state.
-	state, updated := readState(reader)
-	if updated {
-		updatech <- WatchUpdate{
-			Id:    i.Id,
-			State: state,
-		}
-	}
-
-	stopch := make(chan bool, 1)
-
-	// Begin watching the log file and sending any new state updates.
+	// Begin watching the file and sending notifications.
 	go func() {
-		defer watcher.Close()
-		defer file.Close()
+		w.active = true
+		defer w.cleanup()
+
 		for {
 			select {
-			case event, ok := <-watcher.Events:
+			case event, ok := <-w.watcher.Events:
 				if !ok {
-					errch <- WatchError{
+					w.Errors <- WatchError{
 						Err:   fmt.Errorf("watcher closed"),
 						Fatal: true,
-						Id:    i.Id,
 					}
 					return
 				}
 
-				switch event.Op {
-				case fsnotify.Remove, fsnotify.Rename:
-					errch <- WatchError{
-						Err:   fmt.Errorf("log file gone"),
-						Fatal: true,
-						Id:    i.Id,
-					}
-					return
-				case fsnotify.Write:
-					state, updated = readState(reader)
-					if updated {
-						updatech <- WatchUpdate{
-							Id:    i.Id,
-							State: state,
-						}
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				errch <- WatchError{
+				w.Updates <- event
+			case err, ok := <-w.watcher.Errors:
+				w.Errors <- WatchError{
 					Err:   err,
 					Fatal: !ok,
-					Id:    i.Id,
 				}
 
 				if !ok {
 					return
 				}
-			case <-stopch:
+			case <-w.stopch:
 				return
 			}
 		}
 	}()
 
-	watch := Watcher{
-		ch: stopch,
-	}
-
-	return &watch, err
+	return err
 }
 
 // Stop stops the watcher.
 func (w *Watcher) Stop() {
-	w.ch <- true
+	w.stopch <- true
 }
 
-func readState(reader *bufio.Reader) (mc.InstanceState, bool) {
-	lastState := mc.StateUnknown
-	updated := false
-
-	for {
-		lineBytes, _, err := reader.ReadLine()
-		if err != nil {
-			break
-		}
-
-		line := string(lineBytes)
-
-		if !strings.Contains(line, "CHAT") {
-			if strings.Contains(line, "Resetting a random seed") {
-				lastState = mc.StateGenerating
-				updated = true
-			} else if strings.Contains(line, "Saving chunks for level") && strings.Contains(line, "the_end") {
-				lastState = mc.StatePaused
-				updated = true
-			} else if strings.Contains(line, "Starting Preview at") {
-				lastState = mc.StatePreview
-				updated = true
-			}
-		}
-	}
-
-	return lastState, updated
+func (w *Watcher) cleanup() {
+	w.watcher.Close()
+	w.active = false
 }

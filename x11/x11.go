@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"time"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
@@ -100,32 +99,6 @@ func (c *Client) FocusWindow(win xproto.Window) error {
 	).Check()
 
 	return err
-}
-
-// FocusWindowSync focuses the given window and waits until it becomes
-// before returning.
-func (c *Client) FocusWindowSync(win xproto.Window) error {
-	// Focus the window.
-	err := c.FocusWindow(win)
-	if err != nil {
-		return err
-	}
-
-	// Loop 1000 times at 1 microsecond intervals until the window is focused.
-	for cycles := 0; cycles < 1000; cycles++ {
-		active, err := c.GetActiveWindow()
-		if err != nil {
-			return err
-		}
-
-		if win == active {
-			return nil
-		}
-
-		time.Sleep(1 * time.Microsecond)
-	}
-
-	return fmt.Errorf("window did not activate on time")
 }
 
 // GetActiveWindow returns the currently activated window.

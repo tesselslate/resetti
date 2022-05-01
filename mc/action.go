@@ -61,13 +61,11 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 
 		return nil
 	case StatePaused:
-		// If F3+Esc, press Escape twice to reach the normal menu.
-		if settings.HideMenu {
-			x.SendKeyPress(x11.KeyEscape, i.Window, t)
-			time.Sleep(delay)
-			x.SendKeyPress(x11.KeyEscape, i.Window, t)
-			time.Sleep(delay)
-		}
+		// Press Escape twice to reach the normal menu after F3+Escape.
+		x.SendKeyPress(x11.KeyEscape, i.Window, t)
+		time.Sleep(delay)
+		x.SendKeyPress(x11.KeyEscape, i.Window, t)
+		time.Sleep(delay)
 
 		x.SendKeyDown(x11.KeyShift, i.Window, t)
 		x.SendKeyPress(x11.KeyTab, i.Window, t)
@@ -80,11 +78,9 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 		// reset action.
 		break
 	case StatePreview:
-		// If F3+Esc, press Escape to reach the normal menu.
-		if settings.HideMenu {
-			x.SendKeyPress(x11.KeyEscape, i.Window, t)
-			time.Sleep(delay * 2)
-		}
+		// Press Escape to reach the normal menu after F3+Escape.
+		x.SendKeyPress(x11.KeyEscape, i.Window, t)
+		time.Sleep(delay * 2)
 
 		x.SendKeyDown(x11.KeyShift, i.Window, t)
 		x.SendKeyPress(x11.KeyTab, i.Window, t)
@@ -95,23 +91,6 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 
 	default:
 		return fmt.Errorf("bad state; cannot reset")
-	}
-
-	// If the user has LowRd enabled, set their render distance to 5.
-	if settings.LowRd {
-		x.SendKeyDown(x11.KeyF3, i.Window, t)
-
-		x.SendKeyDown(x11.KeyShift, i.Window, t)
-		for j := 0; j < RD_PRESSES; j++ {
-			x.SendKeyPress(x11.KeyF, i.Window, t)
-		}
-		x.SendKeyUp(x11.KeyShift, i.Window, t)
-
-		for j := uint8(0); j < 3; j++ {
-			x.SendKeyPress(x11.KeyF, i.Window, t)
-		}
-
-		x.SendKeyUp(x11.KeyF3, i.Window, t)
 	}
 
 	// If the user does not want their settings reset, we can just
@@ -129,25 +108,23 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 		return nil
 	}
 
-	// Set RD if the user doesn't have LowRd enabled.
-	if !settings.LowRd {
-		// We will press F3+Shift+F 30 times to ensure that it is set to 2.
-		x.SendKeyDown(x11.KeyF3, i.Window, t)
+	// Set the user's render distance.
+	// We will press F3+Shift+F 30 times to ensure that it is set to 2.
+	x.SendKeyDown(x11.KeyF3, i.Window, t)
 
-		x.SendKeyDown(x11.KeyShift, i.Window, t)
-		for j := 0; j < RD_PRESSES; j++ {
-			x.SendKeyPress(x11.KeyF, i.Window, t)
-		}
-		x.SendKeyUp(x11.KeyShift, i.Window, t)
-
-		// Then, press F3+F the required amount of times to set it.
-		for j := uint8(0); j < settings.Mc.Render-2; j++ {
-			x.SendKeyPress(x11.KeyF, i.Window, t)
-		}
-
-		// Release F3 once done adjusting render distance.
-		x.SendKeyUp(x11.KeyF3, i.Window, t)
+	x.SendKeyDown(x11.KeyShift, i.Window, t)
+	for j := 0; j < RD_PRESSES; j++ {
+		x.SendKeyPress(x11.KeyF, i.Window, t)
 	}
+	x.SendKeyUp(x11.KeyShift, i.Window, t)
+
+	// Then, press F3+F the required amount of times to set it.
+	for j := uint8(0); j < settings.Mc.Render-2; j++ {
+		x.SendKeyPress(x11.KeyF, i.Window, t)
+	}
+
+	// Release F3 once done adjusting render distance.
+	x.SendKeyUp(x11.KeyF3, i.Window, t)
 
 	// Then, pause the game, enter the Options menu, and select FOV.
 	// Escape -> Tab x6 -> Enter -> Tab

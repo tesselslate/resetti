@@ -4,83 +4,28 @@
 package manager
 
 import (
-	"fmt"
 	"resetti/cfg"
 	"resetti/mc"
 	"resetti/obs"
 	"resetti/x11"
-	"sort"
-	"sync"
-
-	"github.com/jezek/xgb/xproto"
 )
 
-// Manager provides a reset manager implementation capable of both
-// traditional multi-instance resetting and wall-style resetting.
-type Manager struct {
-	Active         int
-	Settings       cfg.ResetSettings
-	Instances      []mc.Instance
-	Watchers       []Watcher
-	keys           map[x11.Key]int
-	lastTimestamps map[int]xproto.Timestamp
-	x              *x11.Client
-	obs            *obs.Client
+// Manager is responsible for managing multiple Workers.
+type Manager interface {
+	Start([]mc.Instance) error
+	Stop() error
 
-	mx sync.Mutex
+	GetConfig() cfg.ResetSettings
+	GetX() *x11.Client
 }
 
-// NewManager creates a new Manager instance.
-func NewManager(x *x11.Client, o *obs.Client, settings cfg.Config) (*Manager, error) {
-	// Setup instance map.
-	instances, err := mc.GetInstances(x)
-	if err != nil {
-		return nil, err
-	}
+type managerState struct {
+	conf cfg.Config
+	o    *obs.Client
+	x    *x11.Client
 
-	if len(instances) == 0 {
-		return nil, fmt.Errorf("no instances found")
-	}
+	wCmdCh []chan WorkerCommand
+	wErrCh chan WorkerError
 
-	sort.Slice(instances, func(i, j int) bool {
-		a := instances[i].Id
-		b := instances[j].Id
-
-		return a < b
-	})
-
-	// Setup hotkey map.
-	keys := make(map[x11.Key]int)
-	keys[settings.Keys.Reset] = cfg.KeyReset
-	keys[settings.Keys.Focus] = cfg.KeyFocus
-
-	for v := range keys {
-		x.GrabKey(v)
-	}
-
-	manager := Manager{
-		Active:         0,
-		Settings:       settings.Reset,
-		Instances:      instances,
-		Watchers:       make([]Watcher, len(instances)),
-		keys:           keys,
-		lastTimestamps: make(map[int]xproto.Timestamp),
-		x:              x,
-		obs:            o,
-
-		mx: sync.Mutex{},
-	}
-
-	return &manager, nil
-}
-
-// stopWatchers stops all active log watchers.
-func (m *Manager) stopWatchers() {
-	// Stop watchers.
-	for _, w := range m.Watchers {
-		w.Stop()
-	}
-
-	// Clear watchers.
-	m.Watchers = []Watcher{}
+	workers []*Worker
 }

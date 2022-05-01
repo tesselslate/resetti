@@ -43,11 +43,9 @@ type McSettings struct {
 
 // ResetSettings contains the user's settings for resetting instances.
 type ResetSettings struct {
-	LowRd       bool       `yaml:"low-rd"`       // Whether or not to keep instances on low render distance while paused.
 	Mc          McSettings `yaml:"mc"`           // The Minecraft settings to use.
 	SetSettings bool       `yaml:"set-settings"` // Whether or not Minecraft settings should be reset automatically.
 	Delay       uint16     `yaml:"delay"`        // Delay (in milliseconds) between menu switches.
-	HideMenu    bool       `yaml:"hide-menu"`    // Whether or not to hide the menu (F3+Esc) when resetting.
 }
 
 // GetConfig attempts to read the user's configuration file and return it
