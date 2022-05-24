@@ -17,14 +17,9 @@ const (
 
 // Config contains all of the configuration for resetti.
 type Config struct {
-	OBS struct {
-		Enabled  bool   `yaml:"enabled"`
-		Port     uint16 `yaml:"port"`
-		Password string `yaml:"password"` // If empty, no authentication will be used.
-	} `yaml:"obs"` // The settings to use for resetti's OBS integration.
-	Keys     ConfigKeys    `yaml:"keys"`      // The hotkeys to use for resetti's actions.
-	Reset    ResetSettings `yaml:"reset"`     // Reset settings
-	DataPath string        `yaml:"data_path"` // The path to resetti's log directory.
+	OBS   ObsSettings   `yaml:"obs"`   // The settings to use for resetti's OBS integration.
+	Keys  ConfigKeys    `yaml:"keys"`  // The hotkeys to use for resetti's actions.
+	Reset ResetSettings `yaml:"reset"` // Reset settings
 }
 
 // ConfigKeys contains the user's keybindings.
@@ -41,6 +36,13 @@ type McSettings struct {
 	Sensitivity uint8 `yaml:"sensitivity"`
 }
 
+// ObsSettings contains the user's OBS settings.
+type ObsSettings struct {
+	Enabled  bool   `yaml:"enabled"`
+	Port     uint16 `yaml:"port"`
+	Password string `yaml:"password"` // If empty, no authentication will be used.
+}
+
 // ResetSettings contains the user's settings for resetting instances.
 type ResetSettings struct {
 	Mc          McSettings `yaml:"mc"`           // The Minecraft settings to use.
@@ -48,30 +50,34 @@ type ResetSettings struct {
 	Delay       uint16     `yaml:"delay"`        // Delay (in milliseconds) between menu switches.
 }
 
+var DefaultConfig = Config{
+	ObsSettings{
+		Enabled:  false,
+		Port:     4440,
+		Password: "password",
+	},
+	ConfigKeys{},
+	ResetSettings{
+		McSettings{
+			70,
+			16,
+			100,
+		},
+		false,
+		50,
+	},
+}
+
 // GetConfig attempts to read the user's configuration file and return it
 // in its parsed form.
 func GetConfig() (*Config, error) {
-	// Get configuration path.
-	cfgDir, err := os.UserConfigDir()
+	cfgPath, err := GetPath()
 	if err != nil {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-
-		cfgDir = home + "/.config"
+		return nil, err
 	}
 
-	cfgPath := cfgDir + "/resetti.yml"
-
-	// If the configuration file does not exist, return a blank configuration.
-	// TODO: Create a better default configuration.
 	if _, err := os.Stat(cfgPath); err != nil {
-		if os.IsNotExist(err) {
-			return &Config{}, nil
-		} else {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	// If the configuration file exists, read it.
@@ -87,4 +93,20 @@ func GetConfig() (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Function GetPath returns the path to the user's configuration file.
+func GetPath() (string, error) {
+	// Get configuration path.
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+
+		cfgDir = home + "/.config"
+	}
+	cfgPath := cfgDir + "/resetti.yml"
+	return cfgPath, nil
 }

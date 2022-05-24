@@ -23,16 +23,50 @@ const (
 	StatePreview    InstanceState = 4 // The instance is currently on the world preview.
 )
 
-// McVersion represents the Minecraft version of an instance.
-type McVersion int
+func (i InstanceState) String() string {
+	// NOTE: Update switch case with the InstanceState enum.
+	switch i {
+	case StateUnknown:
+		return "???"
+	case StatePaused:
+		return "Paused"
+	case StateIngame:
+		return "Ingame"
+	case StateGenerating:
+		return "Generating"
+	case StatePreview:
+		return "Preview"
+	}
+	panic("unreachable")
+}
+
+// Version represents the Minecraft version of an instance.
+type Version int
 
 const (
-	VersionUnknown McVersion = 0  // The instance's version is not supported.
-	Version1_7     McVersion = 7  // 1.7.x
-	Version1_8     McVersion = 8  // 1.8.x
-	Version1_15    McVersion = 15 // 1.15.x
-	Version1_16    McVersion = 16 // 1.16.x
+	VersionUnknown Version = 0  // The instance's version is not supported.
+	Version1_7     Version = 7  // 1.7.x
+	Version1_8     Version = 8  // 1.8.x
+	Version1_15    Version = 15 // 1.15.x
+	Version1_16    Version = 16 // 1.16.x
 )
+
+func (v Version) String() string {
+	// NOTE: Update switch case with the Version enum.
+	switch v {
+	case VersionUnknown:
+		return "???"
+	case Version1_7:
+		return "1.7"
+	case Version1_8:
+		return "1.8"
+	case Version1_15:
+		return "1.15"
+	case Version1_16:
+		return "1.16"
+	}
+	panic("unreachable")
+}
 
 // Instance contains the state and metadata of a Minecraft instance.
 type Instance struct {
@@ -41,7 +75,7 @@ type Instance struct {
 	Dir     string // The instance's `.minecraft` directory.
 	Pid     uint32
 	State   InstanceState
-	Version McVersion
+	Version Version
 }
 
 // GetInstances returns a list of running Minecraft instances.
@@ -112,7 +146,7 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 		// Get the instance version.
 		verstr := strings.Split(attrs.Class[0], " ")[1]
 		verstr = strings.Split(verstr, ".")[1]
-		var version McVersion
+		var version Version
 
 		switch verstr {
 		case "7":

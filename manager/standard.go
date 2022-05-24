@@ -5,6 +5,7 @@ import (
 	"resetti/cfg"
 	"resetti/mc"
 	"resetti/x11"
+	"time"
 )
 
 // StandardManager provides a Manager implementation for standard
@@ -45,6 +46,9 @@ func (s *StandardManager) Start(instances []mc.Instance) error {
 		s.workers[i] = worker
 	}
 
+	s.active = true
+	go s.run()
+
 	return nil
 }
 
@@ -80,10 +84,15 @@ func (s *StandardManager) run() {
 			// Handle worker error.
 			if err.Fatal {
 				// If worker error is fatal, try to reboot the worker.
-				// TODO
+				time.Sleep(100 * time.Millisecond)
+				err := s.workers[err.Id].Run(s.wCmdCh[err.Id], s.wErrCh)
+				if err != nil {
+					// TODO report error
+					return
+				}
 			}
 
-			// TODO report
+			// TODO report error
 		case <-s.stop:
 			// Stop.
 			s.active = false

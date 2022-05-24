@@ -6,8 +6,9 @@ package manager
 import (
 	"resetti/cfg"
 	"resetti/mc"
-	"resetti/obs"
 	"resetti/x11"
+
+	obs "github.com/woofdoggo/go-obs"
 )
 
 // Manager is responsible for managing multiple Workers.

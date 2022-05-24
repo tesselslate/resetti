@@ -225,11 +225,24 @@ func (c *Client) GrabKey(key Key) {
 	c.keys = append(c.keys, key)
 }
 
+// GrabKeyboard "grabs" the entire keyboard from the X server.
+func (c *Client) GrabKeyboard() error {
+	_, err := xproto.GrabKeyboard(
+		c.conn,
+		true,
+		c.Root,
+		xproto.TimeCurrentTime,
+		xproto.GrabModeAsync,
+		xproto.GrabModeAsync,
+	).Reply()
+	return err
+}
+
 // Loop starts a goroutine which will listen for keypress events from
 // the X server.
-func (c *Client) Loop() (chan error, chan xproto.KeyReleaseEvent) {
+func (c *Client) Loop() (chan error, chan KeyEvent) {
 	errch := make(chan error, 16)
-	keych := make(chan xproto.KeyReleaseEvent, 16)
+	keych := make(chan KeyEvent, 16)
 	c.loop = true
 
 	go func() {
@@ -246,8 +259,22 @@ func (c *Client) Loop() (chan error, chan xproto.KeyReleaseEvent) {
 			}
 
 			switch evt := evt.(type) {
+			case xproto.KeyPressEvent:
+				keych <- KeyEvent{
+					Key: Key{
+						Code: evt.Detail,
+						Mod:  Keymod(evt.State),
+					},
+					State: KeyDown,
+				}
 			case xproto.KeyReleaseEvent:
-				keych <- evt
+				keych <- KeyEvent{
+					Key: Key{
+						Code: evt.Detail,
+						Mod:  Keymod(evt.State),
+					},
+					State: KeyUp,
+				}
 			}
 		}
 	}()
@@ -382,4 +409,9 @@ func (c *Client) UngrabKey(key Key) {
 	}
 
 	c.keys = c.keys[:i]
+}
+
+// UngrabKeyboard returns the keyboard to other X clients.
+func (c *Client) UngrabKeyboard() {
+	xproto.UngrabKeyboard(c.conn, xproto.TimeCurrentTime)
 }
