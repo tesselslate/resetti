@@ -131,14 +131,16 @@ func setupKey() {
 	go func() {
 		mx.Lock()
 		defer mx.Unlock()
-		select {
-		case evt := <-keych:
-			if evt.State == x11.KeyDown {
-				k := evt.Key
-				key = &k
+		for {
+			select {
+			case evt := <-keych:
+				if evt.State == x11.KeyDown {
+					k := evt.Key
+					key = &k
+				}
+			case <-stopch:
+				return
 			}
-		case <-stopch:
-			return
 		}
 	}()
 

@@ -8,7 +8,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-func (k *Key) MarshalYAML() (interface{}, error) {
+func (k Key) MarshalYAML() (interface{}, error) {
 	return fmt.Sprintf("%d;%d", k.Mod, k.Code), nil
 }
 
