@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/lipgloss v0.5.0
 	github.com/fsnotify/fsnotify v1.5.3
 	github.com/jezek/xgb v1.0.0
-	github.com/woofdoggo/go-obs v0.1.0
+	github.com/woofdoggo/go-obs v0.1.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -25,5 +25,3 @@ require (
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	golang.org/x/term v0.0.0-20210422114643-f5beecf764ed // indirect
 )
-
-replace github.com/woofdoggo/go-obs => ../go-obs
