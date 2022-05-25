@@ -8,3 +8,10 @@ type MsgStatus struct {
 	Status Status
 	Text   string
 }
+
+type Command int
+
+const (
+	CmdQuit Command = iota
+	CmdRefresh
+)

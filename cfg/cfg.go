@@ -95,7 +95,7 @@ func GetConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-// Function GetPath returns the path to the user's configuration file.
+// GetPath returns the path to the user's configuration file.
 func GetPath() (string, error) {
 	// Get configuration path.
 	cfgDir, err := os.UserConfigDir()

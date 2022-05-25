@@ -28,8 +28,9 @@ type Key struct {
 
 // KeyEvent represents a single key event.
 type KeyEvent struct {
-	Key   Key
-	State KeyState
+	Key       Key
+	State     KeyState
+	Timestamp xproto.Timestamp
 }
 
 // KeyState represents the state of a keypress.
@@ -265,7 +266,8 @@ func (c *Client) Loop() (chan error, chan KeyEvent) {
 						Code: evt.Detail,
 						Mod:  Keymod(evt.State),
 					},
-					State: KeyDown,
+					State:     KeyDown,
+					Timestamp: evt.Time,
 				}
 			case xproto.KeyReleaseEvent:
 				keych <- KeyEvent{
@@ -273,7 +275,8 @@ func (c *Client) Loop() (chan error, chan KeyEvent) {
 						Code: evt.Detail,
 						Mod:  Keymod(evt.State),
 					},
-					State: KeyUp,
+					State:     KeyUp,
+					Timestamp: evt.Time,
 				}
 			}
 		}
@@ -288,17 +291,17 @@ func (c *Client) LoopStop() {
 }
 
 // sendKey sends a synthetic keypress to the given window.
-func (c *Client) sendKey(press KeyEvent, win xproto.Window, timestamp xproto.Timestamp) error {
+func (c *Client) sendKey(press KeyEvent, win xproto.Window) error {
 	if press.State == KeyPress {
 		newPress := press
 		newPress.State = KeyDown
 
-		if err := c.sendKey(newPress, win, timestamp); err != nil {
+		if err := c.sendKey(newPress, win); err != nil {
 			return err
 		}
 
 		newPress.State = KeyUp
-		if err := c.sendKey(newPress, win, timestamp+1); err != nil {
+		if err := c.sendKey(newPress, win); err != nil {
 			return err
 		}
 
@@ -308,7 +311,7 @@ func (c *Client) sendKey(press KeyEvent, win xproto.Window, timestamp xproto.Tim
 	evt := xproto.KeyPressEvent{
 		Sequence:   0,
 		Detail:     press.Key.Code,
-		Time:       timestamp,
+		Time:       press.Timestamp,
 		Root:       win,
 		Event:      win,
 		Child:      win,
@@ -334,7 +337,8 @@ func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *
 		Key: Key{
 			Code: code,
 		},
-		State: KeyDown,
+		State:     KeyDown,
+		Timestamp: xproto.Timestamp(*timestamp),
 	}
 
 	// We only adjust the timestamp to deal with GLFW's timestamp checks (which
@@ -343,7 +347,7 @@ func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *
 	// See:
 	// https://github.com/glfw/glfw/blob/master/src/x11_window.c#L1218
 
-	err := c.sendKey(evt, win, *timestamp)
+	err := c.sendKey(evt, win)
 	*timestamp += 1
 	return err
 }
@@ -354,10 +358,11 @@ func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xp
 		Key: Key{
 			Code: code,
 		},
-		State: KeyUp,
+		State:     KeyUp,
+		Timestamp: xproto.Timestamp(*timestamp),
 	}
 
-	err := c.sendKey(evt, win, *timestamp)
+	err := c.sendKey(evt, win)
 	*timestamp += 1
 	return err
 }
@@ -368,7 +373,8 @@ func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp 
 		Key: Key{
 			Code: code,
 		},
-		State: KeyPress,
+		State:     KeyPress,
+		Timestamp: xproto.Timestamp(*timestamp),
 	}
 
 	// These shenanigans warrant a bit of explaining for anyone who reads this
@@ -386,11 +392,12 @@ func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp 
 	// See:
 	// https://github.com/glfw/glfw/blob/master/src/x11_window.c#L1295
 
-	err := c.sendKey(evt, win, *timestamp)
+	err := c.sendKey(evt, win)
 	*timestamp += 2
+	evt.Timestamp += 2
 
 	evt.Key.Code = KeyBackslash
-	_ = c.sendKey(evt, win, *timestamp)
+	_ = c.sendKey(evt, win)
 	*timestamp += 2
 
 	return err

@@ -13,7 +13,8 @@ import (
 
 // Manager is responsible for managing multiple Workers.
 type Manager interface {
-	Start([]mc.Instance) error
+	Setup(*x11.Client, *obs.Client, cfg.Config)
+	Start([]mc.Instance, chan mc.Instance) error
 	Stop() error
 
 	GetConfig() cfg.ResetSettings
@@ -27,6 +28,9 @@ type managerState struct {
 
 	wCmdCh []chan WorkerCommand
 	wErrCh chan WorkerError
+
+	mStateCh chan mc.Instance
+	mErrCh   chan error
 
 	workers []*Worker
 }

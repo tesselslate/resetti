@@ -44,10 +44,11 @@ type Worker struct {
 	watcher Watcher
 	manager Manager
 
-	mx     sync.Mutex
-	active bool
-	stop   chan bool
-	errch  chan WorkerError
+	mx      sync.Mutex
+	active  bool
+	stop    chan bool
+	errch   chan WorkerError
+	statech chan mc.Instance
 }
 
 // NewWorker creates a new Worker.
@@ -75,7 +76,7 @@ func NewWorker(mgr Manager, instance mc.Instance) (*Worker, error) {
 }
 
 // Run begins running the worker.
-func (w *Worker) Run(cmdch chan WorkerCommand, errch chan WorkerError) error {
+func (w *Worker) Run(cmdch chan WorkerCommand, errch chan WorkerError, statech chan mc.Instance) error {
 	// Check if worker is already running.
 	if w.active {
 		return fmt.Errorf("worker already running")
@@ -85,6 +86,7 @@ func (w *Worker) Run(cmdch chan WorkerCommand, errch chan WorkerError) error {
 	state, updated := w.readState()
 	if updated {
 		w.instance.State = state
+		statech <- w.instance
 	}
 
 	// Start log watcher.
@@ -95,6 +97,7 @@ func (w *Worker) Run(cmdch chan WorkerCommand, errch chan WorkerError) error {
 
 	// Start worker loop.
 	w.errch = errch
+	w.statech = statech
 	go w.loop(cmdch)
 	return nil
 }
@@ -109,6 +112,21 @@ func (w *Worker) Stop() error {
 	// Emit stop signal.
 	w.stop <- true
 	return nil
+}
+
+// GetState gets the Worker's state.
+func (w *Worker) GetState() mc.InstanceState {
+	w.mx.Lock()
+	defer w.mx.Unlock()
+	return w.instance.State
+}
+
+// SetState sets the Worker's state.
+func (w *Worker) SetState(state mc.InstanceState) {
+	w.mx.Lock()
+	defer w.mx.Unlock()
+	w.instance.State = state
+	w.statech <- w.instance
 }
 
 // cleanup cleans up the Worker's resources.
@@ -172,12 +190,18 @@ func (w *Worker) loop(cmdch chan WorkerCommand) {
 				x := w.manager.GetX()
 				x.FocusWindow(w.instance.Window)
 
+				if w.instance.State == mc.StatePaused {
+					x.SendKeyPress(x11.KeyEscape, w.instance.Window, &cmd.Time)
+				}
+
 				w.mx.Lock()
 				w.time = cmd.Time
 				w.instance.State = mc.StateIngame
+				w.statech <- w.instance
 				w.mx.Unlock()
 			case CmdReset:
 				// Reset the instance.
+				w.time = cmd.Time
 				go w.reset()
 			}
 		case <-w.stop:
@@ -226,6 +250,7 @@ func (w *Worker) reset() {
 
 	time, err := w.instance.Reset(&w.conf, w.manager.GetX(), w.time)
 	if err != nil {
+		println(err)
 		w.errch <- WorkerError{
 			Err:   err,
 			Fatal: false,
@@ -259,6 +284,7 @@ func (w *Worker) updateState() {
 	// Update the instance's state.
 	w.mx.Lock()
 	w.instance.State = state
+	w.statech <- w.instance
 	w.mx.Unlock()
 
 	// Check if any action needs to be taken.
@@ -281,6 +307,7 @@ func (w *Worker) updateState() {
 	if isActive && isPaused {
 		w.mx.Lock()
 		w.instance.State = mc.StateIngame
+		w.statech <- w.instance
 		w.mx.Unlock()
 		return
 	}

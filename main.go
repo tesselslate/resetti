@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"resetti/cfg"
+	"resetti/manager"
+	"resetti/mc"
 	"resetti/ui"
 	"resetti/x11"
 	"sync"
@@ -48,7 +50,7 @@ func run() {
 
 	// Start OBS.
 	var o *obs.Client
-	var obsErr chan error
+	var obsCh chan error
 	if conf.OBS.Enabled {
 		o = &obs.Client{}
 		url := fmt.Sprintf("localhost:%d", conf.OBS.Port)
@@ -57,21 +59,13 @@ func run() {
 			fmt.Printf("Failed to connect to OBS: %s\n", err)
 			os.Exit(1)
 		}
-		obsErr = errch
+		obsCh = errch
 		if authRequired {
 			err = o.Authenticate(conf.OBS.Password)
 			if err != nil {
 				fmt.Printf("Failed to authenticate with OBS: %s\n", err)
 				os.Exit(1)
 			}
-		}
-
-		// Check for requisite OBS scenes.
-		scenes, err := obs.NewGetSceneListRequest(o)
-		_ = scenes
-		if err != nil {
-			fmt.Printf("Failed to get OBS scenes: %s\n", err)
-			os.Exit(1)
 		}
 	}
 
@@ -82,14 +76,98 @@ func run() {
 		os.Exit(1)
 	}
 
+	// Scan for instances.
+	instances, err := mc.GetInstances(x)
+	if err != nil {
+		fmt.Printf("Failed to get instances: %s\n", err)
+		os.Exit(1)
+	}
+
+	// Start main loop.
+	notify := make(chan bool)
+	uiCh := make(chan ui.Command, 16)
+	prog := tea.NewProgram(ui.NewModel(uiCh, notify))
+	go func() {
+		<-notify
+
+		// Startup manager.
+		var mgr manager.Manager
+		stateCh := make(chan mc.Instance, 64)
+		switch os.Args[1] {
+		case "standard":
+			mgr = &manager.StandardManager{}
+		default:
+			panic("not yet implemented")
+		}
+		mgr.Setup(x, o, *conf)
+		err := mgr.Start(instances, stateCh)
+		if err != nil {
+			prog.Send(ui.MsgStatus{
+				Status: ui.StatusFail,
+				Text:   err.Error(),
+			})
+		}
+
+		prog.Send(ui.MsgStatus{
+			Status: ui.StatusOk,
+			Text:   "ready",
+		})
+		prog.Send(instances)
+		for {
+			select {
+			case uiCmd := <-uiCh:
+				switch uiCmd {
+				case ui.CmdQuit:
+					mgr.Stop()
+					return
+				case ui.CmdRefresh:
+					instances, err = mc.GetInstances(x)
+					if err != nil {
+						prog.Send(ui.MsgStatus{
+							Status: ui.StatusFail,
+							Text:   err.Error(),
+						})
+					} else {
+						mgr.Stop()
+						prog.Send(ui.MsgStatus{
+							Status: ui.StatusBusy,
+							Text:   "restarting manager...",
+						})
+						time.Sleep(1 * time.Second)
+						err = mgr.Start(instances, stateCh)
+						if err != nil {
+							prog.Send(ui.MsgStatus{
+								Status: ui.StatusFail,
+								Text:   err.Error(),
+							})
+							prog.Send([]mc.Instance{})
+						} else {
+							prog.Send(instances)
+							prog.Send(ui.MsgStatus{
+								Status: ui.StatusOk,
+								Text:   "ready",
+							})
+						}
+					}
+				}
+			case obsErr := <-obsCh:
+				// Receiving an error from the OBS client means that a
+				// fatal error occurred and it has stopped.
+				prog.Send(ui.MsgStatus{
+					Status: ui.StatusFail,
+					Text:   fmt.Sprintf("OBS: %s", obsErr.Error()),
+				})
+			case state := <-stateCh:
+				prog.Send(state)
+			}
+		}
+	}()
+
 	// Start UI.
-	prog := tea.NewProgram(ui.NewModel())
 	if err := prog.Start(); err != nil {
 		fmt.Printf("Tea error: %s\n", err)
 		os.Exit(1)
 	}
-	_ = x
-	_ = obsErr
 }
 
 func setupKey() {

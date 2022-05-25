@@ -1,11 +1,14 @@
 package manager
 
 import (
+	"errors"
 	"fmt"
 	"resetti/cfg"
 	"resetti/mc"
 	"resetti/x11"
 	"time"
+
+	obs "github.com/woofdoggo/go-obs"
 )
 
 // StandardManager provides a Manager implementation for standard
@@ -15,9 +18,17 @@ type StandardManager struct {
 
 	active bool
 	stop   chan bool
+
+	current int
 }
 
-func (s *StandardManager) Start(instances []mc.Instance) error {
+func (s *StandardManager) Setup(x *x11.Client, o *obs.Client, c cfg.Config) {
+	s.x = x
+	s.o = o
+	s.conf = c
+}
+
+func (s *StandardManager) Start(instances []mc.Instance, stateCh chan mc.Instance) error {
 	if s.active {
 		return fmt.Errorf("manager already running")
 	}
@@ -30,6 +41,9 @@ func (s *StandardManager) Start(instances []mc.Instance) error {
 		s.wCmdCh[i] = make(chan WorkerCommand, 8)
 	}
 
+	s.mErrCh = make(chan error)
+	s.mStateCh = stateCh
+
 	// setup workers
 	s.workers = make([]*Worker, len(instances))
 	for i := 0; i < len(instances); i++ {
@@ -38,7 +52,7 @@ func (s *StandardManager) Start(instances []mc.Instance) error {
 			return err
 		}
 
-		err = worker.Run(s.wCmdCh[i], s.wErrCh)
+		err = worker.Run(s.wCmdCh[i], s.wErrCh, s.mStateCh)
 		if err != nil {
 			return err
 		}
@@ -73,10 +87,16 @@ func (s *StandardManager) cleanup() {
 	for i := 0; i < len(s.workers); i++ {
 		s.workers[i].Stop()
 	}
+	s.x.UngrabKey(s.conf.Keys.Focus)
+	s.x.UngrabKey(s.conf.Keys.Reset)
+	s.x.LoopStop()
 }
 
 func (s *StandardManager) run() {
 	defer s.cleanup()
+	s.x.GrabKey(s.conf.Keys.Focus)
+	s.x.GrabKey(s.conf.Keys.Reset)
+	xerr, xevt := s.x.Loop()
 
 	for {
 		select {
@@ -85,14 +105,44 @@ func (s *StandardManager) run() {
 			if err.Fatal {
 				// If worker error is fatal, try to reboot the worker.
 				time.Sleep(100 * time.Millisecond)
-				err := s.workers[err.Id].Run(s.wCmdCh[err.Id], s.wErrCh)
+				err := s.workers[err.Id].Run(s.wCmdCh[err.Id], s.wErrCh, s.mStateCh)
 				if err != nil {
-					// TODO report error
+					s.mErrCh <- err
 					return
 				}
 			}
-
-			// TODO report error
+		case err := <-xerr:
+			if err.Error() == "connection died" {
+				s.mErrCh <- errors.New("x connection died")
+			}
+		case evt := <-xevt:
+			if evt.State == x11.KeyDown {
+				switch evt.Key {
+				case s.conf.Keys.Focus:
+					s.wCmdCh[s.current] <- WorkerCommand{
+						Op:   CmdFocus,
+						Time: evt.Timestamp,
+					}
+				case s.conf.Keys.Reset:
+					s.wCmdCh[s.current] <- WorkerCommand{
+						Op:   CmdReset,
+						Time: evt.Timestamp,
+					}
+					next := (s.current + 1) % len(s.workers)
+					if next != s.current {
+						s.current = next
+						s.x.FocusWindow(s.workers[s.current].instance.Window)
+						if s.workers[s.current].GetState() == mc.StatePaused {
+							s.x.SendKeyPress(
+								x11.KeyEscape,
+								s.workers[s.current].instance.Window,
+								&evt.Timestamp,
+							)
+						}
+						s.workers[s.current].SetState(mc.StateIngame)
+					}
+				}
+			}
 		case <-s.stop:
 			// Stop.
 			s.active = false

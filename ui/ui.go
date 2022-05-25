@@ -4,6 +4,7 @@ package ui
 import (
 	"fmt"
 	"resetti/mc"
+	"runtime"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,17 +15,22 @@ type Model struct {
 	instances  []mc.Instance
 	status     Status
 	statusText string
+	ch         chan Command
+	notify     chan bool
 }
 
-func NewModel() Model {
+func NewModel(ch chan Command, notify chan bool) Model {
 	return Model{
 		instances:  []mc.Instance{},
 		status:     StatusUnknown,
 		statusText: "",
+		ch:         ch,
+		notify:     notify,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
+	m.notify <- true
 	return nil
 }
 
@@ -33,9 +39,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
+			m.ch <- CmdQuit
 			return m, tea.Quit
 		case "ctrl+r", "f5":
-			return m, func() tea.Msg { return MsgReload }
+			m.ch <- CmdRefresh
+			return m, nil
 		}
 	case mc.Instance:
 		m.instances[msg.Id] = msg
@@ -57,10 +65,17 @@ func (m Model) View() string {
 	}
 	out += "\n"
 
-	out += cyanStyle.Render("  ID  Version  State    ")
-	out += grayStyle.Render(fmt.Sprintf("%d instances\n", len(m.instances)))
+	out += cyanStyle.Render("  ID  Version  State        ")
+	var instances string
+	if len(m.instances) == 1 {
+		instances = "instance"
+	} else {
+		instances = "instances"
+	}
+	goros := runtime.NumGoroutine()
+	out += grayStyle.Render(fmt.Sprintf("%d %s | %d goroutines\n", len(m.instances), instances, goros))
 	for _, i := range m.instances {
-		str := "  " + pad(strconv.Itoa(i.Id), 4)
+		str := "\r  " + pad(strconv.Itoa(i.Id), 4)
 		str += pad(i.Version.String(), 9)
 		str += i.State.String() + "\n"
 		out += gloss.NewStyle().Render(str)
