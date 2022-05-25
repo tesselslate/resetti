@@ -323,9 +323,6 @@ func (c *Client) sendKey(press KeyEvent, win xproto.Window) error {
 	}
 
 	bytes := evt.Bytes()
-	if press.State == KeyUp {
-		bytes[0] = 3
-	}
 
 	reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyPress, string(bytes))
 	return reply.Check()

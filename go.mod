@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/bubbletea v0.20.0
 	github.com/charmbracelet/lipgloss v0.5.0
 	github.com/fsnotify/fsnotify v1.5.3
-	github.com/jezek/xgb v1.0.0
+	github.com/jezek/xgb v1.0.1
 	github.com/woofdoggo/go-obs v0.1.1
 	gopkg.in/yaml.v2 v2.4.0
 )
