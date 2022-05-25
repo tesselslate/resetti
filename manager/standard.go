@@ -98,6 +98,11 @@ func (s *StandardManager) run() {
 	s.x.GrabKey(s.conf.Keys.Reset)
 	xerr, xevt := s.x.Loop()
 
+	for i := 0; i < len(s.workers); i++ {
+		win := s.workers[i].instance.Window
+		s.x.SetTitle(win, fmt.Sprintf("Minecraft | Instance %d", i+1))
+	}
+
 	for {
 		select {
 		case err := <-s.wErrCh:
@@ -140,6 +145,9 @@ func (s *StandardManager) run() {
 							)
 						}
 						s.workers[s.current].SetState(mc.StateIngame)
+						if s.o != nil {
+							obs.NewSetCurrentSceneRequest(s.o, fmt.Sprintf("Instance %d", s.current))
+						}
 					}
 				}
 			}

@@ -69,6 +69,11 @@ func run() {
 		}
 	}
 
+	if !conf.OBS.Enabled && os.Args[1] == "wall" {
+		fmt.Println("OBS is required for wall resetting.")
+		os.Exit(1)
+	}
+
 	// Connect to the X server.
 	x, err := x11.NewClient()
 	if err != nil {
@@ -96,8 +101,10 @@ func run() {
 		switch os.Args[1] {
 		case "standard":
 			mgr = &manager.StandardManager{}
+		case "wall":
+			mgr = &manager.WallManager{}
 		default:
-			panic("not yet implemented")
+			panic("unreachable")
 		}
 		mgr.Setup(x, o, *conf)
 		err := mgr.Start(instances, stateCh)

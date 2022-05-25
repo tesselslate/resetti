@@ -250,7 +250,6 @@ func (w *Worker) reset() {
 
 	time, err := w.instance.Reset(&w.conf, w.manager.GetX(), w.time)
 	if err != nil {
-		println(err)
 		w.errch <- WorkerError{
 			Err:   err,
 			Fatal: false,

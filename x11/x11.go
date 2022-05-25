@@ -219,6 +219,15 @@ func (c *Client) GetWindowList(win xproto.Window) ([]xproto.Window, error) {
 	return children, nil
 }
 
+// GetWindowTitle gets the title of a window.
+func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
+	res, err := c.GetPropertyString(win, "WM_NAME")
+	if err != nil {
+		return "", err
+	}
+	return res[0], nil
+}
+
 // GrabKey "grabs" a key from the X server so that all instances of that key
 // being pressed are routed to resetti.
 func (c *Client) GrabKey(key Key) {
@@ -301,6 +310,7 @@ func (c *Client) sendKey(press KeyEvent, win xproto.Window) error {
 		}
 
 		newPress.State = KeyUp
+		newPress.Timestamp += 1
 		if err := c.sendKey(newPress, win); err != nil {
 			return err
 		}
@@ -323,6 +333,9 @@ func (c *Client) sendKey(press KeyEvent, win xproto.Window) error {
 	}
 
 	bytes := evt.Bytes()
+	if press.State == KeyUp {
+		bytes[0] = 3
+	}
 
 	reply := xproto.SendEventChecked(c.conn, true, win, xproto.EventMaskKeyPress, string(bytes))
 	return reply.Check()
@@ -398,6 +411,26 @@ func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp 
 	*timestamp += 2
 
 	return err
+}
+
+// SetTitle sets the title for the given window.
+func (c *Client) SetTitle(win xproto.Window, title string) error {
+	const WM_NAME = "_NET_WM_NAME"
+	wmName, err := xproto.InternAtom(c.conn, false, uint16(len(WM_NAME)), WM_NAME).Reply()
+	if err != nil {
+		return err
+	}
+
+	return xproto.ChangePropertyChecked(
+		c.conn,
+		xproto.PropertyNewValue,
+		win,
+		wmName.Atom,
+		xproto.AtomString,
+		8,
+		uint32(len(title)),
+		[]byte(title),
+	).Check()
 }
 
 // UngrabKey returns a key to the X server after previously grabbing it.

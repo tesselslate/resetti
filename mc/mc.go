@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"resetti/x11"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -172,6 +173,10 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 
 		instances = append(instances, instance)
 	}
+
+	sort.Slice(instances, func(i, j int) bool {
+		return instances[i].Id < instances[j].Id
+	})
 
 	return instances, nil
 }

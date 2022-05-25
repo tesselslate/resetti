@@ -11,6 +11,15 @@ const (
 	KeyLeft      xproto.Keycode = 113
 	KeyRight     xproto.Keycode = 114
 	KeyTab       xproto.Keycode = 23
+	Key1         xproto.Keycode = 10
+	Key2         xproto.Keycode = 11
+	Key3         xproto.Keycode = 12
+	Key4         xproto.Keycode = 13
+	Key5         xproto.Keycode = 14
+	Key6         xproto.Keycode = 15
+	Key7         xproto.Keycode = 16
+	Key8         xproto.Keycode = 17
+	Key9         xproto.Keycode = 18
 
 	KeyShift xproto.Keycode = 50
 )
