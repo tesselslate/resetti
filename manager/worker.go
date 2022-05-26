@@ -180,7 +180,7 @@ func (w *Worker) loop(cmdch chan WorkerCommand) {
 				}
 			case fsnotify.Write:
 				// Process any state updates from the log.
-				go w.updateState()
+				w.updateState()
 			}
 		case cmd := <-cmdch:
 			// Handle command from manager.
