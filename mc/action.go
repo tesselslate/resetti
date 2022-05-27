@@ -60,7 +60,7 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 		x.SendKeyPress(x11.KeyEnter, i.Window, t)
 
 		return nil
-	case StatePaused:
+	case StateReady:
 		// Press Escape twice to reach the normal menu after F3+Escape.
 		x.SendKeyPress(x11.KeyEscape, i.Window, t)
 		time.Sleep(delay)

@@ -17,11 +17,16 @@ import (
 type InstanceState int
 
 const (
-	StateUnknown    InstanceState = 0 // The instance's state is unknown; no actions have been performed yet.
-	StatePaused     InstanceState = 1 // The instance is currently idle and paused following world generation.
-	StateIngame     InstanceState = 2 // The instance is currently being played on.
-	StateGenerating InstanceState = 3 // The instance is currently generating a world.
-	StatePreview    InstanceState = 4 // The instance is currently on the world preview.
+	// The instance's state is unknown; no actions have been performed yet.
+	StateUnknown InstanceState = iota
+	// The instance is finished generating and ready to be played on.
+	StateReady
+	// The instance is currently being played on.
+	StateIngame
+	// The instance is currently generating a world.
+	StateGenerating
+	// The instance is currently on the world preview.
+	StatePreview
 )
 
 func (i InstanceState) String() string {
@@ -29,8 +34,8 @@ func (i InstanceState) String() string {
 	switch i {
 	case StateUnknown:
 		return "???"
-	case StatePaused:
-		return "Paused"
+	case StateReady:
+		return "Ready"
 	case StateIngame:
 		return "Ingame"
 	case StateGenerating:
