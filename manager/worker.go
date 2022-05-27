@@ -2,7 +2,7 @@ package manager
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"os"
 	"resetti/cfg"
 	"resetti/mc"
@@ -13,331 +13,229 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
+	obs "github.com/woofdoggo/go-obs"
 )
 
-// WorkerCommand represents a single command issued to a worker.
-type WorkerCommand struct {
-	Op   int
-	Time xproto.Timestamp
-}
-
-const (
-	CmdFocus int = iota
-	CmdReset
+var (
+	ErrCannotReset error = errors.New("invalid state for resetting")
 )
 
-// WorkerError contains an error reported by a worker.
 type WorkerError struct {
-	Err   error
-	Fatal bool
-	Id    int
+	Err error
+	Id  int
 }
 
-// Worker manages a single instance.
+// Worker manages a single Minecraft instance and its state.
 type Worker struct {
-	conf     cfg.ResetSettings
+	sync.Mutex
+	stop   chan struct{}
+	active sync.Mutex
+
+	conf cfg.ResetSettings
+	x    *x11.Client
+	o    *obs.Client
+
+	reader   *bufio.Reader
+	watcher  *fsnotify.Watcher
 	instance mc.Instance
-	time     xproto.Timestamp
-
-	reader  *bufio.Reader
-	logfile *os.File
-	watcher Watcher
-	manager Manager
-
-	mx      sync.Mutex
-	active  bool
-	stop    chan bool
-	errch   chan WorkerError
-	statech chan mc.Instance
+	lastTime xproto.Timestamp
 }
 
-// NewWorker creates a new Worker.
-func NewWorker(mgr Manager, instance mc.Instance) (*Worker, error) {
-	// Open log file.
-	logfile := instance.Dir + "/logs/latest.log"
-	file, err := os.Open(logfile)
+// Start begins running the Worker's goroutine in the background.
+func (w *Worker) Start(errch chan<- WorkerError) error {
+	if !w.active.TryLock() {
+		return errors.New("worker already running")
+	}
+	w.stop = make(chan struct{})
+	path := w.instance.Dir + "/logs/latest.log"
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
-	}
-	reader := bufio.NewReader(file)
-
-	return &Worker{
-		conf:     mgr.GetConfig(),
-		instance: instance,
-		time:     0,
-		reader:   reader,
-		logfile:  file,
-		watcher:  NewWatcher(logfile),
-		manager:  mgr,
-		mx:       sync.Mutex{},
-		active:   false,
-		stop:     make(chan bool, 1),
-	}, nil
-}
-
-// Run begins running the worker.
-func (w *Worker) Run(cmdch chan WorkerCommand, errch chan WorkerError, statech chan mc.Instance) error {
-	// Check if worker is already running.
-	if w.active {
-		return fmt.Errorf("worker already running")
-	}
-
-	// Perform initial state update.
-	state, updated := w.readState()
-	if updated {
-		w.instance.State = state
-		statech <- w.instance
-	}
-
-	// Start log watcher.
-	w.active = true
-	if err := w.watcher.Watch(); err != nil {
 		return err
 	}
-
-	// Start worker loop.
-	w.errch = errch
-	w.statech = statech
-	go w.loop(cmdch)
-	return nil
-}
-
-// Stop stops the worker.
-func (w *Worker) Stop() error {
-	// Check if worker is already stopped.
-	if !w.active {
-		return fmt.Errorf("worker already stopped")
+	w.reader = bufio.NewReader(file)
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
 	}
-
-	// Emit stop signal.
-	w.stop <- true
+	err = watcher.Add(path)
+	if err != nil {
+		watcher.Close()
+		return err
+	}
+	state, _ := w.readState()
+	w.instance.State = state
+	go w.run(errch)
 	return nil
 }
 
-// GetState gets the Worker's state.
-func (w *Worker) GetState() mc.InstanceState {
-	w.mx.Lock()
-	defer w.mx.Unlock()
-	return w.instance.State
+// Stop stops the Worker's background goroutine. This function will hang
+// permanently if the Worker is not running.
+func (w *Worker) Stop() {
+	// Send the stop signal. Since the channel is unbuffered, it cannot be
+	// immediately received again here. Then, we wait for the Worker
+	// goroutine to send another value back to signal that it is finished.
+	w.stop <- struct{}{}
+	<-w.stop
 }
 
-// SetState sets the Worker's state.
-func (w *Worker) SetState(state mc.InstanceState) {
-	w.mx.Lock()
-	defer w.mx.Unlock()
-	w.instance.State = state
-	w.statech <- w.instance
+// SetConfig sets the Worker's configuration.
+func (w *Worker) SetConfig(c cfg.ResetSettings) {
+	w.Lock()
+	w.conf = c
+	w.Unlock()
 }
 
-// cleanup cleans up the Worker's resources.
-func (w *Worker) cleanup() {
-	w.watcher.Stop()
-	w.logfile.Close()
+// SetDeps provides certain objects required for the Worker to function. This
+// should be called once before Start and never again.
+func (w *Worker) SetDeps(i mc.Instance, x *x11.Client, o *obs.Client) {
+	w.x = x
+	w.o = o
+	w.instance = i
 }
 
-// loop runs the main Worker loop.
-func (w *Worker) loop(cmdch chan WorkerCommand) {
-	defer w.cleanup()
+// Focus waits for the Worker to finish its current task before focusing the
+// instance's window.
+func (w *Worker) Focus(time xproto.Timestamp) error {
+	w.Lock()
+	defer w.Unlock()
+	w.lastTime = time
+	err := w.x.FocusWindow(w.instance.Window)
+	if err != nil {
+		return err
+	}
+	// If the instance is ready (generated, paused), then unpause it.
+	if w.instance.State == mc.StateReady {
+		w.x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
+		w.instance.State = mc.StateIngame
+	}
+	return nil
+}
 
+// Reset waits for the Worker to finish its current task before focusing the
+// instance's window.
+func (w *Worker) Reset(time xproto.Timestamp) error {
+	w.Lock()
+	defer w.Unlock()
+	if w.instance.State == mc.StateGenerating {
+		return ErrCannotReset
+	}
+	time, err := w.instance.Reset(&w.conf, w.x, time)
+	w.lastTime = time
+	return err
+}
+
+func (w *Worker) run(errch chan<- WorkerError) {
+	defer w.watcher.Close()
+	defer w.active.Unlock()
 	for {
 		select {
-		case error := <-w.watcher.Errors:
-			// Handle error from log watcher.
-
-			// If the error is not fatal, continue.
-			if !error.Fatal {
-				continue
-			}
-
-			// If the error is fatal, try to reboot the log watcher 10
-			// times. If all attempts fail, consider the worker dead and
-			// notify the manager.
-			if err := w.rebootWatcher(); err != nil {
-				w.errch <- WorkerError{
-					Err:   err,
-					Fatal: true,
-					Id:    w.instance.Id,
+		case err, ok := <-w.watcher.Errors:
+			if !ok {
+				errch <- WorkerError{
+					err,
+					w.instance.Id,
 				}
-
-				w.active = false
 				return
 			}
-		case event := <-w.watcher.Updates:
-			// Handle event from log watcher.
-			switch event.Op {
-			case fsnotify.Remove, fsnotify.Rename:
-				// If the log file was removed or renamed, try to first reboot
-				// the watcher.
-				if err := w.rebootWatcher(); err != nil {
-					w.errch <- WorkerError{
-						Err:   err,
-						Fatal: true,
-						Id:    w.instance.Id,
-					}
-
-					w.active = false
-					return
+			// TODO(LOG): LogError("file watcher error: %s", err)
+		case evt, ok := <-w.watcher.Events:
+			if !ok {
+				errch <- WorkerError{
+					errors.New("log watcher closed"),
+					w.instance.Id,
 				}
-			case fsnotify.Write:
-				// Process any state updates from the log.
-				w.updateState()
+				return
 			}
-		case cmd := <-cmdch:
-			// Handle command from manager.
-			switch cmd.Op {
-			case CmdFocus:
-				// Focus the instance's window.
-				x := w.manager.GetX()
-				x.FocusWindow(w.instance.Window)
-
-				if w.instance.State == mc.StatePaused {
-					x.SendKeyPress(x11.KeyEscape, w.instance.Window, &cmd.Time)
+			switch evt.Op {
+			case fsnotify.Write:
+				w.updateState()
+			case fsnotify.Remove, fsnotify.Rename:
+				errch <- WorkerError{
+					errors.New("log file no longer available"),
+					w.instance.Id,
 				}
-
-				w.mx.Lock()
-				w.time = cmd.Time
-				w.instance.State = mc.StateIngame
-				w.statech <- w.instance
-				w.mx.Unlock()
-			case CmdReset:
-				// Reset the instance.
-				w.time = cmd.Time
-				go w.reset()
+				return
 			}
 		case <-w.stop:
-			// Clean up resources.
-			w.active = false
+			// Signal to the sender that this goroutine is finished.
+			w.stop <- struct{}{}
 			return
 		}
 	}
 }
 
-// readState attempts to read the latest instance state from its log file.
 func (w *Worker) readState() (mc.InstanceState, bool) {
-	lastState := mc.StateUnknown
+	state := mc.StateUnknown
 	updated := false
-
 	for {
 		lineBytes, _, err := w.reader.ReadLine()
 		if err != nil {
 			break
 		}
-
 		line := string(lineBytes)
 		if strings.Contains(line, "CHAT") {
 			continue
 		}
-
 		if strings.Contains(line, "Resetting a random seed") {
-			lastState = mc.StateGenerating
+			state = mc.StateGenerating
 			updated = true
-		} else if strings.Contains(line, "Saving chunks for level") && strings.Contains(line, "the_end") {
-			lastState = mc.StatePaused
+		}
+		if strings.Contains(line, "logged in with entity id") {
+			state = mc.StateReady
 			updated = true
-		} else if strings.Contains(line, "Starting Preview at") {
-			lastState = mc.StatePreview
+		}
+		if strings.Contains(line, "Starting Preview at") {
+			state = mc.StatePreview
+			updated = true
+		}
+		if strings.Contains(line, "Leaving world generation") {
+			state = mc.StateGenerating
 			updated = true
 		}
 	}
-
-	return lastState, updated
+	return state, updated
 }
 
-// reset resets the Worker's instance.
-func (w *Worker) reset() {
-	w.mx.Lock()
-	defer w.mx.Unlock()
-
-	time, err := w.instance.Reset(&w.conf, w.manager.GetX(), w.time)
-	if err != nil {
-		w.errch <- WorkerError{
-			Err:   err,
-			Fatal: false,
-			Id:    w.instance.Id,
-		}
-		return
-	}
-
-	w.time = time
-}
-
-// updateState reads the instance's log and performs any necessary actions
-// when the instance's state is updated.
 func (w *Worker) updateState() {
-	x := w.manager.GetX()
-
 	state, updated := w.readState()
+	// Preliminary checks:
+	// If no state updates were logged, then no action is needed.
 	if !updated {
 		return
 	}
-
-	// Check if the state update should be discarded.
+	// If the state did not change, then no action is needed.
 	if w.instance.State == state {
 		return
 	}
-
-	if w.instance.State == mc.StateIngame && state == mc.StatePaused {
+	// If the instance is already being played on, it cannot switch
+	// directly to the Ready state. This condition should only be met
+	// when playing on a LAN world.
+	if w.instance.State == mc.StateIngame && state == mc.StateReady {
 		return
 	}
-
-	// Update the instance's state.
-	w.mx.Lock()
-	w.instance.State = state
-	w.statech <- w.instance
-	w.mx.Unlock()
-
-	// Check if any action needs to be taken.
-	activeWin, err := x.GetActiveWindow()
+	w.Lock()
+	defer w.Unlock()
+	activeWin, err := w.x.GetActiveWindow()
 	if err != nil {
-		w.errch <- WorkerError{
-			Err:   err,
-			Fatal: false,
-			Id:    w.instance.Id,
-		}
+		// TODO(LOG): LogError("failed to get active window: %s", err)
 		return
 	}
-
 	isPreview := w.instance.State == mc.StatePreview
-	isPaused := w.instance.State == mc.StatePaused
+	isReady := w.instance.State == mc.StateReady
 	isActive := activeWin == w.instance.Window
-
-	// If the instance is both active and paused, then the
-	// user is currently playing.
-	if isActive && isPaused {
-		w.mx.Lock()
+	// If the window is currently focused and enters the Ready state, then the
+	// player wants to play it and it can be switched to Ingame.
+	if isActive && isReady {
 		w.instance.State = mc.StateIngame
-		w.statech <- w.instance
-		w.mx.Unlock()
 		return
 	}
-
-	// If the instance is entering WorldPreview or the world itself,
-	// then press F3+Escape to get the transparent pause menu.
-	if isPreview || isPaused {
+	// If the instance is not currently focused and it has either switched
+	// to the WorldPreview menu or finished generating, press F3+Esc
+	// to get the transparent pause menu.
+	if !isActive && (isPreview || isReady) {
 		time.Sleep(time.Duration(w.conf.Delay) * time.Millisecond)
-		x.SendKeyDown(x11.KeyF3, w.instance.Window, &w.time)
-		x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.time)
-		x.SendKeyUp(x11.KeyF3, w.instance.Window, &w.time)
+		w.x.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
+		w.x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
+		w.x.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
 	}
-}
-
-// rebootWatcher attempts to reboot the log watcher upon failure. It will try
-// a total of 10 times with increasing delay between each attempt.
-func (w *Worker) rebootWatcher() error {
-	// Try to reboot the log watcher 10 times with exponential backoff.
-	delay := time.Duration(1 * time.Millisecond)
-	for j := 0; j < 10; j++ {
-		err := w.watcher.Watch()
-		if err != nil {
-			time.Sleep(delay)
-			delay *= 2
-			continue
-		}
-
-		// If the reboot attempt succeeds, return.
-		return nil
-	}
-
-	// If all 10 attempts fail, return an error.
-	return fmt.Errorf("could not restart watcher")
 }

@@ -6,154 +6,157 @@ import (
 	"resetti/cfg"
 	"resetti/mc"
 	"resetti/x11"
+	"sync"
 	"time"
 
 	obs "github.com/woofdoggo/go-obs"
 )
 
-// StandardManager provides a Manager implementation for standard
-// single/multi instance resetting.
+// StandardManager provides a Manager implementation for resetting one or more
+// instances by cycling between each sequentially.
 type StandardManager struct {
-	managerState
+	sync.Mutex
+	stop   chan struct{}
+	active sync.Mutex
 
-	active bool
-	stop   chan bool
+	workers      []*Worker
+	workerErrors chan WorkerError
+	current      int
 
-	current int
+	Errors    chan<- error
+	keyEvents chan x11.KeyEvent
+	conf      cfg.Config
+	x         *x11.Client
+	o         *obs.Client
 }
 
-func (s *StandardManager) Setup(x *x11.Client, o *obs.Client, c cfg.Config) {
-	s.x = x
-	s.o = o
-	s.conf = c
-}
-
-func (s *StandardManager) Start(instances []mc.Instance, stateCh chan mc.Instance) error {
-	if s.active {
-		return fmt.Errorf("manager already running")
+func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error {
+	if len(instances) == 0 {
+		return errors.New("no instances")
 	}
-
-	// setup channels
-	s.stop = make(chan bool, 1)
-	s.wErrCh = make(chan WorkerError, 32)
-	s.wCmdCh = make([]chan WorkerCommand, len(instances))
-	for i := 0; i < len(instances); i++ {
-		s.wCmdCh[i] = make(chan WorkerCommand, 8)
+	if !m.active.TryLock() {
+		return errors.New("already running")
 	}
-
-	s.mErrCh = make(chan error)
-	s.mStateCh = stateCh
-
-	// setup workers
-	s.workers = make([]*Worker, len(instances))
-	for i := 0; i < len(instances); i++ {
-		worker, err := NewWorker(s, instances[i])
-		if err != nil {
-			return err
-		}
-
-		err = worker.Run(s.wCmdCh[i], s.wErrCh, s.mStateCh)
-		if err != nil {
-			return err
-		}
-
-		s.workers[i] = worker
+	m.stop = make(chan struct{})
+	m.workerErrors = make(chan WorkerError, len(instances))
+	m.Errors = errch
+	if err := m.createWorkers(instances); err != nil {
+		return err
 	}
-
-	s.active = true
-	go s.run()
-
+	go m.run()
 	return nil
 }
 
-func (s *StandardManager) Stop() error {
-	if !s.active {
-		return fmt.Errorf("manager already stopped")
-	}
+func (m *StandardManager) Stop() {
+	m.stop <- struct{}{}
+	<-m.stop
+}
 
-	s.stop <- true
+func (m *StandardManager) Restart(instances []mc.Instance) error {
+	return m.createWorkers(instances)
+}
+
+func (m *StandardManager) SetConfig(conf cfg.Config) {
+	m.Lock()
+	m.ungrabKeys()
+	m.conf = conf
+	m.grabKeys()
+	m.Unlock()
+}
+
+func (m *StandardManager) SetDeps(x *x11.Client, xkeys chan x11.KeyEvent, o *obs.Client) {
+	m.x = x
+	m.keyEvents = xkeys
+	m.o = o
+}
+
+func (m *StandardManager) createWorkers(instances []mc.Instance) error {
+	m.stopWorkers()
+	m.workers = make([]*Worker, 0)
+	for _, i := range instances {
+		w := &Worker{}
+		w.SetDeps(i, m.x, m.o)
+		err := w.Start(m.workerErrors)
+		if err != nil {
+			m.stopWorkers()
+			return err
+		}
+		m.workers = append(m.workers, w)
+	}
 	return nil
 }
 
-func (s *StandardManager) GetConfig() cfg.ResetSettings {
-	return s.conf.Reset
-}
-
-func (s *StandardManager) GetX() *x11.Client {
-	return s.x
-}
-
-func (s *StandardManager) cleanup() {
-	for i := 0; i < len(s.workers); i++ {
-		s.workers[i].Stop()
+func (m *StandardManager) stopWorkers() {
+	wg := sync.WaitGroup{}
+	for i := 0; i < len(m.workers); i++ {
+		wg.Add(1)
+		go func(i int) {
+			m.workers[i].Stop()
+			wg.Done()
+		}(i)
 	}
-	s.x.UngrabKey(s.conf.Keys.Focus)
-	s.x.UngrabKey(s.conf.Keys.Reset)
-	s.x.LoopStop()
+	wg.Wait()
 }
 
-func (s *StandardManager) run() {
-	defer s.cleanup()
-	s.x.GrabKey(s.conf.Keys.Focus)
-	s.x.GrabKey(s.conf.Keys.Reset)
-	xerr, xevt := s.x.Loop()
+func (m *StandardManager) grabKeys() {
+	m.x.GrabKey(m.conf.Keys.Focus)
+	m.x.GrabKey(m.conf.Keys.Reset)
+}
 
-	for i := 0; i < len(s.workers); i++ {
-		win := s.workers[i].instance.Window
-		s.x.SetTitle(win, fmt.Sprintf("Minecraft | Instance %d", i+1))
-	}
+func (m *StandardManager) ungrabKeys() {
+	m.x.UngrabKey(m.conf.Keys.Focus)
+	m.x.UngrabKey(m.conf.Keys.Reset)
+}
 
+func (m *StandardManager) run() {
+	m.grabKeys()
+	defer m.stopWorkers()
+	defer m.ungrabKeys()
+	defer m.active.Unlock()
 	for {
 		select {
-		case err := <-s.wErrCh:
-			// Handle worker error.
-			if err.Fatal {
-				// If worker error is fatal, try to reboot the worker.
-				time.Sleep(100 * time.Millisecond)
-				err := s.workers[err.Id].Run(s.wCmdCh[err.Id], s.wErrCh, s.mStateCh)
-				if err != nil {
-					s.mErrCh <- err
-					return
-				}
+		case werr := <-m.workerErrors:
+			// Wait a moment and then attempt to reboot the dead worker.
+			time.Sleep(10 * time.Millisecond)
+			err := m.workers[werr.Id].Start(m.workerErrors)
+			if err != nil {
+				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
+				return
 			}
-		case err := <-xerr:
-			if err.Error() == "connection died" {
-				s.mErrCh <- errors.New("x connection died")
-			}
-		case evt := <-xevt:
+		case evt := <-m.keyEvents:
 			if evt.State == x11.KeyDown {
 				switch evt.Key {
-				case s.conf.Keys.Focus:
-					s.wCmdCh[s.current] <- WorkerCommand{
-						Op:   CmdFocus,
-						Time: evt.Timestamp,
+				case m.conf.Keys.Focus:
+					m.Lock()
+					err := m.workers[m.current].Focus(evt.Timestamp)
+					if err != nil {
+						// TODO(LOG): LogError("failed to focus worker %d: %s", m.current, err)
+						m.Unlock()
+						continue
 					}
-				case s.conf.Keys.Reset:
-					s.wCmdCh[s.current] <- WorkerCommand{
-						Op:   CmdReset,
-						Time: evt.Timestamp,
+				case m.conf.Keys.Reset:
+					m.Lock()
+					err := m.workers[m.current].Reset(evt.Timestamp)
+					if err != nil {
+						// TODO(LOG): LogError("failed to reset worker %d: %s", m.current, err)
+						m.Unlock()
+						continue
 					}
-					next := (s.current + 1) % len(s.workers)
-					if next != s.current {
-						s.current = next
-						s.x.FocusWindow(s.workers[s.current].instance.Window)
-						if s.workers[s.current].GetState() == mc.StatePaused {
-							s.x.SendKeyPress(
-								x11.KeyEscape,
-								s.workers[s.current].instance.Window,
-								&evt.Timestamp,
-							)
-						}
-						s.workers[s.current].SetState(mc.StateIngame)
-						if s.o != nil {
-							obs.NewSetCurrentSceneRequest(s.o, fmt.Sprintf("Instance %d", s.current))
+					m.current = (m.current + 1) % len(m.workers)
+					m.Unlock()
+					if m.o != nil {
+						_, err := obs.NewSetCurrentSceneRequest(
+							m.o,
+							fmt.Sprintf("Instance %d", m.current),
+						)
+						if err != nil {
+							// TODO(LOG): LogError("failed to switch OBS scene: %s", err)
 						}
 					}
 				}
 			}
-		case <-s.stop:
-			// Stop.
-			s.active = false
+		case <-m.stop:
+			m.stop <- struct{}{}
 			return
 		}
 	}
