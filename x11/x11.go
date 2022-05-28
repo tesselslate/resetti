@@ -42,6 +42,9 @@ type Client struct {
 	conn *xgb.Conn
 	keys []Key
 	loop bool
+
+	Errors chan error
+	Keys   chan KeyEvent
 }
 
 // NewClient creates a new Client instance.
@@ -250,27 +253,27 @@ func (c *Client) GrabKeyboard() error {
 
 // Loop starts a goroutine which will listen for keypress events from
 // the X server.
-func (c *Client) Loop() (chan error, chan KeyEvent) {
-	errch := make(chan error, 16)
-	keych := make(chan KeyEvent, 16)
+func (c *Client) Loop() {
+	c.Errors = make(chan error, 16)
+	c.Keys = make(chan KeyEvent, 16)
 	c.loop = true
 
 	go func() {
 		for c.loop {
 			evt, err := c.conn.WaitForEvent()
 			if err == nil && evt == nil {
-				errch <- fmt.Errorf("connection died")
+				c.Errors <- fmt.Errorf("connection died")
 				return
 			}
 
 			if err != nil {
-				errch <- err
+				c.Errors <- err
 				continue
 			}
 
 			switch evt := evt.(type) {
 			case xproto.KeyPressEvent:
-				keych <- KeyEvent{
+				c.Keys <- KeyEvent{
 					Key: Key{
 						Code: evt.Detail,
 						Mod:  Keymod(evt.State),
@@ -279,7 +282,7 @@ func (c *Client) Loop() (chan error, chan KeyEvent) {
 					Timestamp: evt.Time,
 				}
 			case xproto.KeyReleaseEvent:
-				keych <- KeyEvent{
+				c.Keys <- KeyEvent{
 					Key: Key{
 						Code: evt.Detail,
 						Mod:  Keymod(evt.State),
@@ -290,8 +293,6 @@ func (c *Client) Loop() (chan error, chan KeyEvent) {
 			}
 		}
 	}()
-
-	return errch, keych
 }
 
 // LoopStop stops any active loop goroutine.

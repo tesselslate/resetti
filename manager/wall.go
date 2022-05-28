@@ -24,11 +24,10 @@ type WallManager struct {
 	onWall       bool
 	wallGrab     bool
 
-	Errors    chan error
-	keyEvents chan x11.KeyEvent
-	conf      cfg.Config
-	x         *x11.Client
-	o         *obs.Client
+	Errors chan error
+	conf   cfg.Config
+	x      *x11.Client
+	o      *obs.Client
 }
 
 func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
@@ -61,9 +60,8 @@ func (m *WallManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }
 
-func (m *WallManager) SetDeps(x *x11.Client, xkeys chan x11.KeyEvent, o *obs.Client) {
+func (m *WallManager) SetDeps(x *x11.Client, o *obs.Client) {
 	m.x = x
-	m.keyEvents = xkeys
 	m.o = o
 }
 
@@ -106,7 +104,7 @@ func (m *WallManager) ungrabKeys() {
 }
 
 func (m *WallManager) grabWallKeys() {
-	if m.wallGrab || m.conf.Wall.UseMouseWall {
+	if m.wallGrab {
 		return
 	}
 	for i := 0; i < len(m.workers); i++ {
@@ -123,7 +121,7 @@ func (m *WallManager) grabWallKeys() {
 }
 
 func (m *WallManager) ungrabWallKeys() {
-	if !m.wallGrab || m.conf.Wall.UseMouseWall {
+	if !m.wallGrab {
 		return
 	}
 	for i := 0; i < len(m.workers); i++ {
@@ -179,7 +177,7 @@ func (m *WallManager) run() {
 				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
 				return
 			}
-		case evt := <-m.keyEvents:
+		case evt := <-m.x.Keys:
 			if evt.State == x11.KeyDown {
 				switch evt.Key {
 				case m.conf.Keys.Focus:
@@ -214,6 +212,9 @@ func (m *WallManager) run() {
 						}()
 					}
 				default:
+					if evt.Key.Code < 10 || evt.Key.Code > 19 {
+						continue
+					}
 					id := int(evt.Key.Code - 10)
 					switch evt.Key.Mod {
 					case m.conf.Wall.Play:

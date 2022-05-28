@@ -22,11 +22,10 @@ type StandardManager struct {
 	workerErrors chan WorkerError
 	current      int
 
-	Errors    chan error
-	keyEvents chan x11.KeyEvent
-	conf      cfg.Config
-	x         *x11.Client
-	o         *obs.Client
+	Errors chan error
+	conf   cfg.Config
+	x      *x11.Client
+	o      *obs.Client
 }
 
 func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error {
@@ -59,9 +58,8 @@ func (m *StandardManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }
 
-func (m *StandardManager) SetDeps(x *x11.Client, xkeys chan x11.KeyEvent, o *obs.Client) {
+func (m *StandardManager) SetDeps(x *x11.Client, o *obs.Client) {
 	m.x = x
-	m.keyEvents = xkeys
 	m.o = o
 }
 
@@ -118,7 +116,7 @@ func (m *StandardManager) run() {
 				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
 				return
 			}
-		case evt := <-m.keyEvents:
+		case evt := <-m.x.Keys:
 			if evt.State == x11.KeyDown {
 				switch evt.Key {
 				case m.conf.Keys.Focus:

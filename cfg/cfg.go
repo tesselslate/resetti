@@ -31,10 +31,9 @@ type ConfigKeys struct {
 
 // WallSettings contains the user's wall settings, if applicable.
 type WallSettings struct {
-	UseMouseWall bool       `yaml:"mouse-on-wall"`
-	Reset        x11.Keymod `yaml:"mod-reset"`
-	ResetOthers  x11.Keymod `yaml:"mod-reset-others"`
-	Play         x11.Keymod `yaml:"mod-play"`
+	Reset       x11.Keymod `yaml:"mod-reset"`
+	ResetOthers x11.Keymod `yaml:"mod-reset-others"`
+	Play        x11.Keymod `yaml:"mod-play"`
 }
 
 // McSettings contains the user's preferred Minecraft settings for

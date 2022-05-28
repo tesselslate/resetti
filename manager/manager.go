@@ -12,7 +12,7 @@ import (
 
 type Manager interface {
 	SetConfig(cfg.Config)
-	SetDeps(*x11.Client, chan x11.KeyEvent, *obs.Client)
+	SetDeps(*x11.Client, *obs.Client)
 
 	Restart([]mc.Instance) error
 	Start([]mc.Instance, chan error) error
