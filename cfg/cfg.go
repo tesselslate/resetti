@@ -19,6 +19,7 @@ const (
 type Config struct {
 	OBS   ObsSettings   `yaml:"obs"`   // The settings to use for resetti's OBS integration.
 	Keys  ConfigKeys    `yaml:"keys"`  // The hotkeys to use for resetti's actions.
+	Wall  WallSettings  `yaml:"wall"`  // The user's wall settings.
 	Reset ResetSettings `yaml:"reset"` // Reset settings
 }
 
@@ -26,6 +27,14 @@ type Config struct {
 type ConfigKeys struct {
 	Reset x11.Key `yaml:"reset"`
 	Focus x11.Key `yaml:"focus"`
+}
+
+// WallSettings contains the user's wall settings, if applicable.
+type WallSettings struct {
+	UseMouseWall bool       `yaml:"mouse-on-wall"`
+	Reset        x11.Keymod `yaml:"mod-reset"`
+	ResetOthers  x11.Keymod `yaml:"mod-reset-others"`
+	Play         x11.Keymod `yaml:"mod-play"`
 }
 
 // McSettings contains the user's preferred Minecraft settings for
@@ -57,6 +66,7 @@ var DefaultConfig = Config{
 		Password: "password",
 	},
 	ConfigKeys{},
+	WallSettings{},
 	ResetSettings{
 		McSettings{
 			70,

@@ -15,7 +15,6 @@ import (
 // StandardManager provides a Manager implementation for resetting one or more
 // instances by cycling between each sequentially.
 type StandardManager struct {
-	sync.Mutex
 	stop   chan struct{}
 	active sync.Mutex
 
@@ -23,7 +22,7 @@ type StandardManager struct {
 	workerErrors chan WorkerError
 	current      int
 
-	Errors    chan<- error
+	Errors    chan error
 	keyEvents chan x11.KeyEvent
 	conf      cfg.Config
 	x         *x11.Client
@@ -57,11 +56,7 @@ func (m *StandardManager) Restart(instances []mc.Instance) error {
 }
 
 func (m *StandardManager) SetConfig(conf cfg.Config) {
-	m.Lock()
-	m.ungrabKeys()
 	m.conf = conf
-	m.grabKeys()
-	m.Unlock()
 }
 
 func (m *StandardManager) SetDeps(x *x11.Client, xkeys chan x11.KeyEvent, o *obs.Client) {
@@ -127,23 +122,18 @@ func (m *StandardManager) run() {
 			if evt.State == x11.KeyDown {
 				switch evt.Key {
 				case m.conf.Keys.Focus:
-					m.Lock()
 					err := m.workers[m.current].Focus(evt.Timestamp)
 					if err != nil {
 						// TODO(LOG): LogError("failed to focus worker %d: %s", m.current, err)
-						m.Unlock()
 						continue
 					}
 				case m.conf.Keys.Reset:
-					m.Lock()
 					err := m.workers[m.current].Reset(evt.Timestamp)
 					if err != nil {
 						// TODO(LOG): LogError("failed to reset worker %d: %s", m.current, err)
-						m.Unlock()
 						continue
 					}
 					m.current = (m.current + 1) % len(m.workers)
-					m.Unlock()
 					if m.o != nil {
 						_, err := obs.NewSetCurrentSceneRequest(
 							m.o,

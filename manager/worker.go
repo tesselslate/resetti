@@ -78,13 +78,6 @@ func (w *Worker) Stop() {
 	<-w.stop
 }
 
-// SetConfig sets the Worker's configuration.
-func (w *Worker) SetConfig(c cfg.ResetSettings) {
-	w.Lock()
-	w.conf = c
-	w.Unlock()
-}
-
 // SetDeps provides certain objects required for the Worker to function. This
 // should be called once before Start and never again.
 func (w *Worker) SetDeps(i mc.Instance, x *x11.Client, o *obs.Client) {
