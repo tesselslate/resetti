@@ -96,7 +96,7 @@ func (u *Ui) run() {
 		fmt.Printf("\n%s  ctrl+c: exit%s\n\n", TIPS_COLOR, RESET_STYLE)
 		fmt.Print("\n\n")
 		for _, msg := range u.recentLog {
-			fmt.Println(msg)
+			fmt.Print(msg)
 		}
 	}
 }
