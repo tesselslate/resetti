@@ -36,6 +36,12 @@ func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error
 	if !m.active.TryLock() {
 		return errors.New("already running")
 	}
+	if m.o != nil {
+		err := setupObs(m.o, instances)
+		if err != nil {
+			return err
+		}
+	}
 	m.stop = make(chan struct{})
 	m.workerErrors = make(chan WorkerError, len(instances))
 	m.Errors = errch

@@ -63,7 +63,8 @@ func run(mode string, mgr manager.Manager) {
 	err = mgr.Start(instances, mgrErrors)
 	if err != nil {
 		fmt.Println("Failed to start manager:", err)
-		return
+		u.Stop()
+		os.Exit(1)
 	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
