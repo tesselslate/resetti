@@ -92,7 +92,7 @@ func (u *Ui) run() {
 				fmt.Println(inst)
 			}
 		}
-		fmt.Printf("\n%s  ctrl+c: exit | enter: reload%s\n\n", TIPS_COLOR, RESET_STYLE)
+		fmt.Printf("\n%s  ctrl+c: exit%s\n\n", TIPS_COLOR, RESET_STYLE)
 		fmt.Print("\n\n")
 		for _, msg := range u.recentLog {
 			fmt.Println(msg)

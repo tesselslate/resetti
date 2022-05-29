@@ -38,6 +38,7 @@ resetti's feature set is larger than most Windows-only reset macros.
 - Mouse support on wall
 - Instance locking on wall
 - Window stretching for better visibility on wall
+- Redetect instances without having to stop and restart
 - Process affinity for better performance
 - 1.7 and 1.8 support
 
@@ -86,8 +87,7 @@ to figure out how to operate it.
 
 Regardless of which mode you use, you can switch back to the terminal running
 resetti for certain operations. Pressing `ctrl+c` in the terminal with resetti
-will stop it. Pressing `enter` will cause resetti to redetect available
-instances.
+will stop it.
 
 ## Standard
 
