@@ -162,7 +162,7 @@ func (m *StandardManager) run() {
 					}
 					if m.o != nil {
 						_, err := m.o.SetCurrentScene(
-							fmt.Sprintf("Instance %d", m.current),
+							fmt.Sprintf("Instance %d", m.current + 1),
 						)
 						if err != nil {
 							ui.LogError("failed to switch OBS scene: %s", err)
