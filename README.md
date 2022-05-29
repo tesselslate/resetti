@@ -5,7 +5,13 @@ Minecraft instances for speedrunning. It supports Linux (X11 only).
 
 ## Table of Contents
 
-**TODO**
+- [Features](#features)
+  - [Planned Features](#planned-features)
+- [Installation](#installation)
+  - [From source](#from-source-requires-go)
+  - [From binary](#from-binary)
+- [Setup](#setup)
+  - [resetti](#resetti-1)
 
 # Features
 
@@ -53,8 +59,13 @@ Download the latest version and place it somewhere on your `$PATH`.
 This section is largely about setting up resetti. However, there is some other
 information which you may find useful for setting up Minecraft:
 
-- [Memory Tuning]() **TODO**
-- [OpenAL configuration]() **TODO**
+- [Memory tuning](https://github.com/woofdoggo/resetti/blob/main/doc/tuning.md)
+- [OpenAL configuration](https://github.com/woofdoggo/resetti/blob/main/doc/openal.md)
 
 ## resetti
-Once installed, run `resetti --save-default` to get the default configuration.
+
+- Run `resetti --save-default` to get the default configuration
+- Edit as needed
+- Run `resetti keys` to setup your keybinds
+- Run `resetti obs` to setup your OBS scene collection(s)
+- Run `resetti cycle` or `resetti wall` to begin using resetti
