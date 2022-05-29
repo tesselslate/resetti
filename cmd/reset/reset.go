@@ -16,6 +16,18 @@ import (
 )
 
 func run(mode string, mgr manager.Manager) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		fmt.Println("Failed to get log path:", err)
+		return
+	}
+	logHandle, err := os.OpenFile(cacheDir+"/resetti.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	ui.SetLogWriter(logHandle)
+	defer logHandle.Close()
+	if err != nil {
+		fmt.Println("Failed to open log file:", err)
+		return
+	}
 	conf, err := cfg.GetConfig()
 	if err != nil {
 		fmt.Println("Failed to read config:", err)
@@ -68,6 +80,7 @@ func run(mode string, mgr manager.Manager) {
 	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	ui.Log("Started up!")
 	for {
 		select {
 		case <-signals:

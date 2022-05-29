@@ -1,6 +1,8 @@
 package reset
 
-import "resetti/manager"
+import (
+	"resetti/manager"
+)
 
 func CmdCycle() {
 	mgr := &manager.StandardManager{}

@@ -131,6 +131,7 @@ func (m *WallManager) grabWallKeys() {
 		key.Mod = m.conf.Wall.ResetOthers
 		m.x.GrabKey(key)
 	}
+	m.wallGrab = true
 }
 
 func (m *WallManager) ungrabWallKeys() {
@@ -148,6 +149,7 @@ func (m *WallManager) ungrabWallKeys() {
 		key.Mod = m.conf.Wall.ResetOthers
 		m.x.UngrabKey(key)
 	}
+	m.wallGrab = false
 }
 
 func (m *WallManager) run() {
@@ -232,7 +234,7 @@ func (m *WallManager) run() {
 						go func() {
 							err := m.workers[m.current].Reset(evt.Timestamp)
 							if err != nil {
-								ui.LogError("failed to reset instance %d: %s", err)
+								ui.LogError("failed to reset instance %d: %s", m.current, err)
 							}
 						}()
 					}
@@ -246,30 +248,32 @@ func (m *WallManager) run() {
 						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
 						m.ungrabWallKeys()
 						m.onWall = false
+						m.current = id
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to focus instance %d: %s", err)
+							ui.LogError("failed to focus instance %d: %s", id, err)
 							continue
 						}
 					case m.conf.Wall.Reset:
 						err := m.workers[id].Reset(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to reset instance %d: %s", err)
+							ui.LogError("failed to reset instance %d: %s", id, err)
 						}
 					case m.conf.Wall.ResetOthers:
 						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
 						m.ungrabWallKeys()
 						m.onWall = false
+						m.current = id
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to focus instance %d: %s", err)
+							ui.LogError("failed to focus instance %d: %s", id, err)
 							continue
 						}
 						for i := 0; i < len(m.workers); i++ {
 							if i != id {
 								err := m.workers[id].Reset(evt.Timestamp)
 								if err != nil {
-									ui.LogError("failed to reset instance %d: %s", err)
+									ui.LogError("failed to reset instance %d: %s", id, err)
 								}
 							}
 						}

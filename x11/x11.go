@@ -435,8 +435,8 @@ func (c *Client) SetTitle(win xproto.Window, title string) error {
 }
 
 // UngrabKey returns a key to the X server after previously grabbing it.
-func (c *Client) UngrabKey(key Key) {
-	xproto.UngrabKey(c.conn, key.Code, c.Root, uint16(key.Mod))
+func (c *Client) UngrabKey(key Key) error {
+	err := xproto.UngrabKeyChecked(c.conn, key.Code, c.Root, uint16(key.Mod)).Check()
 
 	i := 0
 	for _, v := range c.keys {
@@ -447,6 +447,7 @@ func (c *Client) UngrabKey(key Key) {
 	}
 
 	c.keys = c.keys[:i]
+	return err
 }
 
 // UngrabKeyboard returns the keyboard to other X clients.

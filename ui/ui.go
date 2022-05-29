@@ -56,7 +56,8 @@ func (u *Ui) run() {
 			u.logCount += 1
 		case instances := <-stateCh:
 			if len(instances) == 1 {
-				u.instances[instances[0].Id] = instances[0]
+				id := instances[0].Id
+				u.instances[id] = instances[0]
 			} else {
 				u.instances = make([]mc.Instance, len(instances))
 				copy(u.instances, instances)
