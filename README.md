@@ -12,6 +12,11 @@ Minecraft instances for speedrunning. It supports Linux (X11 only).
   - [From binary](#from-binary)
 - [Setup](#setup)
   - [resetti](#resetti-1)
+- [Usage](#usage)
+  - [Standard](#standard)
+  - [Wall](#wall)
+    - [On the Wall](#on-the-wall)
+    - [Ingame](#ingame)
 
 # Features
 
