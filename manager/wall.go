@@ -213,7 +213,7 @@ func (m *WallManager) run() {
 					} else {
 						err := m.workers[m.current].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to focus instance %d: %s", err)
+							ui.LogError("failed to focus instance %d: %s", m.current, err)
 						}
 					}
 				case m.conf.Keys.Reset:
@@ -222,7 +222,7 @@ func (m *WallManager) run() {
 							go func(v *Worker) {
 								err := v.Reset(evt.Timestamp)
 								if err != nil {
-									ui.LogError("failed to reset instance %d: %s", err)
+									ui.LogError("failed to reset instance %d: %s", m.current, err)
 								}
 							}(v)
 						}
