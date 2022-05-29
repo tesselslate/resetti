@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"resetti/cfg"
 	"resetti/mc"
+	"resetti/ui"
 	"resetti/x11"
 	"strings"
 	"sync"
@@ -50,6 +51,12 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 func (m *WallManager) Stop() {
 	m.stop <- struct{}{}
 	<-m.stop
+}
+
+func (m *WallManager) Wait() {
+	// Suppress "empty critical section" warning with defer.
+	defer m.active.Unlock()
+	m.active.Lock()
 }
 
 func (m *WallManager) Restart(instances []mc.Instance) error {
@@ -138,10 +145,18 @@ func (m *WallManager) ungrabWallKeys() {
 }
 
 func (m *WallManager) run() {
-	defer m.stopWorkers()
-	defer m.ungrabKeys()
-	defer m.ungrabWallKeys()
-	defer m.active.Unlock()
+	cleanup := []func(){
+		m.active.Unlock,
+		m.stopWorkers,
+		m.ungrabKeys,
+		m.ungrabWallKeys,
+	}
+	defer func() {
+		for _, v := range cleanup {
+			v()
+		}
+	}()
+
 	m.grabKeys()
 	m.grabWallKeys()
 	// Locate OBS projector.
@@ -162,8 +177,12 @@ func (m *WallManager) run() {
 		}
 	}
 	if projector == 0 {
-		m.Errors <- errors.New("could not find OBS projector")
-		return
+		// No projector found. Spawn one.
+		_, err := m.o.OpenProjector("Scene", nil, "", "Wall")
+		if err != nil {
+			m.Errors <- fmt.Errorf("failed to spawn projector: %s", err)
+			return
+		}
 	}
 	m.x.FocusWindow(projector)
 	m.onWall = true
@@ -186,7 +205,7 @@ func (m *WallManager) run() {
 					} else {
 						err := m.workers[m.current].Focus(evt.Timestamp)
 						if err != nil {
-							// TODO(LOG): LogError("failed to focus instance %d: %s", err)
+							ui.LogError("failed to focus instance %d: %s", err)
 						}
 					}
 				case m.conf.Keys.Reset:
@@ -195,19 +214,19 @@ func (m *WallManager) run() {
 							go func(v *Worker) {
 								err := v.Reset(evt.Timestamp)
 								if err != nil {
-									// TODO(LOG): LogError("failed to reset instance %d: %s", err)
+									ui.LogError("failed to reset instance %d: %s", err)
 								}
 							}(v)
 						}
 					} else {
-						go obs.NewSetCurrentSceneRequest(m.o, "Wall")
+						go m.o.SetCurrentScene("Wall")
 						m.x.FocusWindow(projector)
 						m.grabWallKeys()
 						m.onWall = true
 						go func() {
 							err := m.workers[m.current].Reset(evt.Timestamp)
 							if err != nil {
-								// TODO(LOG): LogError("failed to reset instance %d: %s", err)
+								ui.LogError("failed to reset instance %d: %s", err)
 							}
 						}()
 					}
@@ -218,33 +237,33 @@ func (m *WallManager) run() {
 					id := int(evt.Key.Code - 10)
 					switch evt.Key.Mod {
 					case m.conf.Wall.Play:
-						go obs.NewSetCurrentSceneRequest(m.o, fmt.Sprintf("Instance %d", id+1))
+						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
 						m.ungrabWallKeys()
 						m.onWall = false
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
-							// TODO(LOG): LogError("failed to focus instance %d: %s", err)
+							ui.LogError("failed to focus instance %d: %s", err)
 							continue
 						}
 					case m.conf.Wall.Reset:
 						err := m.workers[id].Reset(evt.Timestamp)
 						if err != nil {
-							// TODO(LOG): LogError("failed to reset instance %d: %s", err)
+							ui.LogError("failed to reset instance %d: %s", err)
 						}
 					case m.conf.Wall.ResetOthers:
-						go obs.NewSetCurrentSceneRequest(m.o, fmt.Sprintf("Instance %d", id+1))
+						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
 						m.ungrabWallKeys()
 						m.onWall = false
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
-							// TODO(LOG): LogError("failed to focus instance %d: %s", err)
+							ui.LogError("failed to focus instance %d: %s", err)
 							continue
 						}
 						for i := 0; i < len(m.workers); i++ {
 							if i != id {
 								err := m.workers[id].Reset(evt.Timestamp)
 								if err != nil {
-									// TODO(LOG): LogError("failed to reset instance %d: %s", err)
+									ui.LogError("failed to reset instance %d: %s", err)
 								}
 							}
 						}
@@ -252,6 +271,11 @@ func (m *WallManager) run() {
 				}
 			}
 		case <-m.stop:
+			// Delete cleanup tasks and run them before returning.
+			for _, v := range cleanup {
+				v()
+			}
+			cleanup = make([]func(), 0)
 			m.stop <- struct{}{}
 			return
 		}

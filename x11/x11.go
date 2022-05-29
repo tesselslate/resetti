@@ -262,7 +262,7 @@ func (c *Client) Loop() {
 		for c.loop {
 			evt, err := c.conn.WaitForEvent()
 			if err == nil && evt == nil {
-				c.Errors <- fmt.Errorf("connection died")
+				c.Errors <- ErrConnectionDied
 				return
 			}
 

@@ -1,6 +1,12 @@
 package x11
 
-import "github.com/jezek/xgb/xproto"
+import (
+	"errors"
+
+	"github.com/jezek/xgb/xproto"
+)
+
+var ErrConnectionDied = errors.New("connection died")
 
 const (
 	KeyBackslash xproto.Keycode = 51

@@ -1,130 +1,126 @@
-// Package ui implements the UI for resetti.
+// Package ui implements the user interface of resetti.
 package ui
 
 import (
 	"fmt"
+	"math"
 	"resetti/mc"
 	"runtime"
-	"strconv"
-
-	tea "github.com/charmbracelet/bubbletea"
-	gloss "github.com/charmbracelet/lipgloss"
+	"strings"
+	"time"
 )
 
-type Model struct {
-	instances  []mc.Instance
-	status     Status
-	statusText string
-	ch         chan Command
-	notify     chan bool
+const ALTER_ENTER = "\x1b[?25l\x1b[?1049h"
+const ALTER_EXIT = "\x1b[?25h\x1b[?1049l"
+const CLEAR_END = "\x1b[J"
+const CURSOR_START = "\x1b[H"
+const DETAILS_BOLD = "\x1b[0;36m"
+const DETAILS_REG = "\x1b[0;37m"
+const INSTANCES_BOLD = "\x1b[1;36m"
+const INSTANCES_REG = "\x1b[0;37m"
+const RESET_STYLE = "\x1b[0m"
+const TIPS_COLOR = "\x1b[0;38;5;248m"
+
+type Ui struct {
+	stop      chan struct{}
+	instances []mc.Instance
+	recentLog []string
+	start     time.Time
+	logCount  int
 }
 
-func NewModel(ch chan Command, notify chan bool) Model {
-	return Model{
-		instances:  []mc.Instance{},
-		status:     StatusUnknown,
-		statusText: "",
-		ch:         ch,
-		notify:     notify,
-	}
+func (u *Ui) Start(instances []mc.Instance) {
+	u.stop = make(chan struct{})
+	u.instances = make([]mc.Instance, len(instances))
+	copy(u.instances, instances)
+	u.recentLog = make([]string, 0)
+	u.start = time.Now()
+	fmt.Print(ALTER_ENTER)
+	go u.run()
 }
 
-func (m Model) Init() tea.Cmd {
-	m.notify <- true
-	return nil
+func (u *Ui) Stop() {
+	u.stop <- struct{}{}
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
-			m.ch <- CmdQuit
-			return m, tea.Quit
-		case "ctrl+r", "f5":
-			m.ch <- CmdRefresh
-			return m, nil
+func (u *Ui) run() {
+	for {
+		// Process incoming UI updates.
+		select {
+		case logMsg := <-logCh:
+			if len(u.recentLog) > 10 {
+				u.recentLog = append(u.recentLog[1:], logMsg)
+			} else {
+				u.recentLog = append(u.recentLog, logMsg)
+			}
+			u.logCount += 1
+		case instances := <-stateCh:
+			if len(instances) == 1 {
+				u.instances[instances[0].Id] = instances[0]
+			} else {
+				u.instances = make([]mc.Instance, len(instances))
+				copy(u.instances, instances)
+			}
+		case <-time.After(1 * time.Second):
+			// Timeout to force UI updates at least once per second.
+		case <-u.stop:
+			fmt.Print(ALTER_EXIT)
+			return
 		}
-	case mc.Instance:
-		m.instances[msg.Id] = msg
-	case []mc.Instance:
-		m.instances = msg
-	case MsgStatus:
-		m.status = msg.Status
-		m.statusText = msg.Text
+		// Render new UI.
+		fmt.Print(CURSOR_START, CLEAR_END, "\n")
+		instances := make([]string, 0, len(u.instances))
+		for _, i := range u.instances {
+			str := INSTANCES_REG + "  "
+			str += pad(fmt.Sprintf("%d", i.Id), 4)
+			str += pad(i.Version.String(), 8)
+			str += pad(i.State.String(), 16)
+			instances = append(instances, str)
+		}
+		uptime := time.Since(u.start)
+		details := []string{
+			fmt.Sprintf("%sInstances: %s%d", DETAILS_BOLD, DETAILS_REG, len(instances)),
+			fmt.Sprintf("%sRoutines: %s%d", DETAILS_BOLD, DETAILS_REG, runtime.NumGoroutine()),
+			fmt.Sprintf("%sLog Count: %s%d", DETAILS_BOLD, DETAILS_REG, u.logCount),
+			fmt.Sprintf("%sUptime: %s%s", DETAILS_BOLD, DETAILS_REG, prettifyTime(uptime)),
+		}
+		fmt.Printf("%s  ID  Version State            Details\n", INSTANCES_BOLD)
+		for idx, inst := range instances {
+			if idx < len(details) {
+				fmt.Println(inst, details[idx])
+			} else {
+				fmt.Println(inst)
+			}
+		}
+		fmt.Printf("\n%s  ctrl+c: exit | enter: reload%s\n\n", TIPS_COLOR, RESET_STYLE)
+		fmt.Print("\n\n")
+		for _, msg := range u.recentLog {
+			fmt.Println(msg)
+		}
 	}
-
-	return m, nil
 }
 
-func (m Model) View() string {
-	style := statusStyles[m.status]
-	out := style.style.Render("\n  STATUS: " + style.title)
-	if m.statusText != "" {
-		out += style.style.Render(" | " + m.statusText)
+func pad(i string, strlen int) string {
+	if strlen-len(i) <= 0 {
+		return i
 	}
-	out += "\n"
-
-	out += cyanStyle.Render("  ID  Version  State        ")
-	var instances string
-	if len(m.instances) == 1 {
-		instances = "instance"
-	} else {
-		instances = "instances"
-	}
-	goros := runtime.NumGoroutine()
-	out += grayStyle.Render(fmt.Sprintf("%d %s | %d goroutines\n", len(m.instances), instances, goros))
-	for _, i := range m.instances {
-		str := "\r  " + pad(strconv.Itoa(i.Id), 4)
-		str += pad(i.Version.String(), 9)
-		str += i.State.String() + "\n"
-		out += gloss.NewStyle().Render(str)
-	}
-	out += grayStyle.Render("\n  ctrl+c: quit    ctrl+r: reload\n\n")
-
-	return out
+	return i + strings.Repeat(" ", strlen-len(i))
 }
 
-func pad(str string, length int) string {
-	toAdd := length - len(str)
-	for i := 0; i < toAdd; i++ {
-		str += " "
+func prettifyTime(t time.Duration) string {
+	if math.Floor(t.Hours()) > 0 {
+		return fmt.Sprintf(
+			"%.0f:%.0f:%.0f",
+			math.Floor(t.Hours()),
+			math.Floor(t.Minutes()),
+			math.Floor(t.Seconds()),
+		)
+	} else if math.Floor(t.Minutes()) > 0 {
+		return fmt.Sprintf(
+			"%.0f:%.0f",
+			math.Floor(t.Minutes()),
+			math.Floor(t.Seconds()),
+		)
 	}
-	return str
+	return fmt.Sprintf("%.0f sec", math.Floor(t.Seconds()))
 }
-
-type Status int
-
-const (
-	StatusUnknown Status = iota
-	StatusBusy
-	StatusOk
-	StatusFail
-)
-
-type StatusStyle struct {
-	title string
-	style gloss.Style
-}
-
-var statusStyles = map[Status]StatusStyle{
-	StatusUnknown: {
-		title: "???",
-		style: gloss.NewStyle().Foreground(gloss.Color("15")),
-	},
-	StatusBusy: {
-		title: "busy",
-		style: gloss.NewStyle().Foreground(gloss.Color("11")),
-	},
-	StatusOk: {
-		title: "ok",
-		style: gloss.NewStyle().Foreground(gloss.Color("10")),
-	},
-	StatusFail: {
-		title: "fail",
-		style: gloss.NewStyle().Foreground(gloss.Color("9")),
-	},
-}
-
-var cyanStyle = gloss.NewStyle().Bold(true).Foreground(gloss.Color("14"))
-var grayStyle = gloss.NewStyle().Foreground(gloss.Color("#aaaaaa"))

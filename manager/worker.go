@@ -6,6 +6,7 @@ import (
 	"os"
 	"resetti/cfg"
 	"resetti/mc"
+	"resetti/ui"
 	"resetti/x11"
 	"strings"
 	"sync"
@@ -57,13 +58,14 @@ func (w *Worker) Start(errch chan<- WorkerError) error {
 	if err != nil {
 		return err
 	}
+	w.watcher = watcher
 	err = watcher.Add(path)
 	if err != nil {
 		watcher.Close()
 		return err
 	}
 	state, _ := w.readState()
-	w.instance.State = state
+	w.setState(state)
 	go w.run(errch)
 	return nil
 }
@@ -99,7 +101,7 @@ func (w *Worker) Focus(time xproto.Timestamp) error {
 	// If the instance is ready (generated, paused), then unpause it.
 	if w.instance.State == mc.StateReady {
 		w.x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
-		w.instance.State = mc.StateIngame
+		w.setState(mc.StateIngame)
 	}
 	return nil
 }
@@ -118,8 +120,6 @@ func (w *Worker) Reset(time xproto.Timestamp) error {
 }
 
 func (w *Worker) run(errch chan<- WorkerError) {
-	defer w.watcher.Close()
-	defer w.active.Unlock()
 	for {
 		select {
 		case err, ok := <-w.watcher.Errors:
@@ -128,15 +128,17 @@ func (w *Worker) run(errch chan<- WorkerError) {
 					err,
 					w.instance.Id,
 				}
+				w.active.Unlock()
 				return
 			}
-			// TODO(LOG): LogError("file watcher error: %s", err)
+			ui.LogError("file watcher error: %s", err)
 		case evt, ok := <-w.watcher.Events:
 			if !ok {
 				errch <- WorkerError{
 					errors.New("log watcher closed"),
 					w.instance.Id,
 				}
+				w.active.Unlock()
 				return
 			}
 			switch evt.Op {
@@ -147,11 +149,15 @@ func (w *Worker) run(errch chan<- WorkerError) {
 					errors.New("log file no longer available"),
 					w.instance.Id,
 				}
+				w.watcher.Close()
+				w.active.Unlock()
 				return
 			}
 		case <-w.stop:
 			// Signal to the sender that this goroutine is finished.
 			w.stop <- struct{}{}
+			w.watcher.Close()
+			w.active.Unlock()
 			return
 		}
 	}
@@ -207,10 +213,11 @@ func (w *Worker) updateState() {
 		return
 	}
 	w.Lock()
+	w.setState(state)
 	defer w.Unlock()
 	activeWin, err := w.x.GetActiveWindow()
 	if err != nil {
-		// TODO(LOG): LogError("failed to get active window: %s", err)
+		ui.LogError("failed to get active window: %s", err)
 		return
 	}
 	isPreview := w.instance.State == mc.StatePreview
@@ -219,7 +226,7 @@ func (w *Worker) updateState() {
 	// If the window is currently focused and enters the Ready state, then the
 	// player wants to play it and it can be switched to Ingame.
 	if isActive && isReady {
-		w.instance.State = mc.StateIngame
+		w.setState(mc.StateIngame)
 		return
 	}
 	// If the instance is not currently focused and it has either switched
@@ -231,4 +238,9 @@ func (w *Worker) updateState() {
 		w.x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
 		w.x.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
 	}
+}
+
+func (w *Worker) setState(s mc.InstanceState) {
+	w.instance.State = s
+	ui.UpdateInstance(w.instance)
 }

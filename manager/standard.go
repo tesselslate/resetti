@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"resetti/cfg"
 	"resetti/mc"
+	"resetti/ui"
 	"resetti/x11"
 	"sync"
 	"time"
@@ -48,6 +49,12 @@ func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error
 func (m *StandardManager) Stop() {
 	m.stop <- struct{}{}
 	<-m.stop
+}
+
+func (m *StandardManager) Wait() {
+	// Suppress "empty critical section" warning with defer.
+	defer m.active.Unlock()
+	m.active.Lock()
 }
 
 func (m *StandardManager) Restart(instances []mc.Instance) error {
@@ -102,10 +109,18 @@ func (m *StandardManager) ungrabKeys() {
 }
 
 func (m *StandardManager) run() {
+	cleanup := []func(){
+		m.active.Unlock,
+		m.stopWorkers,
+		m.ungrabKeys,
+	}
+	defer func() {
+		for _, v := range cleanup {
+			v()
+		}
+	}()
+
 	m.grabKeys()
-	defer m.stopWorkers()
-	defer m.ungrabKeys()
-	defer m.active.Unlock()
 	for {
 		select {
 		case werr := <-m.workerErrors:
@@ -122,28 +137,32 @@ func (m *StandardManager) run() {
 				case m.conf.Keys.Focus:
 					err := m.workers[m.current].Focus(evt.Timestamp)
 					if err != nil {
-						// TODO(LOG): LogError("failed to focus worker %d: %s", m.current, err)
+						ui.LogError("failed to focus worker %d: %s", m.current, err)
 						continue
 					}
 				case m.conf.Keys.Reset:
 					err := m.workers[m.current].Reset(evt.Timestamp)
 					if err != nil {
-						// TODO(LOG): LogError("failed to reset worker %d: %s", m.current, err)
+						ui.LogError("failed to reset worker %d: %s", m.current, err)
 						continue
 					}
 					m.current = (m.current + 1) % len(m.workers)
 					if m.o != nil {
-						_, err := obs.NewSetCurrentSceneRequest(
-							m.o,
+						_, err := m.o.SetCurrentScene(
 							fmt.Sprintf("Instance %d", m.current),
 						)
 						if err != nil {
-							// TODO(LOG): LogError("failed to switch OBS scene: %s", err)
+							ui.LogError("failed to switch OBS scene: %s", err)
 						}
 					}
 				}
 			}
 		case <-m.stop:
+			// Delete cleanup tasks and run them before returning.
+			for _, v := range cleanup {
+				v()
+			}
+			cleanup = make([]func(), 0)
 			m.stop <- struct{}{}
 			return
 		}
