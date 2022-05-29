@@ -46,6 +46,7 @@ resetti's feature set is larger than most Windows-only reset macros.
 - Redetect instances without having to stop and restart
 - Process affinity for better performance
 - 1.7 and 1.8 support
+- Packages for various distributions
 
 # Installation
 
