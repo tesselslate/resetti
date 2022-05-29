@@ -3,6 +3,7 @@
 package mc
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"resetti/x11"
@@ -182,6 +183,17 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 	sort.Slice(instances, func(i, j int) bool {
 		return instances[i].Id < instances[j].Id
 	})
+	if len(instances) == 0 {
+		return instances, nil
+	}
+	if instances[0].Id != 0 {
+		return nil, errors.New("no instance with id 0")
+	}
+	for i, v := range instances {
+		if v.Id != i {
+			return nil, errors.New("instances do not have sequential ids")
+		}
+	}
 
 	return instances, nil
 }
