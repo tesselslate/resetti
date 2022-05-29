@@ -3,6 +3,10 @@
 resetti is a utility for automatically managing and "resetting" one or more
 Minecraft instances for speedrunning. It supports Linux (X11 only).
 
+> As of now, resetti has only received a few hours of testing. I cannot
+> guarantee that everything will work as expected. Please report any bugs
+> which you encounter.
+
 ## Table of Contents
 
 - [Features](#features)
