@@ -34,10 +34,14 @@ func CmdKeys() {
 		fmt.Println("Once selected, press any key modifiers (e.g. Shift and/or Control)")
 		fmt.Println("you would like to use for the given action. Your choice will be")
 		fmt.Println("saved after 3 seconds.")
+		fmt.Println("\nWall:")
 		fmt.Println("1: Play Instance")
 		fmt.Println("2: Reset Instance")
 		fmt.Println("3: Play Instance, Reset Others")
-		fmt.Println("q: Save and Exit Configuration")
+		fmt.Println("\nGeneral:")
+		fmt.Println("4: Reset")
+		fmt.Println("5: Focus")
+		fmt.Println("\nq: Save and Exit Configuration")
 		res, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Failed to read input.")
@@ -87,6 +91,31 @@ func CmdKeys() {
 			case '3':
 				conf.Wall.ResetOthers = mod
 			}
+		case '4', '5':
+			fmt.Println("Waiting...")
+			x.GrabKeyboard()
+			var key x11.Key
+			timeout := time.After(3 * time.Second)
+		loop2:
+			for {
+				select {
+				case evt := <-x.Keys:
+					if evt.State == x11.KeyDown {
+						key = evt.Key
+					}
+				case <-timeout:
+					fmt.Println("Done!")
+					break loop2
+				}
+			}
+			x.UngrabKeyboard()
+			switch res[0] {
+			case '4':
+				conf.Keys.Reset = key
+			case '5':
+				conf.Keys.Focus = key
+			}
+			fmt.Println("Done!")
 		case 'q':
 			confBytes, err := yaml.Marshal(&conf)
 			if err != nil {
