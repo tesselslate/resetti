@@ -1,10 +1,11 @@
 package reset
 
 import (
+	"os"
 	"resetti/manager"
 )
 
 func CmdWall() {
 	mgr := &manager.WallManager{}
-	run("wall", mgr)
+	os.Exit(run("wall", mgr))
 }

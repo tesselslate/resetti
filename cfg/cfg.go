@@ -17,10 +17,11 @@ const (
 
 // Config contains all of the configuration for resetti.
 type Config struct {
-	OBS   ObsSettings   `yaml:"obs"`   // The settings to use for resetti's OBS integration.
-	Keys  ConfigKeys    `yaml:"keys"`  // The hotkeys to use for resetti's actions.
-	Wall  WallSettings  `yaml:"wall"`  // The user's wall settings.
-	Reset ResetSettings `yaml:"reset"` // Reset settings
+	OBS       ObsSettings   `yaml:"obs"`   // The settings to use for resetti's OBS integration.
+	Keys      ConfigKeys    `yaml:"keys"`  // The hotkeys to use for resetti's actions.
+	Wall      WallSettings  `yaml:"wall"`  // The user's wall settings.
+	Reset     ResetSettings `yaml:"reset"` // Reset settings
+	CountPath string        `yaml:"reset-file"`
 }
 
 // ConfigKeys contains the user's keybindings.
@@ -75,6 +76,7 @@ var DefaultConfig = Config{
 		false,
 		50,
 	},
+	"",
 }
 
 // GetConfig attempts to read the user's configuration file and return it

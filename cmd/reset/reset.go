@@ -15,24 +15,30 @@ import (
 	obs "github.com/woofdoggo/go-obs"
 )
 
-func run(mode string, mgr manager.Manager) {
+func run(mode string, mgr manager.Manager) int {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		fmt.Println("Failed to get log path:", err)
-		return
+		os.Exit(1)
 	}
 	logHandle, err := os.OpenFile(cacheDir+"/resetti.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-	ui.SetLogWriter(logHandle)
-	defer logHandle.Close()
 	if err != nil {
 		fmt.Println("Failed to open log file:", err)
-		return
+		os.Exit(1)
 	}
+	ui.SetLogWriter(logHandle)
+	defer logHandle.Close()
 	conf, err := cfg.GetConfig()
 	if err != nil {
 		fmt.Println("Failed to read config:", err)
 		os.Exit(1)
 	}
+	resetHandle, err := os.OpenFile(conf.CountPath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		fmt.Println("Failed to open reset count:", err)
+		os.Exit(1)
+	}
+	defer resetHandle.Close()
 	if mode == "wall" && !conf.OBS.Enabled {
 		fmt.Println("OBS integration must be enabled for wall.")
 		fmt.Println("Please update your configuration.")
@@ -68,7 +74,7 @@ func run(mode string, mgr manager.Manager) {
 		os.Exit(1)
 	}
 	u := ui.Ui{}
-	u.Start(instances)
+	u.Start(instances, resetHandle)
 	mgr.SetConfig(*conf)
 	mgr.SetDeps(x, o)
 	mgrErrors := make(chan error)
@@ -89,7 +95,7 @@ func run(mode string, mgr manager.Manager) {
 			u.Stop()
 			mgr.Stop()
 			x.LoopStop()
-			return
+			return 0
 		case err := <-mgrErrors:
 			ui.LogError("Fatal manger error: %s", err)
 			mgr.Wait()
@@ -100,14 +106,14 @@ func run(mode string, mgr manager.Manager) {
 				ui.LogError("Failed to get Minecraft instances: %s", err)
 				u.Stop()
 				x.LoopStop()
-				return
+				return 1
 			}
 			err = mgr.Start(instances, mgrErrors)
 			if err != nil {
 				ui.LogError("Failed to restart manager: %s", err)
 				u.Stop()
 				x.LoopStop()
-				return
+				return 1
 			}
 		case err := <-obsErrors:
 			ui.LogError("OBS websocket error: %s", err)
@@ -117,10 +123,17 @@ func run(mode string, mgr manager.Manager) {
 				ui.Log("Shutting down.")
 				u.Stop()
 				mgr.Stop()
-				return
+				return 1
 			} else {
 				ui.LogError("X error: %s", err)
 			}
+		case err := <-u.Errors:
+			ui.LogError("UI error: %s", err)
+			ui.Log("Shutting down.")
+			fmt.Printf("UI error: %s\n", err)
+			mgr.Stop()
+			x.LoopStop()
+			return 1
 		}
 	}
 }

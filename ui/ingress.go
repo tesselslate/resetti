@@ -9,6 +9,7 @@ import (
 )
 
 var logCh = make(chan string, 32)
+var resetCh = make(chan struct{}, 32)
 var stateCh = make(chan []mc.Instance, 32)
 var logWriter io.Writer
 
@@ -53,5 +54,10 @@ func LogError(content ...any) {
 }
 
 func UpdateInstance(i ...mc.Instance) {
+	for _, v := range i {
+		if v.State == mc.StateGenerating {
+			resetCh <- struct{}{}
+		}
+	}
 	stateCh <- i
 }

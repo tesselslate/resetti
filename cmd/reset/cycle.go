@@ -1,10 +1,11 @@
 package reset
 
 import (
+	"os"
 	"resetti/manager"
 )
 
 func CmdCycle() {
 	mgr := &manager.StandardManager{}
-	run("standard", mgr)
+	os.Exit(run("standard", mgr))
 }

@@ -4,8 +4,10 @@ package ui
 import (
 	"fmt"
 	"math"
+	"os"
 	"resetti/mc"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,19 +24,24 @@ const RESET_STYLE = "\x1b[0m"
 const TIPS_COLOR = "\x1b[0;38;5;248m"
 
 type Ui struct {
-	stop      chan struct{}
-	instances []mc.Instance
-	recentLog []string
-	start     time.Time
-	logCount  int
+	Errors      chan error
+	stop        chan struct{}
+	instances   []mc.Instance
+	recentLog   []string
+	start       time.Time
+	logCount    int
+	resetCount  int
+	resetHandle *os.File
 }
 
-func (u *Ui) Start(instances []mc.Instance) {
+func (u *Ui) Start(instances []mc.Instance, countHandle *os.File) {
+	u.Errors = make(chan error, 4)
 	u.stop = make(chan struct{})
 	u.instances = make([]mc.Instance, len(instances))
 	copy(u.instances, instances)
 	u.recentLog = make([]string, 0)
 	u.start = time.Now()
+	u.resetHandle = countHandle
 	fmt.Print(ALTER_ENTER)
 	go u.run()
 }
@@ -44,6 +51,20 @@ func (u *Ui) Stop() {
 }
 
 func (u *Ui) run() {
+	bytebuf := make([]byte, 16)
+	n, err := u.resetHandle.Read(bytebuf)
+	if err != nil {
+		fmt.Print(ALTER_EXIT)
+		u.Errors <- err
+		return
+	}
+	count, err := strconv.Atoi(strings.Trim(string(bytebuf[:n]), "\n"))
+	if err != nil {
+		fmt.Print(ALTER_EXIT)
+		u.Errors <- err
+		return
+	}
+	u.resetCount = count
 	for {
 		// Process incoming UI updates.
 		select {
@@ -61,6 +82,20 @@ func (u *Ui) run() {
 			} else {
 				u.instances = make([]mc.Instance, len(instances))
 				copy(u.instances, instances)
+			}
+			for _, v := range instances {
+				if v.State == mc.StateGenerating {
+					u.resetCount += 1
+					_, err := u.resetHandle.Seek(0, 0)
+					if err != nil {
+						LogError("Failed to seek in reset file: %s", err)
+						continue
+					}
+					_, err = u.resetHandle.WriteString(strconv.Itoa(u.resetCount))
+					if err != nil {
+						LogError("Failed to write reset count of %d: %s", u.resetCount, err)
+					}
+				}
 			}
 		case <-time.After(1 * time.Second):
 			// Timeout to force UI updates at least once per second.
@@ -81,17 +116,23 @@ func (u *Ui) run() {
 		uptime := time.Since(u.start)
 		details := []string{
 			fmt.Sprintf("%sInstances: %s%d", DETAILS_BOLD, DETAILS_REG, len(instances)),
+			fmt.Sprintf("%sResets: %s%d", DETAILS_BOLD, DETAILS_REG, u.resetCount),
 			fmt.Sprintf("%sRoutines: %s%d", DETAILS_BOLD, DETAILS_REG, runtime.NumGoroutine()),
 			fmt.Sprintf("%sLog Count: %s%d", DETAILS_BOLD, DETAILS_REG, u.logCount),
 			fmt.Sprintf("%sUptime: %s%s", DETAILS_BOLD, DETAILS_REG, prettifyTime(uptime)),
 		}
 		fmt.Printf("%s  ID  Version State            Details\n", INSTANCES_BOLD)
-		for idx, inst := range instances {
-			if idx < len(details) {
-				fmt.Println(inst, details[idx])
+		rows := max(len(details), len(instances))
+		for i := 0; i < rows; i++ {
+			if i < len(instances) {
+				fmt.Print(instances[i])
 			} else {
-				fmt.Println(inst)
+				fmt.Print(pad("", 31))
 			}
+			if i < len(details) {
+				fmt.Print(details[i])
+			}
+			fmt.Print("\n")
 		}
 		fmt.Printf("\n%s  ctrl+c: exit%s\n\n", TIPS_COLOR, RESET_STYLE)
 		fmt.Print("\n\n")
@@ -124,4 +165,12 @@ func prettifyTime(t time.Duration) string {
 		)
 	}
 	return fmt.Sprintf("%.0f sec", math.Floor(t.Seconds()))
+}
+
+func max(a int, b int) int {
+	if a > b {
+		return a
+	} else {
+		return b
+	}
 }
