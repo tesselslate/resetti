@@ -19,21 +19,16 @@ jobs:
           go-version: "1.18.2"
 
       - name: Build resetti
-        run: go build .
+        run: env CGO_ENABLED=0 go build . -ldflags="-s -w"
 
       - name: Get release info
         id: tag
-        run: |
-          echo "::set-output name=tag::$(git describe --tags --abbrev=0)"
-          PREVTAG=$(git for-each-ref --sort=-taggerdate --format '%(refname)' refs/tags | tail -n 2 | head -n 1)
-          SHORTLOG=$(git shortlog $PREVTAG..HEAD | grep '^ ' | sed 's/  //g')
-          echo "::set-output name=log::$SHORTLOG"
+        run: echo "::set-output name=tag::$(git describe --tags --abbrev=0)"
 
       - name: Publish release
         uses: ncipollo/release-action@v1
         with:
           artifacts: "resetti"
-          body: ${{ steps.tag.outputs.log }}
           name: ${{ steps.tag.outputs.tag }}
           tag: ${{ steps.tag.outputs.tag }}
           token: ${{ secrets.GITHUB_TOKEN }}
