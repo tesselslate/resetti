@@ -204,7 +204,7 @@ func createScenes(info choices) {
 		_, err := o.CreateSource(
 			fmt.Sprintf("MC %d", i+1),
 			"xcomposite_input",
-			"Wall",
+			"Scene",
 			nil,
 			ptr(true),
 		)
@@ -243,8 +243,7 @@ func createScenes(info choices) {
 				Y: ptr(0.0),
 			},
 			nil,
-			obs.SetSceneItemPropertiesScale{
-			},
+			obs.SetSceneItemPropertiesScale{},
 			obs.SetSceneItemPropertiesCrop{},
 			ptr(true),
 			ptr(true),
@@ -285,8 +284,8 @@ func createScenes(info choices) {
 					},
 					nil,
 					obs.SetSceneItemPropertiesScale{
-						X: ptr(1.0/8.0),
-						Y: ptr(1.0/10.0),
+						X: ptr(1.0 / 8.0),
+						Y: ptr(1.0 / 10.0),
 					},
 					obs.SetSceneItemPropertiesCrop{},
 					ptr(true),
@@ -332,8 +331,8 @@ func createScenes(info choices) {
 					},
 					nil,
 					obs.SetSceneItemPropertiesScale{
-						X: ptr(1.0/float64(info.WallX)),
-						Y: ptr(1.0/float64(info.WallY)),
+						X: ptr(1.0 / float64(info.WallX)),
+						Y: ptr(1.0 / float64(info.WallY)),
 					},
 					obs.SetSceneItemPropertiesCrop{},
 					ptr(true),
@@ -350,6 +349,8 @@ func createScenes(info choices) {
 			}
 		}
 	}
+	fmt.Println("\nOBS websocket does not provide a mechanism for deleting scenes.")
+	fmt.Println("You can delete the scene named 'Scene' if you would like.")
 }
 
 func ptr[T any](v T) *T {

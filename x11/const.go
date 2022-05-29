@@ -21,6 +21,7 @@ const (
 	Key8         xproto.Keycode = 17
 	Key9         xproto.Keycode = 18
 
+	KeyCtrl  xproto.Keycode = 37
 	KeyShift xproto.Keycode = 50
 )
 

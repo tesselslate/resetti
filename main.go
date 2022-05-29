@@ -4,9 +4,12 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"resetti/cfg"
 	"resetti/cmd/reset"
 	"resetti/cmd/setup"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 //go:embed .notice
@@ -23,6 +26,24 @@ func main() {
 	switch os.Args[1] {
 	case "--help":
 		printHelp()
+	case "--save-default":
+		confBytes, err := yaml.Marshal(cfg.DefaultConfig)
+		if err != nil {
+			fmt.Println("Failed to serialize config:", err)
+			return
+		}
+		confPath, err := cfg.GetPath()
+		if err != nil {
+			fmt.Println("Failed to get config path:", err)
+			return
+		}
+		err = os.WriteFile(confPath, confBytes, 0644)
+		if err != nil {
+			fmt.Println("Failed to write config:", err)
+			return
+		}
+		fmt.Printf("Wrote default configuration to:\n%s\n", confPath)
+		return
 	case "--version":
 		fmt.Print(
 			"\n    resetti ",
@@ -50,6 +71,7 @@ func printHelp() {
 
     USAGE:
         --help                  Print this menu.
+        --save-default          Save default config.
         --version               Print the version and copyright notice.
 
     SUBCOMMANDS:
