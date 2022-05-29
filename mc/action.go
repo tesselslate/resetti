@@ -78,15 +78,7 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 		// reset action.
 		break
 	case StatePreview:
-		// Press Escape to reach the normal menu after F3+Escape.
-		x.SendKeyPress(x11.KeyEscape, i.Window, t)
-		time.Sleep(delay * 2)
-
-		x.SendKeyDown(x11.KeyShift, i.Window, t)
-		x.SendKeyPress(x11.KeyTab, i.Window, t)
-		x.SendKeyUp(x11.KeyShift, i.Window, t)
-
-		x.SendKeyPress(x11.KeyEnter, i.Window, t)
+		x.SendKeyPress(x11.KeyH, i.Window, t)
 		return nil
 
 	default:

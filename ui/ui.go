@@ -110,16 +110,16 @@ func pad(i string, strlen int) string {
 func prettifyTime(t time.Duration) string {
 	if math.Floor(t.Hours()) > 0 {
 		return fmt.Sprintf(
-			"%.0f:%.0f:%.0f",
-			math.Floor(t.Hours()),
-			math.Floor(t.Minutes()),
-			math.Floor(t.Seconds()),
+			"%d:%d:%d",
+			int(math.Floor(t.Hours()))%60,
+			int(math.Floor(t.Minutes()))%60,
+			int(math.Floor(t.Seconds()))%60,
 		)
 	} else if math.Floor(t.Minutes()) > 0 {
 		return fmt.Sprintf(
-			"%.0f:%.0f",
-			math.Floor(t.Minutes()),
-			math.Floor(t.Seconds()),
+			"%d:%d",
+			int(math.Floor(t.Minutes()))%60,
+			int(math.Floor(t.Seconds()))%60,
 		)
 	}
 	return fmt.Sprintf("%.0f sec", math.Floor(t.Seconds()))

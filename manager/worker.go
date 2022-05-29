@@ -179,7 +179,7 @@ func (w *Worker) readState() (mc.InstanceState, bool) {
 			state = mc.StateGenerating
 			updated = true
 		}
-		if strings.Contains(line, "logged in with entity id") {
+		if strings.Contains(line, "Saving and pausing game...") {
 			state = mc.StateReady
 			updated = true
 		}
@@ -213,8 +213,8 @@ func (w *Worker) updateState() {
 		return
 	}
 	w.Lock()
-	w.setState(state)
 	defer w.Unlock()
+	w.setState(state)
 	activeWin, err := w.x.GetActiveWindow()
 	if err != nil {
 		ui.LogError("failed to get active window: %s", err)
