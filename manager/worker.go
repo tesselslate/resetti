@@ -131,7 +131,7 @@ func (w *Worker) run(errch chan<- WorkerError) {
 				w.active.Unlock()
 				return
 			}
-			ui.LogError("file watcher error: %s", err)
+			ui.LogError("File watcher error: %s", err)
 		case evt, ok := <-w.watcher.Events:
 			if !ok {
 				errch <- WorkerError{
@@ -217,7 +217,7 @@ func (w *Worker) updateState() {
 	w.setState(state)
 	activeWin, err := w.x.GetActiveWindow()
 	if err != nil {
-		ui.LogError("failed to get active window: %s", err)
+		ui.LogError("Failed to get active window: %s", err)
 		return
 	}
 	isPreview := w.instance.State == mc.StatePreview

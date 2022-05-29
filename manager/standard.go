@@ -141,31 +141,30 @@ func (m *StandardManager) run() {
 			if evt.State == x11.KeyDown {
 				switch evt.Key {
 				case m.conf.Keys.Focus:
-					ui.Log("focus instance %d", m.current)
 					err := m.workers[m.current].Focus(evt.Timestamp)
 					if err != nil {
-						ui.LogError("failed to focus worker %d: %s", m.current, err)
+						ui.LogError("Failed to focus worker %d: %s", m.current, err)
 						continue
 					}
 				case m.conf.Keys.Reset:
-					ui.Log("reset instance %d", m.current)
+					ui.Log("Reset instance %d.", m.current)
 					err := m.workers[m.current].Reset(evt.Timestamp)
 					if err != nil {
-						ui.LogError("failed to reset worker %d: %s", m.current, err)
+						ui.LogError("Failed to reset worker %d: %s", m.current, err)
 						continue
 					}
 					m.current = (m.current + 1) % len(m.workers)
 					err = m.workers[m.current].Focus(evt.Timestamp)
 					if err != nil {
-						ui.LogError("failed to focus worker %d: %s", m.current, err)
+						ui.LogError("Failed to focus worker %d: %s", m.current, err)
 						continue
 					}
 					if m.o != nil {
 						_, err := m.o.SetCurrentScene(
-							fmt.Sprintf("Instance %d", m.current + 1),
+							fmt.Sprintf("Instance %d", m.current+1),
 						)
 						if err != nil {
-							ui.LogError("failed to switch OBS scene: %s", err)
+							ui.LogError("Failed to switch OBS scene: %s", err)
 						}
 					}
 				}

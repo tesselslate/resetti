@@ -213,16 +213,17 @@ func (m *WallManager) run() {
 					} else {
 						err := m.workers[m.current].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to focus instance %d: %s", m.current, err)
+							ui.LogError("Failed to focus instance %d: %s", m.current, err)
 						}
 					}
 				case m.conf.Keys.Reset:
 					if m.onWall {
 						for _, v := range m.workers {
 							go func(v *Worker) {
+								ui.Log("Reset instance %d.", v.instance.Id)
 								err := v.Reset(evt.Timestamp)
 								if err != nil {
-									ui.LogError("failed to reset instance %d: %s", m.current, err)
+									ui.LogError("Failed to reset instance %d: %s", m.current, err)
 								}
 							}(v)
 						}
@@ -232,9 +233,10 @@ func (m *WallManager) run() {
 						m.grabWallKeys()
 						m.onWall = true
 						go func() {
+							ui.Log("Reset instance %d; going to wall.", m.current)
 							err := m.workers[m.current].Reset(evt.Timestamp)
 							if err != nil {
-								ui.LogError("failed to reset instance %d: %s", m.current, err)
+								ui.LogError("Failed to reset instance %d: %s", m.current, err)
 							}
 						}()
 					}
@@ -251,13 +253,14 @@ func (m *WallManager) run() {
 						m.current = id
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to focus instance %d: %s", id, err)
+							ui.LogError("Failed to focus instance %d: %s", id, err)
 							continue
 						}
 					case m.conf.Wall.Reset:
+						ui.Log("Reset instance %d.", id)
 						err := m.workers[id].Reset(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to reset instance %d: %s", id, err)
+							ui.LogError("Failed to reset instance %d: %s", id, err)
 						}
 					case m.conf.Wall.ResetOthers:
 						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
@@ -266,14 +269,15 @@ func (m *WallManager) run() {
 						m.current = id
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("failed to focus instance %d: %s", id, err)
+							ui.LogError("Failed to focus instance %d: %s", id, err)
 							continue
 						}
 						for i := 0; i < len(m.workers); i++ {
 							if i != id {
+								ui.Log("Reset instance %d.", i)
 								err := m.workers[id].Reset(evt.Timestamp)
 								if err != nil {
-									ui.LogError("failed to reset instance %d: %s", id, err)
+									ui.LogError("Failed to reset instance %d: %s", id, err)
 								}
 							}
 						}

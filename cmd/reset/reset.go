@@ -81,6 +81,7 @@ func run(mode string, mgr manager.Manager) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	ui.Log("Started up!")
+	ui.Log("Session type: %s", mode)
 	for {
 		select {
 		case <-signals:
