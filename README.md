@@ -85,6 +85,9 @@ Go to the `.minecraft` folder of each instance you will be using. Inside,
 create a file named `instance_num` whose contents are nothing but the number
 of the instance. Make sure these are in sequential order **starting from 0.**
 
+> **NOTE:** Make sure all of your instances have pause on lost focus
+> (F3+P) disabled.
+
 resetti will only detect instances with the `instance_num` file. It will
 refuse to start up when the instances it detects do not have IDs starting from
 0 and in sequential order (e.g. 0, 1, 2, ... n)
