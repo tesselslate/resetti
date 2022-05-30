@@ -131,6 +131,11 @@ For example, if you have set your Reset Others keybind to Control, press Control
 to start playing Instance 1 and reset all other instances. You can do the same
 for the other available actions.
 
+The names of each action should be self explanatory. However, "Lock" might confuse
+you if you are not already familiar with it. Locking an instance will prevent it from
+being reset by any means. You can unlock an instance by either pressing Lock
+again or by playing the instance and resetting.
+
 ### Ingame
 
 You can press your general Reset key to reset the instance and return to the
