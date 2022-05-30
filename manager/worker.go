@@ -78,6 +78,7 @@ func (w *Worker) Stop() {
 	// goroutine to send another value back to signal that it is finished.
 	w.stop <- struct{}{}
 	<-w.stop
+	ui.Log("Stopped worker %d!", w.instance.Id)
 }
 
 // SetDeps provides certain objects required for the Worker to function. This

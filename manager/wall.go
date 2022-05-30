@@ -20,6 +20,7 @@ type WallManager struct {
 	active sync.Mutex
 
 	workers      []*Worker
+	locks        []bool
 	workerErrors chan WorkerError
 	current      int
 	onWall       bool
@@ -50,13 +51,16 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 	if err := m.createWorkers(instances); err != nil {
 		return err
 	}
+	m.locks = make([]bool, len(m.workers))
 	go m.run()
 	return nil
 }
 
 func (m *WallManager) Stop() {
+	ui.Log("Manager: sent stop signal...")
 	m.stop <- struct{}{}
 	<-m.stop
+	ui.Log("Manager stop signal returned!")
 }
 
 func (m *WallManager) Wait() {
@@ -130,6 +134,8 @@ func (m *WallManager) grabWallKeys() {
 		m.x.GrabKey(key)
 		key.Mod = m.conf.Wall.ResetOthers
 		m.x.GrabKey(key)
+		key.Mod = m.conf.Wall.Lock
+		m.x.GrabKey(key)
 	}
 	m.wallGrab = true
 }
@@ -148,16 +154,18 @@ func (m *WallManager) ungrabWallKeys() {
 		m.x.UngrabKey(key)
 		key.Mod = m.conf.Wall.ResetOthers
 		m.x.UngrabKey(key)
+		key.Mod = m.conf.Wall.Lock
+		m.x.UngrabKey(key)
 	}
 	m.wallGrab = false
 }
 
 func (m *WallManager) run() {
 	cleanup := []func(){
-		m.active.Unlock,
-		m.stopWorkers,
 		m.ungrabKeys,
 		m.ungrabWallKeys,
+		m.stopWorkers,
+		m.active.Unlock,
 	}
 	defer func() {
 		for _, v := range cleanup {
@@ -194,10 +202,14 @@ func (m *WallManager) run() {
 	}
 	m.x.FocusWindow(projector)
 	m.onWall = true
+	for i := range m.locks {
+		m.setLock(i, false)
+	}
 	for {
 		select {
 		case werr := <-m.workerErrors:
 			// Wait a moment and then attempt to reboot the dead worker.
+			ui.LogError("Worker %d died: %s", werr.Id, werr.Err)
 			time.Sleep(10 * time.Millisecond)
 			err := m.workers[werr.Id].Start(m.workerErrors)
 			if err != nil {
@@ -218,8 +230,15 @@ func (m *WallManager) run() {
 					}
 				case m.conf.Keys.Reset:
 					if m.onWall {
+						ui.Log("Resetting all instances. Waiting...")
+						wg := sync.WaitGroup{}
 						for _, v := range m.workers {
+							wg.Add(1)
 							go func(v *Worker) {
+								defer wg.Done()
+								if m.locks[v.instance.Id] {
+									return
+								}
 								ui.Log("Reset instance %d.", v.instance.Id)
 								err := v.Reset(evt.Timestamp)
 								if err != nil {
@@ -227,18 +246,25 @@ func (m *WallManager) run() {
 								}
 							}(v)
 						}
+						wg.Wait()
+						ui.Log("Reset all instances successfully.")
 					} else {
 						go m.o.SetCurrentScene("Wall")
 						m.x.FocusWindow(projector)
 						m.grabWallKeys()
 						m.onWall = true
+						ui.Log("Resetting instance. Waiting...")
+						ch := make(chan struct{})
 						go func() {
 							ui.Log("Reset instance %d; going to wall.", m.current)
 							err := m.workers[m.current].Reset(evt.Timestamp)
 							if err != nil {
 								ui.LogError("Failed to reset instance %d: %s", m.current, err)
 							}
+							ch <- struct{}{}
 						}()
+						<-ch
+						ui.Log("Reset instance successfully.")
 					}
 				default:
 					if evt.Key.Code < 10 || evt.Key.Code > 19 {
@@ -256,7 +282,11 @@ func (m *WallManager) run() {
 							ui.LogError("Failed to focus instance %d: %s", id, err)
 							continue
 						}
+						m.setLock(id, false)
 					case m.conf.Wall.Reset:
+						if m.locks[id] {
+							continue
+						}
 						ui.Log("Reset instance %d.", id)
 						err := m.workers[id].Reset(evt.Timestamp)
 						if err != nil {
@@ -273,7 +303,7 @@ func (m *WallManager) run() {
 							continue
 						}
 						for i := 0; i < len(m.workers); i++ {
-							if i != id {
+							if i != id && !m.locks[i] {
 								ui.Log("Reset instance %d.", i)
 								err := m.workers[id].Reset(evt.Timestamp)
 								if err != nil {
@@ -281,17 +311,76 @@ func (m *WallManager) run() {
 								}
 							}
 						}
+					case m.conf.Wall.Lock:
+						m.setLock(id, !m.locks[id])
+						ui.Log("Toggled lock state of instance %d (%t)", id, m.locks[id])
 					}
 				}
 			}
 		case <-m.stop:
 			// Delete cleanup tasks and run them before returning.
-			for _, v := range cleanup {
+			ui.Log("Stopping manager...")
+			for i, v := range cleanup {
 				v()
+				ui.Log("Cleanup: Completed task %d", i)
 			}
 			cleanup = make([]func(), 0)
 			m.stop <- struct{}{}
+			ui.Log("Stopped manager!")
 			return
 		}
+	}
+}
+
+func (m *WallManager) setLock(i int, state bool) {
+	if m.locks[i] == state {
+		return
+	}
+	m.locks[i] = state
+	res, err := m.o.GetSceneItemProperties(
+		"Wall",
+		obs.GetSceneItemPropertiesItem{
+			Name: fmt.Sprintf("Lock %d", i+1),
+		},
+	)
+	if err != nil {
+		ui.LogError("Failed to lock instance %d: %s", i, err)
+		return
+	}
+	b := true
+	_, err = m.o.SetSceneItemProperties(
+		"Wall",
+		obs.SetSceneItemPropertiesItem{
+			Name: fmt.Sprintf("Lock %d", i+1),
+		},
+		obs.SetSceneItemPropertiesPosition{
+			X:         &res.Position.X,
+			Y:         &res.Position.Y,
+			Alignment: &res.Position.Alignment,
+		},
+		&res.Rotation,
+		obs.SetSceneItemPropertiesScale{
+			X:      &res.Scale.X,
+			Y:      &res.Scale.Y,
+			Filter: res.Scale.Filter,
+		},
+		obs.SetSceneItemPropertiesCrop{
+			Top:    &res.Crop.Top,
+			Right:  &res.Crop.Right,
+			Bottom: &res.Crop.Bottom,
+			Left:   &res.Crop.Left,
+		},
+		&state,
+		&b,
+		obs.SetSceneItemPropertiesBounds{
+			Type:      res.Bounds.Type,
+			Alignment: &res.Bounds.Alignment,
+			X:         &res.Bounds.X,
+			Y:         &res.Bounds.Y,
+		},
+	)
+	if err != nil {
+		ui.LogError("Failed to lock instance %d: %s", i, err)
+		return
 	}
 }

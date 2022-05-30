@@ -27,11 +27,12 @@ Minecraft instances for speedrunning. It supports Linux (X11 only).
 resetti's feature set is larger than most Windows-only reset macros.
 
 - Standard single/multi-instance support
-- Wall-style resetting, with keybinds to:
+- Wall-style resetting
   - Reset an instance
   - Reset all instances
   - Play an instance
   - Play an instance and reset all others
+  - Lock an instance
 - Supports 1.14+ (Atum required)
 - Run with or without WorldPreview
 - **Out-of-the-box multi-version support**
@@ -45,7 +46,6 @@ resetti's feature set is larger than most Windows-only reset macros.
 ## Planned Features
 
 - Mouse support on wall
-- Instance locking on wall
 - Window stretching for better visibility on wall
 - Redetect instances without having to stop and restart
 - Process affinity for better performance

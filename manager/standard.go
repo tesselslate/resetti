@@ -176,6 +176,7 @@ func (m *StandardManager) run() {
 			}
 			cleanup = make([]func(), 0)
 			m.stop <- struct{}{}
+			ui.Log("Stopped manager!")
 			return
 		}
 	}

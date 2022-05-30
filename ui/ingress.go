@@ -8,9 +8,11 @@ import (
 	"time"
 )
 
-var logCh = make(chan string, 32)
-var resetCh = make(chan struct{}, 32)
-var stateCh = make(chan []mc.Instance, 32)
+const CHAN_SIZE = 2048
+
+var logCh = make(chan string, CHAN_SIZE)
+var resetCh = make(chan struct{}, CHAN_SIZE)
+var stateCh = make(chan []mc.Instance, CHAN_SIZE)
 var logWriter io.Writer
 
 func SetLogWriter(w io.Writer) {

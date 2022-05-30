@@ -101,6 +101,7 @@ func (u *Ui) run() {
 			// Timeout to force UI updates at least once per second.
 		case <-u.stop:
 			fmt.Print(ALTER_EXIT)
+			Log("UI received shutdown notification.")
 			return
 		}
 		// Render new UI.

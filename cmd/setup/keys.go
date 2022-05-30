@@ -38,9 +38,10 @@ func CmdKeys() {
 		fmt.Println("1: Play Instance")
 		fmt.Println("2: Reset Instance")
 		fmt.Println("3: Play Instance, Reset Others")
+		fmt.Println("4: Lock")
 		fmt.Println("\nGeneral:")
-		fmt.Println("4: Reset")
-		fmt.Println("5: Focus")
+		fmt.Println("5: Reset")
+		fmt.Println("6: Focus")
 		fmt.Println("\nq: Save and Exit Configuration")
 		res, err := reader.ReadString('\n')
 		if err != nil {
@@ -48,7 +49,7 @@ func CmdKeys() {
 			return
 		}
 		switch res[0] {
-		case '1', '2', '3':
+		case '1', '2', '3', '4':
 			fmt.Println("Waiting...")
 			x.GrabKeyboard()
 			keys := make(map[xproto.Keycode]bool)
@@ -76,6 +77,9 @@ func CmdKeys() {
 				case x11.KeyCtrl:
 					modlist = append(modlist, "Control")
 					mod |= x11.ModCtrl
+				case x11.KeyAlt:
+					modlist = append(modlist, "Alt")
+					mod |= x11.Mod1
 				}
 			}
 			if len(modlist) == 0 {
@@ -90,8 +94,10 @@ func CmdKeys() {
 				conf.Wall.Reset = mod
 			case '3':
 				conf.Wall.ResetOthers = mod
+			case '4':
+				conf.Wall.Lock = mod
 			}
-		case '4', '5':
+		case '5', '6':
 			fmt.Println("Waiting...")
 			x.GrabKeyboard()
 			var key x11.Key
@@ -110,9 +116,9 @@ func CmdKeys() {
 			}
 			x.UngrabKeyboard()
 			switch res[0] {
-			case '4':
-				conf.Keys.Reset = key
 			case '5':
+				conf.Keys.Reset = key
+			case '6':
 				conf.Keys.Focus = key
 			}
 			fmt.Println("Done!")

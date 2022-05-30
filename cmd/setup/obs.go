@@ -17,6 +17,7 @@ type choices struct {
 	WallX           uint
 	WallY           uint
 	InstancesAlways bool
+	LockImg         string
 }
 
 func CmdObs() {
@@ -141,6 +142,27 @@ outer2:
 			fmt.Println("Try again.")
 			continue
 		}
+	}
+	fmt.Println("What would you like to use as a lock image on the wall scene?")
+	fmt.Println("Provide a path to the image you will be using. Alternatively,")
+	fmt.Println("if you don't plan on locking instances (or do not care about")
+	fmt.Println("seeing which are locked), you can leave this prompt blank.")
+	for {
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Try again.")
+			continue
+		}
+		input = strings.Trim(input, "\n")
+		if len(input) == 0 {
+			break
+		}
+		if _, err := os.Stat(input); err != nil {
+			fmt.Println("File does not exist.")
+			continue
+		}
+		info.LockImg = input
+		break
 	}
 	fmt.Println("Please create a new scene collection with the name:")
 	fmt.Printf("resetti - %d multi\n", info.Instances)
@@ -340,6 +362,42 @@ func createScenes(info choices) {
 					obs.SetSceneItemPropertiesBounds{
 						X: ptr(float64(iw)),
 						Y: ptr(float64(ih)),
+					},
+				)
+				if err != nil {
+					fmt.Println("Failed to set scene item properties:", err)
+					return
+				}
+				_, err = o.CreateSource(
+					fmt.Sprintf("Lock %d", num),
+					"image_source",
+					"Wall",
+					map[string]interface{}{
+						"file": info.LockImg,
+					},
+					ptr(true),
+				)
+				if err != nil {
+					fmt.Println("Failed to create lock source:", err)
+					return
+				}
+				_, err = o.SetSceneItemProperties(
+					"Wall",
+					obs.SetSceneItemPropertiesItem{
+						Name: fmt.Sprintf("Lock %d", num),
+					},
+					obs.SetSceneItemPropertiesPosition{
+						X: ptr(float64(x * iw)),
+						Y: ptr(float64(y * ih)),
+					},
+					nil,
+					obs.SetSceneItemPropertiesScale{},
+					obs.SetSceneItemPropertiesCrop{},
+					ptr(true),
+					ptr(true),
+					obs.SetSceneItemPropertiesBounds{
+						X: ptr(float64(iw) * 0.25),
+						Y: ptr(float64(ih) * 0.25),
 					},
 				)
 				if err != nil {
