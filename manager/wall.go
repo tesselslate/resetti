@@ -254,17 +254,11 @@ func (m *WallManager) run() {
 						m.x.FocusWindow(projector)
 						m.grabWallKeys()
 						m.onWall = true
-						ui.Log("Resetting instance. Waiting...")
-						ch := make(chan struct{})
-						go func() {
-							ui.Log("Reset instance %d; going to wall.", m.current)
-							err := m.workers[m.current].Reset(evt.Timestamp)
-							if err != nil {
-								ui.LogError("Failed to reset instance %d: %s", m.current, err)
-							}
-							ch <- struct{}{}
-						}()
-						<-ch
+						ui.Log("Resetting instance %d; going to wall.", m.current)
+						err := m.workers[m.current].Reset(evt.Timestamp)
+						if err != nil {
+							ui.LogError("Failed to reset instance %d: %s", m.current, err)
+						}
 						ui.Log("Reset instance successfully.")
 					}
 				default:
