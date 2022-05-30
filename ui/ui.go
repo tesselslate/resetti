@@ -128,7 +128,7 @@ func (u *Ui) run() {
 			if i < len(instances) {
 				fmt.Print(instances[i])
 			} else {
-				fmt.Print(pad("", 31))
+				fmt.Print(pad("", 30))
 			}
 			if i < len(details) {
 				fmt.Print(details[i])
@@ -153,14 +153,14 @@ func pad(i string, strlen int) string {
 func prettifyTime(t time.Duration) string {
 	if math.Floor(t.Hours()) > 0 {
 		return fmt.Sprintf(
-			"%d:%d:%d",
+			"%02d:%02d:%02d",
 			int(math.Floor(t.Hours()))%60,
 			int(math.Floor(t.Minutes()))%60,
 			int(math.Floor(t.Seconds()))%60,
 		)
 	} else if math.Floor(t.Minutes()) > 0 {
 		return fmt.Sprintf(
-			"%d:%d",
+			"%02d:%02d",
 			int(math.Floor(t.Minutes()))%60,
 			int(math.Floor(t.Seconds()))%60,
 		)

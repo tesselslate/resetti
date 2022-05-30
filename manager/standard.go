@@ -81,6 +81,7 @@ func (m *StandardManager) createWorkers(instances []mc.Instance) error {
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
+		w.SetConfig(m.conf.Reset)
 		w.SetDeps(i, m.x, m.o)
 		err := w.Start(m.workerErrors)
 		if err != nil {
@@ -147,18 +148,19 @@ func (m *StandardManager) run() {
 						continue
 					}
 				case m.conf.Keys.Reset:
-					ui.Log("Reset instance %d.", m.current)
-					err := m.workers[m.current].Reset(evt.Timestamp)
-					if err != nil {
-						ui.LogError("Failed to reset worker %d: %s", m.current, err)
-						continue
-					}
-					m.current = (m.current + 1) % len(m.workers)
-					err = m.workers[m.current].Focus(evt.Timestamp)
+					next := (m.current + 1) % len(m.workers)
+					err := m.workers[next].Focus(evt.Timestamp)
 					if err != nil {
 						ui.LogError("Failed to focus worker %d: %s", m.current, err)
 						continue
 					}
+					err = m.workers[m.current].Reset(evt.Timestamp)
+					if err != nil {
+						ui.LogError("Failed to reset worker %d: %s", m.current, err)
+						continue
+					}
+					m.current = next
+					ui.Log("Reset instance %d.", m.current)
 					if m.o != nil {
 						_, err := m.o.SetCurrentScene(
 							fmt.Sprintf("Instance %d", m.current+1),
