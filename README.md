@@ -57,7 +57,7 @@ resetti's feature set ~~is~~ will soon be larger than most Windows-only reset ma
 ## From source (requires [Go](https://go.dev)):
 
 ```sh
-env CGO_ENABLED=0 go install github.com/woofdoggo/resetti@v0.1.1 -ldflags="-s -w"
+env CGO_ENABLED=0 go install github.com/woofdoggo/resetti@latest -ldflags="-s -w"
 ```
 
 ## From binary
