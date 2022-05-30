@@ -21,6 +21,7 @@ Minecraft instances for speedrunning. It supports Linux (X11 only).
   - [Wall](#wall)
     - [On the Wall](#on-the-wall)
     - [Ingame](#ingame)
+- [Miscellaneous](#miscellaneous)
 
 # Features
 
@@ -144,3 +145,16 @@ again or by playing the instance and resetting.
 You can press your general Reset key to reset the instance and return to the
 Wall scene. You can press your Focus key to tab back into the instance if you
 have switched away.
+
+# Miscellaneous
+
+## License
+
+resetti is licensed under the GNU General Public License v3 ONLY, no later
+version. You can view the full license [here](https://raw.githubusercontent.com/woofdoggo/resetti/main/LICENSE).
+
+## Prior Art
+
+- Specnr's [MultiResetWall](https://github.com/specnr/multiresetwall)
+- jojoe's wall macro
+- Others I'm probably not aware of
