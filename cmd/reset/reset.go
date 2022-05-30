@@ -97,7 +97,7 @@ func run(mode string, mgr manager.Manager) int {
 			x.LoopStop()
 			return 0
 		case err := <-mgrErrors:
-			ui.LogError("Fatal manger error: %s", err)
+			ui.LogError("Fatal manager error: %s", err)
 			mgr.Wait()
 			ui.Log("Attempting to reboot manager...")
 			time.Sleep(1 * time.Second)
