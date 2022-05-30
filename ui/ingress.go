@@ -2,8 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"github.com/woofdoggo/resetti/mc"
 	"io"
-	"resetti/mc"
 	"runtime"
 	"time"
 )

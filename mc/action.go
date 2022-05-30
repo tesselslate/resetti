@@ -2,9 +2,9 @@ package mc
 
 import (
 	"fmt"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/x11"
 	"math"
-	"resetti/cfg"
-	"resetti/x11"
 	"time"
 
 	"github.com/jezek/xgb/xproto"

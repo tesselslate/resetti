@@ -1,8 +1,8 @@
 package reset
 
 import (
+	"github.com/woofdoggo/resetti/manager"
 	"os"
-	"resetti/manager"
 )
 
 func CmdCycle() {

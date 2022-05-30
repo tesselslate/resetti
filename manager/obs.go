@@ -2,7 +2,7 @@ package manager
 
 import (
 	"fmt"
-	"resetti/mc"
+	"github.com/woofdoggo/resetti/mc"
 	"strconv"
 
 	obs "github.com/woofdoggo/go-obs"

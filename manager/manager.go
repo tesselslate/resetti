@@ -3,9 +3,9 @@
 package manager
 
 import (
-	"resetti/cfg"
-	"resetti/mc"
-	"resetti/x11"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/x11"
 
 	obs "github.com/woofdoggo/go-obs"
 )

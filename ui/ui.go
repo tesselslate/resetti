@@ -3,9 +3,9 @@ package ui
 
 import (
 	"fmt"
+	"github.com/woofdoggo/resetti/mc"
 	"math"
 	"os"
-	"resetti/mc"
 	"runtime"
 	"strconv"
 	"strings"

@@ -2,13 +2,13 @@ package reset
 
 import (
 	"fmt"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/manager"
+	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/ui"
+	"github.com/woofdoggo/resetti/x11"
 	"os"
 	"os/signal"
-	"resetti/cfg"
-	"resetti/manager"
-	"resetti/mc"
-	"resetti/ui"
-	"resetti/x11"
 	"syscall"
 	"time"
 

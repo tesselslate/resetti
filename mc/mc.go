@@ -5,8 +5,8 @@ package mc
 import (
 	"errors"
 	"fmt"
+	"github.com/woofdoggo/resetti/x11"
 	"os"
-	"resetti/x11"
 	"sort"
 	"strconv"
 	"strings"

@@ -3,10 +3,10 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/cmd/reset"
+	"github.com/woofdoggo/resetti/cmd/setup"
 	"os"
-	"resetti/cfg"
-	"resetti/cmd/reset"
-	"resetti/cmd/setup"
 	"strings"
 
 	"gopkg.in/yaml.v2"

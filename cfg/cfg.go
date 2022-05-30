@@ -4,8 +4,8 @@
 package cfg
 
 import (
+	"github.com/woofdoggo/resetti/x11"
 	"os"
-	"resetti/x11"
 
 	"gopkg.in/yaml.v2"
 )

@@ -1,4 +1,4 @@
-module resetti
+module github.com/woofdoggo/resetti
 
 go 1.18
 

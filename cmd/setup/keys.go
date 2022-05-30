@@ -3,9 +3,9 @@ package setup
 import (
 	"bufio"
 	"fmt"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/x11"
 	"os"
-	"resetti/cfg"
-	"resetti/x11"
 	"strings"
 	"time"
 
