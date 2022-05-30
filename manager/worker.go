@@ -81,6 +81,13 @@ func (w *Worker) Stop() {
 	ui.Log("Stopped worker %d!", w.instance.Id)
 }
 
+// SetConfig sets the worker's configuration.
+func (w *Worker) SetConfig(c cfg.ResetSettings) {
+	w.Lock()
+	w.conf = c
+	w.Unlock()
+}
+
 // SetDeps provides certain objects required for the Worker to function. This
 // should be called once before Start and never again.
 func (w *Worker) SetDeps(i mc.Instance, x *x11.Client, o *obs.Client) {

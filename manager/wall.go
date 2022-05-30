@@ -87,6 +87,7 @@ func (m *WallManager) createWorkers(instances []mc.Instance) error {
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
+		w.SetConfig(m.conf.Reset)
 		w.SetDeps(i, m.x, m.o)
 		err := w.Start(m.workerErrors)
 		if err != nil {

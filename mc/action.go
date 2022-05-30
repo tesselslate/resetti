@@ -39,7 +39,7 @@ func (i Instance) Reset(settings *cfg.ResetSettings, x *x11.Client, t xproto.Tim
 	// Pick the appropriate reset method based on the instance version.
 	// TODO: Implement 1.7, 1.8
 	switch i.Version {
-	case Version1_15, Version1_16:
+	case Version1_14, Version1_15, Version1_16:
 		err := v16_reset(i, settings, x, &t)
 		return t, err
 	default:

@@ -54,25 +54,16 @@ const (
 	VersionUnknown Version = 0  // The instance's version is not supported.
 	Version1_7     Version = 7  // 1.7.x
 	Version1_8     Version = 8  // 1.8.x
+	Version1_14    Version = 14 // 1.14.x
 	Version1_15    Version = 15 // 1.15.x
 	Version1_16    Version = 16 // 1.16.x
 )
 
 func (v Version) String() string {
-	// NOTE: Update switch case with the Version enum.
-	switch v {
-	case VersionUnknown:
+	if v == VersionUnknown {
 		return "???"
-	case Version1_7:
-		return "1.7"
-	case Version1_8:
-		return "1.8"
-	case Version1_15:
-		return "1.15"
-	case Version1_16:
-		return "1.16"
 	}
-	panic("unreachable")
+	return "1." + strconv.Itoa(int(v))
 }
 
 // Instance contains the state and metadata of a Minecraft instance.

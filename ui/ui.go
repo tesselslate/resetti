@@ -122,7 +122,7 @@ func (u *Ui) run() {
 			fmt.Sprintf("%sLog Count: %s%d", DETAILS_BOLD, DETAILS_REG, u.logCount),
 			fmt.Sprintf("%sUptime: %s%s", DETAILS_BOLD, DETAILS_REG, prettifyTime(uptime)),
 		}
-		fmt.Printf("%s  ID  Version State            Details\n", INSTANCES_BOLD)
+		fmt.Printf("%s  ID  Version State           Details\n", INSTANCES_BOLD)
 		rows := max(len(details), len(instances))
 		for i := 0; i < rows; i++ {
 			if i < len(instances) {
