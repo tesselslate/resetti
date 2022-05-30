@@ -24,7 +24,7 @@ Minecraft instances for speedrunning. It supports Linux (X11 only).
 
 # Features
 
-resetti's feature set is larger than most Windows-only reset macros.
+resetti's feature set ~~is~~ will soon be larger than most Windows-only reset macros.
 
 - Standard single/multi-instance support
 - Wall-style resetting
