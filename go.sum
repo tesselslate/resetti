@@ -6,8 +6,8 @@ github.com/gorilla/websocket v1.5.0 h1:PPwGk2jz7EePpoHN/+ClbZu8SPxiqlu12wZP/3sWm
 github.com/gorilla/websocket v1.5.0/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/jezek/xgb v1.0.1 h1:YUGhxps0aR7J2Xplbs23OHnV1mWaxFVcOl9b+1RQkt8=
 github.com/jezek/xgb v1.0.1/go.mod h1:nrhwO0FX/enq75I7Y7G8iN1ubpSGZEiA3v9e9GyRFlk=
-github.com/woofdoggo/go-obs v0.2.0 h1:FBiaaG1/axLr8Nmnq+uw05vKpQLu1p37XKP4a9LM4jI=
-github.com/woofdoggo/go-obs v0.2.0/go.mod h1:ajpUBIirc0L/goTqh33RyC5e1DOWgQwpRxUsZ2IWqCY=
+github.com/woofdoggo/go-obs v0.3.0 h1:G8bMrT7Isq5LDQ3utB1IKUTNr6KB9/jZXGG2L45hPQM=
+github.com/woofdoggo/go-obs v0.3.0/go.mod h1:ajpUBIirc0L/goTqh33RyC5e1DOWgQwpRxUsZ2IWqCY=
 golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c h1:F1jZWGFhYfh0Ci55sIpILtKKK8p3i2/krTr0H1rg74I=
 golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
