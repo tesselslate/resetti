@@ -33,12 +33,15 @@ func run(mode string, mgr manager.Manager) int {
 		fmt.Println("Failed to read config:", err)
 		os.Exit(1)
 	}
-	resetHandle, err := os.OpenFile(conf.CountPath, os.O_RDWR|os.O_CREATE, 0644)
-	if err != nil {
-		fmt.Println("Failed to open reset count:", err)
-		os.Exit(1)
+	var resetHandle *os.File
+	if conf.CountPath != "" {
+		resetHandle, err = os.OpenFile(conf.CountPath, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			fmt.Println("Failed to open reset count:", err)
+			os.Exit(1)
+		}
+		defer resetHandle.Close()
 	}
-	defer resetHandle.Close()
 	if mode == "wall" && !conf.OBS.Enabled {
 		fmt.Println("OBS integration must be enabled for wall.")
 		fmt.Println("Please update your configuration.")

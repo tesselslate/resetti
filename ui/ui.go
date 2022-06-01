@@ -51,20 +51,22 @@ func (u *Ui) Stop() {
 }
 
 func (u *Ui) run() {
-	bytebuf := make([]byte, 16)
-	n, err := u.resetHandle.Read(bytebuf)
-	if err != nil {
-		fmt.Print(ALTER_EXIT)
-		u.Errors <- err
-		return
+	if u.resetHandle != nil {
+		bytebuf := make([]byte, 16)
+		n, err := u.resetHandle.Read(bytebuf)
+		if err != nil {
+			fmt.Print(ALTER_EXIT)
+			u.Errors <- err
+			return
+		}
+		count, err := strconv.Atoi(strings.Trim(string(bytebuf[:n]), "\n"))
+		if err != nil {
+			fmt.Print(ALTER_EXIT)
+			u.Errors <- err
+			return
+		}
+		u.resetCount = count
 	}
-	count, err := strconv.Atoi(strings.Trim(string(bytebuf[:n]), "\n"))
-	if err != nil {
-		fmt.Print(ALTER_EXIT)
-		u.Errors <- err
-		return
-	}
-	u.resetCount = count
 	for {
 		// Process incoming UI updates.
 		select {
@@ -86,6 +88,9 @@ func (u *Ui) run() {
 			for _, v := range instances {
 				if v.State == mc.StateGenerating {
 					u.resetCount += 1
+					if u.resetHandle == nil {
+						continue
+					}
 					_, err := u.resetHandle.Seek(0, 0)
 					if err != nil {
 						LogError("Failed to seek in reset file: %s", err)
