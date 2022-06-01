@@ -220,6 +220,13 @@ func createScenes(info choices) {
 			return
 		}
 	}
+	// Get canvas size.
+	fmt.Println("Getting OBS canvas size.")
+	cw, ch, err := getCanvasSize(o)
+	if err != nil {
+		fmt.Println("Failed to get canvas size:", err)
+		return
+	}
 	// Create instance sources.
 	fmt.Println("Creating Minecraft sources.")
 	for i := uint(0); i < info.Instances; i++ {
@@ -234,14 +241,22 @@ func createScenes(info choices) {
 			fmt.Println("Failed to create source:", err)
 			return
 		}
+		if info.Wall {
+			_, err = o.AddFilterToSource(
+				fmt.Sprintf("MC %d", i+1),
+				"Scaling/Aspect Ratio",
+				"scale_filter",
+				map[string]string{
+					"resolution": fmt.Sprintf("%dx%d", cw, ch),
+				},
+			)
+			if err != nil {
+				fmt.Println("Failed to set scale on instance:", err)
+				return
+			}
+		}
 	}
 	// Populate scene for each instance.
-	fmt.Println("Getting OBS canvas size.")
-	cw, ch, err := getCanvasSize(o)
-	if err != nil {
-		fmt.Println("Failed to get canvas size:", err)
-		return
-	}
 	for i := uint(0); i < info.Instances; i++ {
 		fmt.Printf("Populating Instance %d.\n", i+1)
 		scene := fmt.Sprintf("Instance %d", i+1)
