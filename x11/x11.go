@@ -11,6 +11,9 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
+const window_mask = xproto.ConfigWindowX | xproto.ConfigWindowY |
+	xproto.ConfigWindowWidth | xproto.ConfigWindowHeight
+
 // Attributes contains various window attributes.
 type Attributes struct {
 	Pid   uint32
@@ -300,6 +303,16 @@ func (c *Client) LoopStop() {
 	c.loop = false
 }
 
+// MoveWindow moves and resizes the given window with the given parameters.
+func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) error {
+	return xproto.ConfigureWindowChecked(
+		c.conn,
+		win,
+		window_mask,
+		[]uint32{x, y, w, h},
+	).Check()
+}
+
 // sendKey sends a synthetic keypress to the given window.
 func (c *Client) sendKey(press KeyEvent, win xproto.Window) error {
 	if press.State == KeyPress {
@@ -412,26 +425,6 @@ func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp 
 	*timestamp += 2
 
 	return err
-}
-
-// SetTitle sets the title for the given window.
-func (c *Client) SetTitle(win xproto.Window, title string) error {
-	const WM_NAME = "_NET_WM_NAME"
-	wmName, err := xproto.InternAtom(c.conn, false, uint16(len(WM_NAME)), WM_NAME).Reply()
-	if err != nil {
-		return err
-	}
-
-	return xproto.ChangePropertyChecked(
-		c.conn,
-		xproto.PropertyNewValue,
-		win,
-		wmName.Atom,
-		xproto.AtomString,
-		8,
-		uint32(len(title)),
-		[]byte(title),
-	).Check()
 }
 
 // UngrabKey returns a key to the X server after previously grabbing it.
