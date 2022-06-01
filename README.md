@@ -102,7 +102,7 @@ refuse to start up when the instances it detects do not have IDs starting from
 Run `resetti --save-default` to generate the default configuration file. It will
 generate this (without the comments):
 
-```
+```yaml
 # OBS integration settings. These should be self-explanatory.
 obs:
   enabled: false
