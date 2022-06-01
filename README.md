@@ -131,10 +131,14 @@ reset:
     fov: 70
     rd: 16
     sensitivity: 100
+  # Whether or not to adjust your Minecraft settings automatically when
+  # resetting an instance. If you are using SleepBackground, you may need
+  # to increase your framerate limit in the "background" section for this
+  # to work.
   set-settings: false
   
   # The delay (in milliseconds) to use when switching between
-  # menus. Increase this if things are inconsistent.
+  # menus.
   delay: 50
 
 # The file to use for counting resets. If empty, persistent reset
