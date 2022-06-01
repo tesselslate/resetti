@@ -55,6 +55,10 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 		return err
 	}
 	m.locks = make([]bool, len(m.workers))
+	err := setAffinity(instances, m.conf.Affinity)
+	if err != nil {
+		return err
+	}
 	go m.run()
 	return nil
 }
@@ -260,7 +264,7 @@ func (m *WallManager) run() {
 							}(v)
 						}
 						wg.Wait()
-						ui.Log("Reset all instances successfully.")
+						ui.Log("Reset all instances.")
 					} else {
 						go m.o.SetCurrentScene("Wall")
 						if m.conf.Reset.Stretch {

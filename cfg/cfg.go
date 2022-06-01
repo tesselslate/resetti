@@ -22,6 +22,7 @@ type Config struct {
 	Wall      WallSettings  `yaml:"wall"`  // The user's wall settings.
 	Reset     ResetSettings `yaml:"reset"` // Reset settings
 	CountPath string        `yaml:"reset-file"`
+	Affinity  string        `yaml:"affinity"`
 }
 
 // ConfigKeys contains the user's keybindings.
@@ -79,6 +80,7 @@ var DefaultConfig = Config{
 		false,
 		50,
 	},
+	"",
 	"",
 }
 

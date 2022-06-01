@@ -48,6 +48,10 @@ func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error
 	if err := m.createWorkers(instances); err != nil {
 		return err
 	}
+	err := setAffinity(instances, m.conf.Affinity)
+	if err != nil {
+		return err
+	}
 	go m.run()
 	return nil
 }
