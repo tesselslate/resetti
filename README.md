@@ -16,6 +16,7 @@ Minecraft instances for speedrunning. It supports Linux (X11 only).
   - [From binary](#from-binary)
 - [Setup](#setup)
   - [resetti](#resetti-1)
+- [Configuration](#configuration)
 - [Usage](#usage)
   - [Standard](#standard)
   - [Wall](#wall)
@@ -77,8 +78,11 @@ information which you may find useful for setting up Minecraft:
 
 ## resetti
 
+> If you would like to use the OBS integration (or if you are using wall, it is
+> **required**) then you will have to install [obs-websocket](https://github.com/obsproject/obs-websocket).
+
 - Run `resetti --save-default` to get the default configuration
-- Edit as needed
+- Edit as needed (refer to [Configuration](#configuration))
 - Run `resetti keys` to setup your keybinds
 - Run `resetti obs` to setup your OBS scene collection(s)
 
@@ -92,6 +96,52 @@ of the instance. Make sure these are in sequential order **starting from 0.**
 resetti will only detect instances with the `instance_num` file. It will
 refuse to start up when the instances it detects do not have IDs starting from
 0 and in sequential order (e.g. 0, 1, 2, ... n)
+
+# Configuration
+
+Run `resetti --save-default` to generate the default configuration file. It will
+generate this (without the comments):
+
+```
+# OBS integration settings. These should be self-explanatory.
+obs:
+  enabled: false
+  port: 4440
+  password: password
+
+# Keybinds for resetting regardless of your reset style.
+# Use `resetti keys` to set these up.
+keys:
+  reset: 0;0
+  focus: 0;0
+
+# Keybinds for resetting on the wall. Use `resetti keys`
+to set these up.
+wall:
+  mod-reset: 0
+  mod-reset-others: 0
+  mod-play: 0
+  mod-lock: 0
+
+# Reset settings.
+reset:
+  # Minecraft settings to be set automatically upon leaving
+  # a world. The `set-settings` option below toggles this.
+  mc:
+    fov: 70
+    rd: 16
+    sensitivity: 100
+  set-settings: false
+  
+  # The delay (in milliseconds) to use when switching between
+  # menus. Increase this if things are inconsistent.
+  delay: 50
+
+# The file to use for counting resets. If empty, persistent reset
+# counting is disabled. If provided, resetti will automatically
+# update the given file with the amount of resets you have done.
+reset-file: ""
+```
 
 # Usage
 
