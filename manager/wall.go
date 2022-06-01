@@ -300,7 +300,7 @@ func (m *WallManager) run() {
 						for i := 0; i < len(m.workers); i++ {
 							if i != id && !m.locks[i] {
 								ui.Log("Reset instance %d.", i)
-								err := m.workers[id].Reset(evt.Timestamp)
+								err := m.workers[i].Reset(evt.Timestamp)
 								if err != nil {
 									ui.LogError("Failed to reset instance %d: %s", id, err)
 								}
