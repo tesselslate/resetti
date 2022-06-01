@@ -116,7 +116,7 @@ keys:
   focus: 0;0
 
 # Keybinds for resetting on the wall. Use `resetti keys`
-to set these up.
+# to set these up.
 wall:
   mod-reset: 0
   mod-reset-others: 0
