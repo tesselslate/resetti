@@ -114,6 +114,14 @@ func (w *Worker) Focus(time xproto.Timestamp) error {
 	return nil
 }
 
+// Fullscreen toggles the instance's fullscreen state.
+func (w *Worker) Fullscreen(timestamp xproto.Timestamp) {
+	w.Lock()
+	w.lastTime = timestamp
+	w.x.SendKeyPress(x11.KeyF11, w.instance.Window, &w.lastTime)
+	w.Unlock()
+}
+
 // Reset waits for the Worker to finish its current task before focusing the
 // instance's window.
 func (w *Worker) Reset(time xproto.Timestamp) error {
@@ -125,6 +133,11 @@ func (w *Worker) Reset(time xproto.Timestamp) error {
 	time, err := w.instance.Reset(&w.conf, w.x, time)
 	w.lastTime = time
 	return err
+}
+
+// Resize will resize the window of the Worker's instance.
+func (w *Worker) Resize(width, height uint32) error {
+	return w.x.MoveWindow(w.instance.Window, 0, 0, width, height)
 }
 
 func (w *Worker) run(errch chan<- WorkerError) {

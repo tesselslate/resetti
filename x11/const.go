@@ -14,6 +14,7 @@ const (
 	KeyEscape    xproto.Keycode = 9
 	KeyF         xproto.Keycode = 41
 	KeyF3        xproto.Keycode = 69
+	KeyF11       xproto.Keycode = 95
 	KeyH         xproto.Keycode = 43
 	KeyLeft      xproto.Keycode = 113
 	KeyRight     xproto.Keycode = 114

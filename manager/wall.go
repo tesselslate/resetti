@@ -15,6 +15,9 @@ import (
 	obs "github.com/woofdoggo/go-obs"
 )
 
+const RESIZE_WIDTH = 1600
+const RESIZE_HEIGHT = 300
+
 type WallManager struct {
 	stop   chan struct{}
 	active sync.Mutex
@@ -206,6 +209,15 @@ func (m *WallManager) run() {
 	for i := range m.locks {
 		m.setLock(i, false)
 	}
+	if m.conf.Reset.Stretch {
+		for _, v := range m.workers {
+			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
+			if err != nil {
+				m.Errors <- fmt.Errorf("failed to resize instance: %s", err)
+				return
+			}
+		}
+	}
 	for {
 		select {
 		case werr := <-m.workerErrors:
@@ -251,6 +263,9 @@ func (m *WallManager) run() {
 						ui.Log("Reset all instances successfully.")
 					} else {
 						go m.o.SetCurrentScene("Wall")
+						if m.conf.Reset.Stretch {
+							m.workers[m.current].Fullscreen(evt.Timestamp)
+						}
 						m.x.FocusWindow(projector)
 						m.grabWallKeys()
 						m.onWall = true
@@ -272,7 +287,10 @@ func (m *WallManager) run() {
 						m.ungrabWallKeys()
 						m.onWall = false
 						m.current = id
-						err := m.workers[id].Focus(evt.Timestamp)
+						if m.conf.Reset.Stretch {
+							m.workers[id].Fullscreen(evt.Timestamp)
+						}
+						err := m.workers[id].Focus(evt.Timestamp + 10)
 						if err != nil {
 							ui.LogError("Failed to focus instance %d: %s", id, err)
 							continue
@@ -292,6 +310,9 @@ func (m *WallManager) run() {
 						m.ungrabWallKeys()
 						m.onWall = false
 						m.current = id
+						if m.conf.Reset.Stretch {
+							m.workers[id].Fullscreen(evt.Timestamp)
+						}
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
 							ui.LogError("Failed to focus instance %d: %s", id, err)

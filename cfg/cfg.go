@@ -55,9 +55,10 @@ type ObsSettings struct {
 
 // ResetSettings contains the user's settings for resetting instances.
 type ResetSettings struct {
-	Mc          McSettings `yaml:"mc"`           // The Minecraft settings to use.
-	SetSettings bool       `yaml:"set-settings"` // Whether or not Minecraft settings should be reset automatically.
-	Delay       uint16     `yaml:"delay"`        // Delay (in milliseconds) between menu switches.
+	Mc          McSettings `yaml:"mc"`              // The Minecraft settings to use.
+	SetSettings bool       `yaml:"set-settings"`    // Whether or not Minecraft settings should be reset automatically.
+	Stretch     bool       `yaml:"stretch-windows"` // Whether or not to stretch windows for greater visibility.
+	Delay       uint16     `yaml:"delay"`           // Delay (in milliseconds) between menu switches.
 }
 
 var DefaultConfig = Config{
@@ -74,6 +75,7 @@ var DefaultConfig = Config{
 			16,
 			100,
 		},
+		false,
 		false,
 		50,
 	},
