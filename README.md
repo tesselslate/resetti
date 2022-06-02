@@ -131,10 +131,13 @@ reset:
     fov: 70
     rd: 16
     sensitivity: 100
+  # This setting only applies on the wall. If enabled, instances will be
+  # stretched while resetting for greater visibility. Please be cautious
+  # when enabling this if you are photosensitive.
+  stretch-windows: true
   # Whether or not to adjust your Minecraft settings automatically when
-  # resetting an instance. If you are using SleepBackground, you may need
-  # to increase your framerate limit in the "background" section for this
-  # to work.
+  # resetting an instance. Please be cautious when enabling this if you
+  # are photosensitive, the menu will flash on screen.
   set-settings: false
   
   # The delay (in milliseconds) to use when switching between
@@ -145,6 +148,13 @@ reset:
 # counting is disabled. If provided, resetti will automatically
 # update the given file with the amount of resets you have done.
 reset-file: ""
+# When used, this setting will set each Minecraft instance to run
+# on one specific CPU core/thread. This can offer a decent
+# performance boost. Possible values are:
+# "alternate" - allocate instances to every other thread
+# "sequence" - allocate instances to threads starting from 0
+# nothing - Do not use affinity.
+affinity: ""
 ```
 
 # Usage
