@@ -313,6 +313,15 @@ func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) error {
 	).Check()
 }
 
+// ScreenSize returns the size of the root window.
+func (c *Client) ScreenSize() (uint32, uint32, error) {
+	res, err := xproto.GetGeometry(c.conn, xproto.Drawable(c.Root)).Reply()
+	if err != nil {
+		return 0, 0, err
+	}
+	return uint32(res.Width), uint32(res.Height), nil
+}
+
 // sendKey sends a synthetic keypress to the given window.
 func (c *Client) sendKey(press KeyEvent, win xproto.Window) error {
 	if press.State == KeyPress {

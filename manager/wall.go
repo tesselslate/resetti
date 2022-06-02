@@ -213,7 +213,14 @@ func (m *WallManager) run() {
 	for i := range m.locks {
 		m.setLock(i, false)
 	}
+	var width, height uint32
 	if m.conf.Reset.Stretch {
+		width, height, err = m.x.ScreenSize()
+		ui.Log("Got screen size: %d x %d", width, height)
+		if err != nil {
+			m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
+			return
+		}
 		for _, v := range m.workers {
 			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
 			if err != nil {
@@ -267,16 +274,24 @@ func (m *WallManager) run() {
 						ui.Log("Reset all instances.")
 					} else {
 						go m.o.SetCurrentScene("Wall")
-						if m.conf.Reset.Stretch {
-							m.workers[m.current].Fullscreen(evt.Timestamp)
-						}
-						m.x.FocusWindow(projector)
-						m.grabWallKeys()
-						m.onWall = true
 						ui.Log("Resetting instance %d; going to wall.", m.current)
 						err := m.workers[m.current].Reset(evt.Timestamp)
 						if err != nil {
 							ui.LogError("Failed to reset instance %d: %s", m.current, err)
+						}
+						if m.conf.Reset.Stretch {
+							err := m.workers[m.current].Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
+							if err != nil {
+								ui.LogError("Failed to resize instance: %s", err)
+								continue
+							}
+						}
+						time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
+						m.grabWallKeys()
+						m.onWall = true
+						err = m.x.FocusWindow(projector)
+						if err != nil {
+							ui.LogError("Failed to focus projector: %s", err)
 						}
 						ui.Log("Reset instance successfully.")
 					}
@@ -291,13 +306,17 @@ func (m *WallManager) run() {
 						m.ungrabWallKeys()
 						m.onWall = false
 						m.current = id
-						if m.conf.Reset.Stretch {
-							m.workers[id].Fullscreen(evt.Timestamp)
-						}
 						err := m.workers[id].Focus(evt.Timestamp + 10)
 						if err != nil {
 							ui.LogError("Failed to focus instance %d: %s", id, err)
 							continue
+						}
+						if m.conf.Reset.Stretch {
+							err := m.workers[m.current].Resize(width, height)
+							if err != nil {
+								ui.LogError("Failed to resize instance: %s", err)
+								continue
+							}
 						}
 						m.setLock(id, false)
 					case m.conf.Wall.Reset:
@@ -314,14 +333,19 @@ func (m *WallManager) run() {
 						m.ungrabWallKeys()
 						m.onWall = false
 						m.current = id
-						if m.conf.Reset.Stretch {
-							m.workers[id].Fullscreen(evt.Timestamp)
-						}
 						err := m.workers[id].Focus(evt.Timestamp)
 						if err != nil {
 							ui.LogError("Failed to focus instance %d: %s", id, err)
 							continue
 						}
+						if m.conf.Reset.Stretch {
+							err := m.workers[m.current].Resize(width, height)
+							if err != nil {
+								ui.LogError("Failed to resize instance: %s", err)
+								continue
+							}
+						}
+						m.setLock(id, false)
 						for i := 0; i < len(m.workers); i++ {
 							if i != id && !m.locks[i] {
 								ui.Log("Reset instance %d.", i)
