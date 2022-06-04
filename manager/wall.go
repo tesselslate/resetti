@@ -282,6 +282,9 @@ func (m *WallManager) run() {
 							continue
 						}
 						id := int(evt.Key.Code - 10)
+						if id >= len(m.workers) {
+							continue
+						}
 						m.handleEvent(id, evt.Key.Mod, evt.Timestamp)
 					}
 				}
