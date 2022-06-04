@@ -142,35 +142,38 @@ func (m *StandardManager) run() {
 				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
 				return
 			}
-		case evt := <-m.x.Keys:
-			if evt.State == x11.KeyDown {
-				switch evt.Key {
-				case m.conf.Keys.Focus:
-					err := m.workers[m.current].Focus(evt.Timestamp)
-					if err != nil {
-						ui.LogError("Failed to focus worker %d: %s", m.current, err)
-						continue
-					}
-				case m.conf.Keys.Reset:
-					next := (m.current + 1) % len(m.workers)
-					err := m.workers[next].Focus(evt.Timestamp)
-					if err != nil {
-						ui.LogError("Failed to focus worker %d: %s", m.current, err)
-						continue
-					}
-					err = m.workers[m.current].Reset(evt.Timestamp)
-					if err != nil {
-						ui.LogError("Failed to reset worker %d: %s", m.current, err)
-						continue
-					}
-					m.current = next
-					ui.Log("Reset instance %d.", m.current)
-					if m.o != nil {
-						_, err := m.o.SetCurrentScene(
-							fmt.Sprintf("Instance %d", m.current+1),
-						)
+		case evt := <-m.x.Events:
+			switch evt := evt.(type) {
+			case x11.KeyEvent:
+				if evt.State == x11.KeyDown {
+					switch evt.Key {
+					case m.conf.Keys.Focus:
+						err := m.workers[m.current].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("Failed to switch OBS scene: %s", err)
+							ui.LogError("Failed to focus worker %d: %s", m.current, err)
+							continue
+						}
+					case m.conf.Keys.Reset:
+						next := (m.current + 1) % len(m.workers)
+						err := m.workers[next].Focus(evt.Timestamp)
+						if err != nil {
+							ui.LogError("Failed to focus worker %d: %s", m.current, err)
+							continue
+						}
+						err = m.workers[m.current].Reset(evt.Timestamp)
+						if err != nil {
+							ui.LogError("Failed to reset worker %d: %s", m.current, err)
+							continue
+						}
+						m.current = next
+						ui.Log("Reset instance %d.", m.current)
+						if m.o != nil {
+							_, err := m.o.SetCurrentScene(
+								fmt.Sprintf("Instance %d", m.current+1),
+							)
+							if err != nil {
+								ui.LogError("Failed to switch OBS scene: %s", err)
+							}
 						}
 					}
 				}

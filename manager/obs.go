@@ -2,8 +2,9 @@ package manager
 
 import (
 	"fmt"
-	"github.com/woofdoggo/resetti/mc"
 	"strconv"
+
+	"github.com/woofdoggo/resetti/mc"
 
 	obs "github.com/woofdoggo/go-obs"
 )
@@ -39,4 +40,31 @@ func setSources(o *obs.Client, instances []mc.Instance) error {
 		}
 	}
 	return nil
+}
+
+func getWallSize(o *obs.Client, count int) (uint32, uint32, error) {
+	xs, ys := make([]float64, 0), make([]float64, 0)
+	for i := 0; i < count; i++ {
+		itemSettings, err := o.GetSceneItemProperties(
+			"Wall",
+			obs.GetSceneItemPropertiesItem{
+				Name: fmt.Sprintf("MC %d", i+1),
+			},
+		)
+		if err != nil {
+			return 0, 0, err
+		}
+		xs = appendUnique(xs, itemSettings.Position.X)
+		ys = appendUnique(ys, itemSettings.Position.Y)
+	}
+	return uint32(len(xs)), uint32(len(ys)), nil
+}
+
+func appendUnique(s []float64, i float64) []float64 {
+	for _, v := range s {
+		if i == v {
+			return s
+		}
+	}
+	return append(s, i)
 }

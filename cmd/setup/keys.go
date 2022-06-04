@@ -57,9 +57,11 @@ func CmdKeys() {
 		loop:
 			for {
 				select {
-				case evt := <-x.Keys:
-					if evt.State == x11.KeyDown {
-						keys[evt.Key.Code] = true
+				case evt := <-x.Events:
+					if evt, ok := evt.(x11.KeyEvent); ok {
+						if evt.State == x11.KeyDown {
+							keys[evt.Key.Code] = true
+						}
 					}
 				case <-timeout:
 					fmt.Println("Done!")
@@ -105,9 +107,11 @@ func CmdKeys() {
 		loop2:
 			for {
 				select {
-				case evt := <-x.Keys:
-					if evt.State == x11.KeyDown {
-						key = evt.Key
+				case evt := <-x.Events:
+					if evt, ok := evt.(x11.KeyEvent); ok {
+						if evt.State == x11.KeyDown {
+							key = evt.Key
+						}
 					}
 				case <-timeout:
 					fmt.Println("Done!")

@@ -28,6 +28,12 @@ type WallManager struct {
 	current      int
 	onWall       bool
 	wallGrab     bool
+	projector    xproto.Window
+	screenWidth  uint32
+	screenHeight uint32
+	wallWidth    uint32
+	wallHeight   uint32
+	lastMouseId  int
 
 	Errors chan error
 	conf   cfg.Config
@@ -59,6 +65,7 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 	if err != nil {
 		return err
 	}
+	m.lastMouseId = -1
 	go m.run()
 	return nil
 }
@@ -145,6 +152,11 @@ func (m *WallManager) grabWallKeys() {
 		key.Mod = m.conf.Wall.Lock
 		m.x.GrabKey(key)
 	}
+	if m.conf.Wall.Mouse {
+		if err := m.x.GrabPointer(); err != nil {
+			ui.LogError("Failed to grab pointer: %s", err)
+		}
+	}
 	m.wallGrab = true
 }
 
@@ -165,6 +177,11 @@ func (m *WallManager) ungrabWallKeys() {
 		key.Mod = m.conf.Wall.Lock
 		m.x.UngrabKey(key)
 	}
+	if m.conf.Wall.Mouse {
+		if err := m.x.UngrabPointer(); err != nil {
+			ui.LogError("Failed to release pointer: %s", err)
+		}
+	}
 	m.wallGrab = false
 }
 
@@ -184,7 +201,6 @@ func (m *WallManager) run() {
 	m.grabKeys()
 	m.grabWallKeys()
 	// Locate OBS projector.
-	var projector xproto.Window
 	windows, err := m.x.GetWindowList(m.x.Root)
 	if err != nil {
 		m.Errors <- err
@@ -196,11 +212,11 @@ func (m *WallManager) run() {
 			continue
 		}
 		if strings.Contains(title, "Projector (Scene)") {
-			projector = win
+			m.projector = win
 			break
 		}
 	}
-	if projector == 0 {
+	if m.projector == 0 {
 		// No projector found. Spawn one.
 		_, err := m.o.OpenProjector("Scene", nil, "", "Wall")
 		if err != nil {
@@ -208,19 +224,20 @@ func (m *WallManager) run() {
 			return
 		}
 	}
-	m.x.FocusWindow(projector)
+	m.x.FocusWindow(m.projector)
 	m.onWall = true
 	for i := range m.locks {
 		m.setLock(i, false)
 	}
-	var width, height uint32
 	if m.conf.Reset.Stretch {
-		width, height, err = m.x.ScreenSize()
-		ui.Log("Got screen size: %d x %d", width, height)
+		sw, sh, err := m.x.ScreenSize()
 		if err != nil {
 			m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
 			return
 		}
+		ui.Log("Got screen size: %dx%d.", sw, sh)
+		m.screenWidth = sw
+		m.screenHeight = sh
 		for _, v := range m.workers {
 			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
 			if err != nil {
@@ -228,6 +245,17 @@ func (m *WallManager) run() {
 				return
 			}
 		}
+		ui.Log("Stretched instances.")
+	}
+	if m.conf.Wall.Mouse {
+		ww, wh, err := getWallSize(m.o, len(m.workers))
+		ui.Log("Got wall size: %dx%d, %d.", ww, wh, len(m.workers))
+		if err != nil {
+			m.Errors <- fmt.Errorf("failed to get wall size: %s", err)
+			return
+		}
+		m.wallWidth = ww
+		m.wallHeight = wh
 	}
 	for {
 		select {
@@ -240,126 +268,49 @@ func (m *WallManager) run() {
 				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
 				return
 			}
-		case evt := <-m.x.Keys:
-			if evt.State == x11.KeyDown {
-				switch evt.Key {
-				case m.conf.Keys.Focus:
-					if m.onWall {
-						m.x.FocusWindow(projector)
-					} else {
-						err := m.workers[m.current].Focus(evt.Timestamp)
-						if err != nil {
-							ui.LogError("Failed to focus instance %d: %s", m.current, err)
-						}
-					}
-				case m.conf.Keys.Reset:
-					if m.onWall {
-						ui.Log("Resetting all instances. Waiting...")
-						wg := sync.WaitGroup{}
-						for _, v := range m.workers {
-							wg.Add(1)
-							go func(v *Worker) {
-								defer wg.Done()
-								if m.locks[v.instance.Id] {
-									return
-								}
-								ui.Log("Reset instance %d.", v.instance.Id)
-								err := v.Reset(evt.Timestamp)
-								if err != nil {
-									ui.LogError("Failed to reset instance %d: %s", m.current, err)
-								}
-							}(v)
-						}
-						wg.Wait()
-						ui.Log("Reset all instances.")
-					} else {
-						go m.o.SetCurrentScene("Wall")
-						ui.Log("Resetting instance %d; going to wall.", m.current)
-						err := m.workers[m.current].Reset(evt.Timestamp)
-						if err != nil {
-							ui.LogError("Failed to reset instance %d: %s", m.current, err)
-						}
-						if m.conf.Reset.Stretch {
-							err := m.workers[m.current].Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
-							if err != nil {
-								ui.LogError("Failed to resize instance: %s", err)
-								continue
-							}
-						}
-						time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
-						m.grabWallKeys()
-						m.onWall = true
-						err = m.x.FocusWindow(projector)
-						if err != nil {
-							ui.LogError("Failed to focus projector: %s", err)
-						}
-						ui.Log("Reset instance successfully.")
-					}
-				default:
-					if evt.Key.Code < 10 || evt.Key.Code > 19 {
-						continue
-					}
-					id := int(evt.Key.Code - 10)
-					switch evt.Key.Mod {
-					case m.conf.Wall.Play:
-						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
-						m.ungrabWallKeys()
-						m.onWall = false
-						m.current = id
-						err := m.workers[id].Focus(evt.Timestamp + 10)
-						if err != nil {
-							ui.LogError("Failed to focus instance %d: %s", id, err)
+		case evt := <-m.x.Events:
+			switch evt := evt.(type) {
+			case x11.KeyEvent:
+				if evt.State == x11.KeyDown {
+					switch evt.Key {
+					case m.conf.Keys.Focus:
+						m.focus(evt)
+					case m.conf.Keys.Reset:
+						m.reset(evt)
+					default:
+						if evt.Key.Code < 10 || evt.Key.Code > 19 {
 							continue
 						}
-						if m.conf.Reset.Stretch {
-							err := m.workers[m.current].Resize(width, height)
-							if err != nil {
-								ui.LogError("Failed to resize instance: %s", err)
-								continue
-							}
-						}
-						m.setLock(id, false)
-					case m.conf.Wall.Reset:
-						if m.locks[id] {
-							continue
-						}
-						ui.Log("Reset instance %d.", id)
-						err := m.workers[id].Reset(evt.Timestamp)
-						if err != nil {
-							ui.LogError("Failed to reset instance %d: %s", id, err)
-						}
-					case m.conf.Wall.ResetOthers:
-						go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
-						m.ungrabWallKeys()
-						m.onWall = false
-						m.current = id
-						err := m.workers[id].Focus(evt.Timestamp)
-						if err != nil {
-							ui.LogError("Failed to focus instance %d: %s", id, err)
-							continue
-						}
-						if m.conf.Reset.Stretch {
-							err := m.workers[m.current].Resize(width, height)
-							if err != nil {
-								ui.LogError("Failed to resize instance: %s", err)
-								continue
-							}
-						}
-						m.setLock(id, false)
-						for i := 0; i < len(m.workers); i++ {
-							if i != id && !m.locks[i] {
-								ui.Log("Reset instance %d.", i)
-								err := m.workers[i].Reset(evt.Timestamp)
-								if err != nil {
-									ui.LogError("Failed to reset instance %d: %s", id, err)
-								}
-							}
-						}
-					case m.conf.Wall.Lock:
-						m.setLock(id, !m.locks[id])
-						ui.Log("Toggled lock state of instance %d (%t)", id, m.locks[id])
+						id := int(evt.Key.Code - 10)
+						m.handleEvent(id, evt.Key.Mod, evt.Timestamp)
 					}
 				}
+			case x11.MoveEvent:
+				if evt.State&xproto.ButtonMask1 != 0 {
+					iw := m.screenWidth / m.wallWidth
+					ih := m.screenHeight / m.wallHeight
+					x := uint32(evt.X) / iw
+					y := uint32(evt.Y) / ih
+					id := int((y * m.wallWidth) + x)
+					if id >= len(m.workers) {
+						continue
+					}
+					if m.lastMouseId == id {
+						continue
+					}
+					m.lastMouseId = id
+					m.handleEvent(id, x11.Keymod(evt.State)^xproto.ButtonMask1, evt.Timestamp)
+				}
+			case x11.ButtonEvent:
+				iw := m.screenWidth / m.wallWidth
+				ih := m.screenHeight / m.wallHeight
+				x := uint32(evt.X) / iw
+				y := uint32(evt.Y) / ih
+				id := int((y * m.wallWidth) + x)
+				if id >= len(m.workers) {
+					continue
+				}
+				m.handleEvent(id, x11.Keymod(evt.State), evt.Timestamp)
 			}
 		case <-m.stop:
 			// Delete cleanup tasks and run them before returning.
@@ -374,6 +325,140 @@ func (m *WallManager) run() {
 			return
 		}
 	}
+}
+
+func (m *WallManager) handleEvent(id int, state x11.Keymod, time xproto.Timestamp) {
+	switch state {
+	case m.conf.Wall.Play:
+		m.wallPlay(id, time)
+	case m.conf.Wall.Reset:
+		m.wallReset(id, time)
+	case m.conf.Wall.ResetOthers:
+		m.wallResetOthers(id, time)
+	case m.conf.Wall.Lock:
+		m.wallLock(id, time)
+	}
+}
+
+func (m *WallManager) focus(evt x11.KeyEvent) {
+	if m.onWall {
+		m.x.FocusWindow(m.projector)
+	} else {
+		err := m.workers[m.current].Focus(evt.Timestamp)
+		if err != nil {
+			ui.LogError("Failed to focus instance %d: %s", m.current, err)
+		}
+	}
+}
+
+func (m *WallManager) reset(evt x11.KeyEvent) {
+	if m.onWall {
+		ui.Log("Resetting all instances. Waiting...")
+		wg := sync.WaitGroup{}
+		for _, v := range m.workers {
+			wg.Add(1)
+			go func(v *Worker) {
+				defer wg.Done()
+				if m.locks[v.instance.Id] {
+					return
+				}
+				ui.Log("Reset instance %d.", v.instance.Id)
+				err := v.Reset(evt.Timestamp)
+				if err != nil {
+					ui.LogError("Failed to reset instance %d: %s", m.current, err)
+				}
+			}(v)
+		}
+		wg.Wait()
+		ui.Log("Reset all instances.")
+	} else {
+		go m.o.SetCurrentScene("Wall")
+		ui.Log("Resetting instance %d; going to wall.", m.current)
+		err := m.workers[m.current].Reset(evt.Timestamp)
+		if err != nil {
+			ui.LogError("Failed to reset instance %d: %s", m.current, err)
+		}
+		if m.conf.Reset.Stretch {
+			err := m.workers[m.current].Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
+			if err != nil {
+				ui.LogError("Failed to resize instance: %s", err)
+				return
+			}
+		}
+		time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
+		m.grabWallKeys()
+		m.onWall = true
+		err = m.x.FocusWindow(m.projector)
+		if err != nil {
+			ui.LogError("Failed to focus projector: %s", err)
+		}
+		ui.Log("Reset instance successfully.")
+	}
+}
+
+func (m *WallManager) wallReset(id int, t xproto.Timestamp) {
+	if m.locks[id] {
+		return
+	}
+	ui.Log("Reset instance %d.", id)
+	err := m.workers[id].Reset(t)
+	if err != nil {
+		ui.LogError("Failed to reset instance %d: %s", id, err)
+	}
+}
+
+func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
+	go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
+	m.ungrabWallKeys()
+	m.onWall = false
+	m.current = id
+	err := m.workers[id].Focus(t)
+	if err != nil {
+		ui.LogError("Failed to focus instance %d: %s", id, err)
+		return
+	}
+	if m.conf.Reset.Stretch {
+		err := m.workers[m.current].Resize(m.screenWidth, m.screenHeight)
+		if err != nil {
+			ui.LogError("Failed to resize instance: %s", err)
+			return
+		}
+	}
+	m.setLock(id, false)
+	for i := 0; i < len(m.workers); i++ {
+		if i != id && !m.locks[i] {
+			ui.Log("Reset instance %d.", i)
+			err := m.workers[i].Reset(t)
+			if err != nil {
+				ui.LogError("Failed to reset instance %d: %s", id, err)
+			}
+		}
+	}
+}
+
+func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
+	go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
+	m.ungrabWallKeys()
+	m.onWall = false
+	m.current = id
+	err := m.workers[id].Focus(t + 10)
+	if err != nil {
+		ui.LogError("Failed to focus instance %d: %s", id, err)
+		return
+	}
+	if m.conf.Reset.Stretch {
+		err := m.workers[m.current].Resize(m.screenWidth, m.screenHeight)
+		if err != nil {
+			ui.LogError("Failed to resize instance: %s", err)
+			return
+		}
+	}
+	m.setLock(id, false)
+}
+
+func (m *WallManager) wallLock(id int, t xproto.Timestamp) {
+	m.setLock(id, !m.locks[id])
+	ui.Log("Toggled lock state of instance %d (%t)", id, m.locks[id])
 }
 
 func (m *WallManager) setLock(i int, state bool) {

@@ -11,44 +11,10 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
+const pointer_mask = xproto.EventMaskPointerMotion | xproto.EventMaskButtonPress
+
 const window_mask = xproto.ConfigWindowX | xproto.ConfigWindowY |
 	xproto.ConfigWindowWidth | xproto.ConfigWindowHeight
-
-// Attributes contains various window attributes.
-type Attributes struct {
-	Pid   uint32
-	Class []string
-}
-
-// Keymod represents modifiers held down for a keypress.
-type Keymod uint16
-
-// Key represents the contents of a keypress.
-type Key struct {
-	Code xproto.Keycode
-	Mod  Keymod
-}
-
-// KeyEvent represents a single key event.
-type KeyEvent struct {
-	Key       Key
-	State     KeyState
-	Timestamp xproto.Timestamp
-}
-
-// KeyState represents the state of a keypress.
-type KeyState int
-
-// Client managaes an active X connection.
-type Client struct {
-	Root xproto.Window
-	conn *xgb.Conn
-	keys []Key
-	loop bool
-
-	Errors chan error
-	Keys   chan KeyEvent
-}
 
 // NewClient creates a new Client instance.
 func NewClient() (*Client, error) {
@@ -254,11 +220,27 @@ func (c *Client) GrabKeyboard() error {
 	return err
 }
 
+// GrabPointer "grabs" the mouse pointer from the X server.
+func (c *Client) GrabPointer() error {
+	_, err := xproto.GrabPointer(
+		c.conn,
+		true,
+		c.Root,
+		pointer_mask,
+		xproto.GrabModeAsync,
+		xproto.GrabModeAsync,
+		c.Root,
+		xproto.CursorNone,
+		xproto.TimeCurrentTime,
+	).Reply()
+	return err
+}
+
 // Loop starts a goroutine which will listen for keypress events from
 // the X server.
 func (c *Client) Loop() {
 	c.Errors = make(chan error, 16)
-	c.Keys = make(chan KeyEvent, 16)
+	c.Events = make(chan any, 256)
 	c.loop = true
 
 	go func() {
@@ -276,7 +258,7 @@ func (c *Client) Loop() {
 
 			switch evt := evt.(type) {
 			case xproto.KeyPressEvent:
-				c.Keys <- KeyEvent{
+				c.Events <- KeyEvent{
 					Key: Key{
 						Code: evt.Detail,
 						Mod:  Keymod(evt.State),
@@ -285,12 +267,26 @@ func (c *Client) Loop() {
 					Timestamp: evt.Time,
 				}
 			case xproto.KeyReleaseEvent:
-				c.Keys <- KeyEvent{
+				c.Events <- KeyEvent{
 					Key: Key{
 						Code: evt.Detail,
 						Mod:  Keymod(evt.State),
 					},
 					State:     KeyUp,
+					Timestamp: evt.Time,
+				}
+			case xproto.ButtonPressEvent:
+				c.Events <- ButtonEvent{
+					X:         evt.RootX,
+					Y:         evt.RootY,
+					State:     evt.State,
+					Timestamp: evt.Time,
+				}
+			case xproto.MotionNotifyEvent:
+				c.Events <- MoveEvent{
+					X:         evt.RootX,
+					Y:         evt.RootY,
+					State:     evt.State,
 					Timestamp: evt.Time,
 				}
 			}
@@ -455,4 +451,9 @@ func (c *Client) UngrabKey(key Key) error {
 // UngrabKeyboard returns the keyboard to other X clients.
 func (c *Client) UngrabKeyboard() {
 	xproto.UngrabKeyboard(c.conn, xproto.TimeCurrentTime)
+}
+
+// UngrabPointer returns the mouse pointer to the X server.
+func (c *Client) UngrabPointer() error {
+	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
 }

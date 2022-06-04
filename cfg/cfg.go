@@ -37,6 +37,7 @@ type WallSettings struct {
 	ResetOthers x11.Keymod `yaml:"mod-reset-others"`
 	Play        x11.Keymod `yaml:"mod-play"`
 	Lock        x11.Keymod `yaml:"mod-lock"`
+	Mouse       bool       `yaml:"use-mouse"`
 }
 
 // McSettings contains the user's preferred Minecraft settings for
