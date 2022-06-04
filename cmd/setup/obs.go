@@ -347,6 +347,9 @@ func createScenes(info choices) {
 		for x := uint(0); x < info.WallX; x++ {
 			for y := uint(0); y < info.WallY; y++ {
 				num := info.WallX*y + x + 1
+				if num > info.Instances {
+					break
+				}
 				source := fmt.Sprintf("MC %d", num)
 				res, err := o.AddSceneItem(
 					"Wall",
