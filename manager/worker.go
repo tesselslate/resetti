@@ -33,7 +33,6 @@ type Worker struct {
 	active sync.Mutex
 
 	conf cfg.ResetSettings
-	x    *x11.Client
 	o    *obs.Client
 
 	reader   *bufio.Reader
@@ -90,8 +89,7 @@ func (w *Worker) SetConfig(c cfg.ResetSettings) {
 
 // SetDeps provides certain objects required for the Worker to function. This
 // should be called once before Start and never again.
-func (w *Worker) SetDeps(i mc.Instance, x *x11.Client, o *obs.Client) {
-	w.x = x
+func (w *Worker) SetDeps(i mc.Instance, o *obs.Client) {
 	w.o = o
 	w.instance = i
 }
@@ -102,13 +100,13 @@ func (w *Worker) Focus(time xproto.Timestamp) error {
 	w.Lock()
 	defer w.Unlock()
 	w.lastTime = time
-	err := w.x.FocusWindow(w.instance.Window)
+	err := x11.FocusWindow(w.instance.Window)
 	if err != nil {
 		return err
 	}
 	// If the instance is ready (generated, paused), then unpause it.
 	if w.instance.State == mc.StateReady {
-		w.x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
+		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
 		w.setState(mc.StateIngame)
 	}
 	return nil
@@ -118,7 +116,7 @@ func (w *Worker) Focus(time xproto.Timestamp) error {
 func (w *Worker) Fullscreen(timestamp xproto.Timestamp) {
 	w.Lock()
 	w.lastTime = timestamp
-	w.x.SendKeyPress(x11.KeyF11, w.instance.Window, &w.lastTime)
+	x11.SendKeyPress(x11.KeyF11, w.instance.Window, &w.lastTime)
 	w.Unlock()
 }
 
@@ -130,14 +128,14 @@ func (w *Worker) Reset(time xproto.Timestamp) error {
 	if w.instance.State == mc.StateGenerating {
 		return ErrCannotReset
 	}
-	time, err := w.instance.Reset(&w.conf, w.x, time)
+	time, err := w.instance.Reset(&w.conf, time)
 	w.lastTime = time
 	return err
 }
 
 // Resize will resize the window of the Worker's instance.
-func (w *Worker) Resize(width, height uint32) error {
-	return w.x.MoveWindow(w.instance.Window, 0, 0, width, height)
+func (w *Worker) Resize(width, height uint16) error {
+	return x11.MoveWindow(w.instance.Window, 0, 0, uint32(width), uint32(height))
 }
 
 func (w *Worker) run(errch chan<- WorkerError) {
@@ -236,7 +234,7 @@ func (w *Worker) updateState() {
 	w.Lock()
 	defer w.Unlock()
 	w.setState(state)
-	activeWin, err := w.x.GetActiveWindow()
+	activeWin, err := x11.GetActiveWindow()
 	if err != nil {
 		ui.LogError("Failed to get active window: %s", err)
 		return
@@ -255,9 +253,9 @@ func (w *Worker) updateState() {
 	// to get the transparent pause menu.
 	if !isActive && (isPreview || isReady) {
 		time.Sleep(time.Duration(w.conf.Delay) * time.Millisecond)
-		w.x.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
-		w.x.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
-		w.x.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
+		x11.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
+		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
+		x11.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
 	}
 }
 

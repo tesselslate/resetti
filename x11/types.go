@@ -1,9 +1,6 @@
 package x11
 
-import (
-	"github.com/jezek/xgb"
-	"github.com/jezek/xgb/xproto"
-)
+import "github.com/jezek/xgb/xproto"
 
 // Attributes contains various window attributes.
 type Attributes struct {
@@ -44,15 +41,4 @@ type MoveEvent struct {
 	Y         int16
 	State     uint16
 	Timestamp xproto.Timestamp
-}
-
-// Client managaes an active X connection.
-type Client struct {
-	Root xproto.Window
-	conn *xgb.Conn
-	keys []Key
-	loop bool
-
-	Errors chan error
-	Events chan any
 }

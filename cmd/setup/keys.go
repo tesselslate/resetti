@@ -14,8 +14,10 @@ import (
 )
 
 func CmdKeys() {
-	x, err := x11.NewClient()
-	x.Loop()
+	xerr := make(chan error, 32)
+	xevt := make(chan any, 32)
+	x11.Subscribe(xerr, xevt)
+	err := x11.Initialize()
 	if err != nil {
 		fmt.Println("Failed to connect to X server:", err)
 		return
@@ -51,13 +53,13 @@ func CmdKeys() {
 		switch res[0] {
 		case '1', '2', '3', '4':
 			fmt.Println("Waiting...")
-			x.GrabKeyboard()
+			x11.GrabKeyboard(0)
 			keys := make(map[xproto.Keycode]bool)
 			timeout := time.After(3 * time.Second)
 		loop:
 			for {
 				select {
-				case evt := <-x.Events:
+				case evt := <-xevt:
 					if evt, ok := evt.(x11.KeyEvent); ok {
 						if evt.State == x11.KeyDown {
 							keys[evt.Key.Code] = true
@@ -68,7 +70,7 @@ func CmdKeys() {
 					break loop
 				}
 			}
-			x.UngrabKeyboard()
+			x11.UngrabKeyboard()
 			modlist := make([]string, 0)
 			mod := x11.Keymod(x11.ModNone)
 			for k := range keys {
@@ -101,13 +103,13 @@ func CmdKeys() {
 			}
 		case '5', '6':
 			fmt.Println("Waiting...")
-			x.GrabKeyboard()
+			x11.GrabKeyboard(0)
 			var key x11.Key
 			timeout := time.After(3 * time.Second)
 		loop2:
 			for {
 				select {
-				case evt := <-x.Events:
+				case evt := <-xevt:
 					if evt, ok := evt.(x11.KeyEvent); ok {
 						if evt.State == x11.KeyDown {
 							key = evt.Key
@@ -118,7 +120,7 @@ func CmdKeys() {
 					break loop2
 				}
 			}
-			x.UngrabKeyboard()
+			x11.UngrabKeyboard()
 			switch res[0] {
 			case '5':
 				conf.Keys.Reset = key

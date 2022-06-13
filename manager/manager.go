@@ -5,14 +5,13 @@ package manager
 import (
 	"github.com/woofdoggo/resetti/cfg"
 	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/x11"
 
 	obs "github.com/woofdoggo/go-obs"
 )
 
 type Manager interface {
 	SetConfig(cfg.Config)
-	SetDeps(*x11.Client, *obs.Client)
+	SetDeps(*obs.Client)
 	Wait()
 
 	Restart([]mc.Instance) error

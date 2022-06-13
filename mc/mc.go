@@ -5,13 +5,13 @@ package mc
 import (
 	"errors"
 	"fmt"
-	"github.com/woofdoggo/resetti/x11"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
+	"github.com/woofdoggo/resetti/x11"
 )
 
 // InstanceState represents the state of a given instance.
@@ -77,8 +77,8 @@ type Instance struct {
 }
 
 // GetInstances returns a list of running Minecraft instances.
-func GetInstances(x *x11.Client) ([]Instance, error) {
-	windows, err := x.GetWindowList(x.Root)
+func GetInstances() ([]Instance, error) {
+	windows, err := x11.GetAllWindows()
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +87,16 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 
 	for _, win := range windows {
 		// Check if the window is a Minecraft window.
-		attrs, err := x.GetWindowAttributes(win)
+		class, err := x11.GetWindowClass(win)
+		if err != nil {
+			continue
+		}
+		pid, err := x11.GetWindowPid(win)
 		if err != nil {
 			continue
 		}
 
-		if !strings.Contains(attrs.Class[0], "Minecraft") {
+		if !strings.Contains(class, "Minecraft") {
 			continue
 		}
 
@@ -107,7 +111,7 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 		// be using the vanilla launcher, it's pretty bad...)
 
 		// Get the path to the instance.
-		argbytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", attrs.Pid))
+		argbytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
 		if err != nil {
 			continue
 		}
@@ -142,7 +146,7 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 		}
 
 		// Get the instance version.
-		verstr := strings.Split(attrs.Class[0], " ")[1]
+		verstr := strings.Split(class, " ")[1]
 		verstr = strings.Split(verstr, ".")[1]
 		var version Version
 
@@ -163,7 +167,7 @@ func GetInstances(x *x11.Client) ([]Instance, error) {
 			Id:      id,
 			Window:  win,
 			Dir:     dir,
-			Pid:     attrs.Pid,
+			Pid:     pid,
 			State:   StateUnknown,
 			Version: version,
 		}

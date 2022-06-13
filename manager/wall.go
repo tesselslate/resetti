@@ -29,15 +29,14 @@ type WallManager struct {
 	onWall       bool
 	wallGrab     bool
 	projector    xproto.Window
-	screenWidth  uint32
-	screenHeight uint32
-	wallWidth    uint32
-	wallHeight   uint32
+	screenWidth  uint16
+	screenHeight uint16
+	wallWidth    uint16
+	wallHeight   uint16
 	lastMouseId  int
 
 	Errors chan error
 	conf   cfg.Config
-	x      *x11.Client
 	o      *obs.Client
 }
 
@@ -91,8 +90,7 @@ func (m *WallManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }
 
-func (m *WallManager) SetDeps(x *x11.Client, o *obs.Client) {
-	m.x = x
+func (m *WallManager) SetDeps(o *obs.Client) {
 	m.o = o
 }
 
@@ -102,7 +100,7 @@ func (m *WallManager) createWorkers(instances []mc.Instance) error {
 	for _, i := range instances {
 		w := &Worker{}
 		w.SetConfig(m.conf.Reset)
-		w.SetDeps(i, m.x, m.o)
+		w.SetDeps(i, m.o)
 		err := w.Start(m.workerErrors)
 		if err != nil {
 			m.stopWorkers()
@@ -126,13 +124,15 @@ func (m *WallManager) stopWorkers() {
 }
 
 func (m *WallManager) grabKeys() {
-	m.x.GrabKey(m.conf.Keys.Focus)
-	m.x.GrabKey(m.conf.Keys.Reset)
+	// TODO: check for errors
+	x11.GrabKey(m.conf.Keys.Focus, 0)
+	x11.GrabKey(m.conf.Keys.Reset, 0)
 }
 
 func (m *WallManager) ungrabKeys() {
-	m.x.UngrabKey(m.conf.Keys.Focus)
-	m.x.UngrabKey(m.conf.Keys.Reset)
+	// TODO: check for errors
+	x11.UngrabKey(m.conf.Keys.Focus)
+	x11.UngrabKey(m.conf.Keys.Reset)
 }
 
 func (m *WallManager) grabWallKeys() {
@@ -144,16 +144,16 @@ func (m *WallManager) grabWallKeys() {
 			Code: xproto.Keycode(i + 10),
 		}
 		key.Mod = m.conf.Wall.Play
-		m.x.GrabKey(key)
+		x11.GrabKey(key, 0)
 		key.Mod = m.conf.Wall.Reset
-		m.x.GrabKey(key)
+		x11.GrabKey(key, 0)
 		key.Mod = m.conf.Wall.ResetOthers
-		m.x.GrabKey(key)
+		x11.GrabKey(key, 0)
 		key.Mod = m.conf.Wall.Lock
-		m.x.GrabKey(key)
+		x11.GrabKey(key, 0)
 	}
 	if m.conf.Wall.Mouse {
-		if err := m.x.GrabPointer(); err != nil {
+		if err := x11.GrabPointer(0); err != nil {
 			ui.LogError("Failed to grab pointer: %s", err)
 		}
 	}
@@ -169,16 +169,16 @@ func (m *WallManager) ungrabWallKeys() {
 			Code: xproto.Keycode(i + 10),
 		}
 		key.Mod = m.conf.Wall.Play
-		m.x.UngrabKey(key)
+		x11.UngrabKey(key)
 		key.Mod = m.conf.Wall.Reset
-		m.x.UngrabKey(key)
+		x11.UngrabKey(key)
 		key.Mod = m.conf.Wall.ResetOthers
-		m.x.UngrabKey(key)
+		x11.UngrabKey(key)
 		key.Mod = m.conf.Wall.Lock
-		m.x.UngrabKey(key)
+		x11.UngrabKey(key)
 	}
 	if m.conf.Wall.Mouse {
-		if err := m.x.UngrabPointer(); err != nil {
+		if err := x11.UngrabPointer(); err != nil {
 			ui.LogError("Failed to release pointer: %s", err)
 		}
 	}
@@ -224,12 +224,12 @@ func (m *WallManager) run() {
 			return
 		}
 	}
-	m.x.FocusWindow(m.projector)
+	x11.FocusWindow(m.projector)
 	m.onWall = true
 	for i := range m.locks {
 		m.setLock(i, false)
 	}
-	sw, sh, err := m.x.ScreenSize()
+	sw, sh, err := x11.ScreenSize()
 	if err != nil {
 		m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
 		return
@@ -257,6 +257,8 @@ func (m *WallManager) run() {
 		m.wallWidth = ww
 		m.wallHeight = wh
 	}
+	xevt := make(chan any, 32)
+	x11.Subscribe(nil, xevt)
 	for {
 		select {
 		case werr := <-m.workerErrors:
@@ -268,7 +270,7 @@ func (m *WallManager) run() {
 				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
 				return
 			}
-		case evt := <-m.x.Events:
+		case evt := <-xevt:
 			switch evt := evt.(type) {
 			case x11.KeyEvent:
 				if evt.State == x11.KeyDown {
@@ -292,8 +294,8 @@ func (m *WallManager) run() {
 				if evt.State&xproto.ButtonMask1 != 0 {
 					iw := m.screenWidth / m.wallWidth
 					ih := m.screenHeight / m.wallHeight
-					x := uint32(evt.X) / iw
-					y := uint32(evt.Y) / ih
+					x := uint16(evt.X) / iw
+					y := uint16(evt.Y) / ih
 					id := int((y * m.wallWidth) + x)
 					if id >= len(m.workers) {
 						continue
@@ -307,8 +309,8 @@ func (m *WallManager) run() {
 			case x11.ButtonEvent:
 				iw := m.screenWidth / m.wallWidth
 				ih := m.screenHeight / m.wallHeight
-				x := uint32(evt.X) / iw
-				y := uint32(evt.Y) / ih
+				x := uint16(evt.X) / iw
+				y := uint16(evt.Y) / ih
 				id := int((y * m.wallWidth) + x)
 				if id >= len(m.workers) {
 					continue
@@ -346,7 +348,7 @@ func (m *WallManager) handleEvent(id int, state x11.Keymod, time xproto.Timestam
 
 func (m *WallManager) focus(evt x11.KeyEvent) {
 	if m.onWall {
-		m.x.FocusWindow(m.projector)
+		x11.FocusWindow(m.projector)
 	} else {
 		err := m.workers[m.current].Focus(evt.Timestamp)
 		if err != nil {
@@ -392,7 +394,7 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 		time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
 		m.grabWallKeys()
 		m.onWall = true
-		err = m.x.FocusWindow(m.projector)
+		err = x11.FocusWindow(m.projector)
 		if err != nil {
 			ui.LogError("Failed to focus projector: %s", err)
 		}
@@ -519,12 +521,12 @@ func (m *WallManager) setLock(i int, state bool) {
 }
 
 func (m *WallManager) findProjector() error {
-	windows, err := m.x.GetWindowList(m.x.Root)
+	windows, err := x11.GetAllWindows()
 	if err != nil {
 		return err
 	}
 	for _, win := range windows {
-		title, err := m.x.GetWindowTitle(win)
+		title, err := x11.GetWindowTitle(win)
 		if err != nil {
 			continue
 		}

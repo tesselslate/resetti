@@ -65,13 +65,12 @@ func run(mode string, mgr manager.Manager) int {
 			}
 		}
 	}
-	x, err := x11.NewClient()
+	err = x11.Initialize()
 	if err != nil {
 		fmt.Println("Failed to connect to X server:", err)
 		os.Exit(1)
 	}
-	x.Loop()
-	instances, err := mc.GetInstances(x)
+	instances, err := mc.GetInstances()
 	if err != nil {
 		fmt.Println("Failed to get Minecraft instances:", err)
 		os.Exit(1)
@@ -79,7 +78,7 @@ func run(mode string, mgr manager.Manager) int {
 	u := ui.Ui{}
 	u.Start(instances, resetHandle)
 	mgr.SetConfig(*conf)
-	mgr.SetDeps(x, o)
+	mgr.SetDeps(o)
 	mgrErrors := make(chan error)
 	err = mgr.Start(instances, mgrErrors)
 	if err != nil {
@@ -91,36 +90,38 @@ func run(mode string, mgr manager.Manager) int {
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	ui.Log("Started up!")
 	ui.Log("Session type: %s", mode)
+	xerr := make(chan error, 32)
+	x11.Subscribe(xerr, nil)
 	for {
 		select {
 		case <-signals:
 			ui.Log("Shutting down.")
 			u.Stop()
 			mgr.Stop()
-			x.LoopStop()
+			x11.Close()
 			return 0
 		case err := <-mgrErrors:
 			ui.LogError("Fatal manager error: %s", err)
 			mgr.Wait()
 			ui.Log("Attempting to reboot manager...")
 			time.Sleep(1 * time.Second)
-			instances, err := mc.GetInstances(x)
+			instances, err := mc.GetInstances()
 			if err != nil {
 				ui.LogError("Failed to get Minecraft instances: %s", err)
 				u.Stop()
-				x.LoopStop()
+				x11.Close()
 				return 1
 			}
 			err = mgr.Start(instances, mgrErrors)
 			if err != nil {
 				ui.LogError("Failed to restart manager: %s", err)
 				u.Stop()
-				x.LoopStop()
+				x11.Close()
 				return 1
 			}
 		case err := <-obsErrors:
 			ui.LogError("OBS websocket error: %s", err)
-		case err := <-x.Errors:
+		case err := <-xerr:
 			if err == x11.ErrConnectionDied {
 				ui.LogError("X connection died.")
 				ui.Log("Shutting down.")
@@ -135,7 +136,7 @@ func run(mode string, mgr manager.Manager) int {
 			ui.Log("Shutting down.")
 			fmt.Printf("UI error: %s\n", err)
 			mgr.Stop()
-			x.LoopStop()
+			x11.Close()
 			return 1
 		}
 	}

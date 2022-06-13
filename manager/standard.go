@@ -25,7 +25,6 @@ type StandardManager struct {
 
 	Errors chan error
 	conf   cfg.Config
-	x      *x11.Client
 	o      *obs.Client
 }
 
@@ -75,8 +74,7 @@ func (m *StandardManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }
 
-func (m *StandardManager) SetDeps(x *x11.Client, o *obs.Client) {
-	m.x = x
+func (m *StandardManager) SetDeps(o *obs.Client) {
 	m.o = o
 }
 
@@ -86,7 +84,7 @@ func (m *StandardManager) createWorkers(instances []mc.Instance) error {
 	for _, i := range instances {
 		w := &Worker{}
 		w.SetConfig(m.conf.Reset)
-		w.SetDeps(i, m.x, m.o)
+		w.SetDeps(i, m.o)
 		err := w.Start(m.workerErrors)
 		if err != nil {
 			m.stopWorkers()
@@ -110,13 +108,15 @@ func (m *StandardManager) stopWorkers() {
 }
 
 func (m *StandardManager) grabKeys() {
-	m.x.GrabKey(m.conf.Keys.Focus)
-	m.x.GrabKey(m.conf.Keys.Reset)
+	// TODO: check for errors
+	x11.GrabKey(m.conf.Keys.Focus, 0)
+	x11.GrabKey(m.conf.Keys.Reset, 0)
 }
 
 func (m *StandardManager) ungrabKeys() {
-	m.x.UngrabKey(m.conf.Keys.Focus)
-	m.x.UngrabKey(m.conf.Keys.Reset)
+	// TODO: check for errors
+	x11.UngrabKey(m.conf.Keys.Focus)
+	x11.UngrabKey(m.conf.Keys.Reset)
 }
 
 func (m *StandardManager) run() {
@@ -132,6 +132,8 @@ func (m *StandardManager) run() {
 	}()
 
 	m.grabKeys()
+	xevt := make(chan any, 32)
+	x11.Subscribe(nil, xevt)
 	for {
 		select {
 		case werr := <-m.workerErrors:
@@ -142,7 +144,7 @@ func (m *StandardManager) run() {
 				m.Errors <- fmt.Errorf("failed to reboot worker %d: %s", werr.Id, err)
 				return
 			}
-		case evt := <-m.x.Events:
+		case evt := <-xevt:
 			switch evt := evt.(type) {
 			case x11.KeyEvent:
 				if evt.State == x11.KeyDown {

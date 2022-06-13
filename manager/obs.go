@@ -42,7 +42,7 @@ func setSources(o *obs.Client, instances []mc.Instance) error {
 	return nil
 }
 
-func getWallSize(o *obs.Client, count int) (uint32, uint32, error) {
+func getWallSize(o *obs.Client, count int) (uint16, uint16, error) {
 	xs, ys := make([]float64, 0), make([]float64, 0)
 	for i := 0; i < count; i++ {
 		itemSettings, err := o.GetSceneItemProperties(
@@ -57,7 +57,7 @@ func getWallSize(o *obs.Client, count int) (uint32, uint32, error) {
 		xs = appendUnique(xs, itemSettings.Position.X)
 		ys = appendUnique(ys, itemSettings.Position.Y)
 	}
-	return uint32(len(xs)), uint32(len(ys)), nil
+	return uint16(len(xs)), uint16(len(ys)), nil
 }
 
 func appendUnique(s []float64, i float64) []float64 {
