@@ -2,17 +2,17 @@ package reset
 
 import (
 	"fmt"
-	"github.com/woofdoggo/resetti/cfg"
-	"github.com/woofdoggo/resetti/manager"
-	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/ui"
-	"github.com/woofdoggo/resetti/x11"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	obs "github.com/woofdoggo/go-obs"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/manager"
+	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/obs"
+	"github.com/woofdoggo/resetti/ui"
+	"github.com/woofdoggo/resetti/x11"
 )
 
 func run(mode string, mgr manager.Manager) int {
@@ -47,24 +47,17 @@ func run(mode string, mgr manager.Manager) int {
 		fmt.Println("Please update your configuration.")
 		os.Exit(1)
 	}
-	var o *obs.Client
-	var obsErrors chan error
+	var obserr <-chan error
 	if conf.OBS.Enabled {
-		o = &obs.Client{}
-		authRequired, errch, err := o.Connect(fmt.Sprintf("localhost:%d", conf.OBS.Port))
+		errch, err := obs.Initialize(conf.OBS.Port, conf.OBS.Password)
+		obserr = errch
 		if err != nil {
 			fmt.Println("Failed to connect to OBS:", err)
 			os.Exit(1)
 		}
-		obsErrors = errch
-		if authRequired {
-			err = o.Login(conf.OBS.Password)
-			if err != nil {
-				fmt.Println("Failed to authenticate with OBS:", err)
-				os.Exit(1)
-			}
-		}
 	}
+	xerr := make(chan error, 32)
+	x11.Subscribe(xerr, nil)
 	err = x11.Initialize()
 	if err != nil {
 		fmt.Println("Failed to connect to X server:", err)
@@ -78,7 +71,6 @@ func run(mode string, mgr manager.Manager) int {
 	u := ui.Ui{}
 	u.Start(instances, resetHandle)
 	mgr.SetConfig(*conf)
-	mgr.SetDeps(o)
 	mgrErrors := make(chan error)
 	err = mgr.Start(instances, mgrErrors)
 	if err != nil {
@@ -90,8 +82,6 @@ func run(mode string, mgr manager.Manager) int {
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	ui.Log("Started up!")
 	ui.Log("Session type: %s", mode)
-	xerr := make(chan error, 32)
-	x11.Subscribe(xerr, nil)
 	for {
 		select {
 		case <-signals:
@@ -119,7 +109,7 @@ func run(mode string, mgr manager.Manager) int {
 				x11.Close()
 				return 1
 			}
-		case err := <-obsErrors:
+		case err := <-obserr:
 			ui.LogError("OBS websocket error: %s", err)
 		case err := <-xerr:
 			if err == x11.ErrConnectionDied {

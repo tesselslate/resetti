@@ -3,14 +3,14 @@ package manager
 import (
 	"errors"
 	"fmt"
-	"github.com/woofdoggo/resetti/cfg"
-	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/ui"
-	"github.com/woofdoggo/resetti/x11"
 	"sync"
 	"time"
 
-	obs "github.com/woofdoggo/go-obs"
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/obs"
+	"github.com/woofdoggo/resetti/ui"
+	"github.com/woofdoggo/resetti/x11"
 )
 
 // StandardManager provides a Manager implementation for resetting one or more
@@ -25,7 +25,6 @@ type StandardManager struct {
 
 	Errors chan error
 	conf   cfg.Config
-	o      *obs.Client
 }
 
 func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error {
@@ -35,8 +34,8 @@ func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error
 	if !m.active.TryLock() {
 		return errors.New("already running")
 	}
-	if m.o != nil {
-		err := setupObs(m.o, instances)
+	if m.conf.OBS.Enabled {
+		err := obs.SetupScenes(instances)
 		if err != nil {
 			return err
 		}
@@ -74,17 +73,13 @@ func (m *StandardManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }
 
-func (m *StandardManager) SetDeps(o *obs.Client) {
-	m.o = o
-}
-
 func (m *StandardManager) createWorkers(instances []mc.Instance) error {
 	m.stopWorkers()
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
 		w.SetConfig(m.conf.Reset)
-		w.SetDeps(i, m.o)
+		w.SetInstance(i)
 		err := w.Start(m.workerErrors)
 		if err != nil {
 			m.stopWorkers()
@@ -169,10 +164,8 @@ func (m *StandardManager) run() {
 						}
 						m.current = next
 						ui.Log("Reset instance %d.", m.current)
-						if m.o != nil {
-							_, err := m.o.SetCurrentScene(
-								fmt.Sprintf("Instance %d", m.current+1),
-							)
+						if m.conf.OBS.Enabled {
+							err := obs.SetScene(fmt.Sprintf("Instance %d", m.current+1))
 							if err != nil {
 								ui.LogError("Failed to switch OBS scene: %s", err)
 							}

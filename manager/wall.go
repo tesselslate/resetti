@@ -3,16 +3,17 @@ package manager
 import (
 	"errors"
 	"fmt"
-	"github.com/woofdoggo/resetti/cfg"
-	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/ui"
-	"github.com/woofdoggo/resetti/x11"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/obs"
+	"github.com/woofdoggo/resetti/ui"
+	"github.com/woofdoggo/resetti/x11"
+
 	"github.com/jezek/xgb/xproto"
-	obs "github.com/woofdoggo/go-obs"
 )
 
 const RESIZE_WIDTH = 1600
@@ -37,7 +38,6 @@ type WallManager struct {
 
 	Errors chan error
 	conf   cfg.Config
-	o      *obs.Client
 }
 
 func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
@@ -47,8 +47,8 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 	if !m.active.TryLock() {
 		return errors.New("already running")
 	}
-	if m.o != nil {
-		err := setupObs(m.o, instances)
+	if m.conf.OBS.Enabled {
+		err := obs.SetupScenes(instances)
 		if err != nil {
 			return err
 		}
@@ -90,17 +90,13 @@ func (m *WallManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }
 
-func (m *WallManager) SetDeps(o *obs.Client) {
-	m.o = o
-}
-
 func (m *WallManager) createWorkers(instances []mc.Instance) error {
 	m.stopWorkers()
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
 		w.SetConfig(m.conf.Reset)
-		w.SetDeps(i, m.o)
+		w.SetInstance(i)
 		err := w.Start(m.workerErrors)
 		if err != nil {
 			m.stopWorkers()
@@ -208,7 +204,7 @@ func (m *WallManager) run() {
 	}
 	if m.projector == 0 {
 		// No projector found. Spawn one.
-		_, err := m.o.OpenProjector("Scene", nil, "", "Wall")
+		err := obs.OpenProjector()
 		if err != nil {
 			m.Errors <- fmt.Errorf("failed to spawn projector: %s", err)
 			return
@@ -248,7 +244,7 @@ func (m *WallManager) run() {
 		ui.Log("Stretched instances.")
 	}
 	if m.conf.Wall.Mouse {
-		ww, wh, err := getWallSize(m.o, len(m.workers))
+		ww, wh, err := obs.GetWallSize(len(m.workers))
 		ui.Log("Got wall size: %dx%d, %d.", ww, wh, len(m.workers))
 		if err != nil {
 			m.Errors <- fmt.Errorf("failed to get wall size: %s", err)
@@ -378,7 +374,7 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 		wg.Wait()
 		ui.Log("Reset all instances.")
 	} else {
-		go m.o.SetCurrentScene("Wall")
+		go obs.SetScene("Wall")
 		ui.Log("Resetting instance %d; going to wall.", m.current)
 		err := m.workers[m.current].Reset(evt.Timestamp)
 		if err != nil {
@@ -414,7 +410,7 @@ func (m *WallManager) wallReset(id int, t xproto.Timestamp) {
 }
 
 func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
-	go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
+	go obs.SetScene(fmt.Sprintf("Instance %d", id+1))
 	m.ungrabWallKeys()
 	m.onWall = false
 	m.current = id
@@ -443,7 +439,7 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 }
 
 func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
-	go m.o.SetCurrentScene(fmt.Sprintf("Instance %d", id+1))
+	go obs.SetScene(fmt.Sprintf("Instance %d", id+1))
 	m.ungrabWallKeys()
 	m.onWall = false
 	m.current = id
@@ -472,51 +468,9 @@ func (m *WallManager) setLock(i int, state bool) {
 		return
 	}
 	m.locks[i] = state
-	res, err := m.o.GetSceneItemProperties(
-		"Wall",
-		obs.GetSceneItemPropertiesItem{
-			Name: fmt.Sprintf("Lock %d", i+1),
-		},
-	)
+	err := obs.SetVisible("Wall", fmt.Sprintf("Lock %d", i+1), state)
 	if err != nil {
-		ui.LogError("Failed to lock instance %d: %s", i, err)
-		return
-	}
-	b := true
-	_, err = m.o.SetSceneItemProperties(
-		"Wall",
-		obs.SetSceneItemPropertiesItem{
-			Name: fmt.Sprintf("Lock %d", i+1),
-		},
-		obs.SetSceneItemPropertiesPosition{
-			X:         &res.Position.X,
-			Y:         &res.Position.Y,
-			Alignment: &res.Position.Alignment,
-		},
-		&res.Rotation,
-		obs.SetSceneItemPropertiesScale{
-			X:      &res.Scale.X,
-			Y:      &res.Scale.Y,
-			Filter: res.Scale.Filter,
-		},
-		obs.SetSceneItemPropertiesCrop{
-			Top:    &res.Crop.Top,
-			Right:  &res.Crop.Right,
-			Bottom: &res.Crop.Bottom,
-			Left:   &res.Crop.Left,
-		},
-		&state,
-		&b,
-		obs.SetSceneItemPropertiesBounds{
-			Type:      res.Bounds.Type,
-			Alignment: &res.Bounds.Alignment,
-			X:         &res.Bounds.X,
-			Y:         &res.Bounds.Y,
-		},
-	)
-	if err != nil {
-		ui.LogError("Failed to lock instance %d: %s", i, err)
-		return
+		ui.LogError("Failed to set lock (%d, %t).", i, state)
 	}
 }
 

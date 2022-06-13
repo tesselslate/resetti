@@ -14,7 +14,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
-	obs "github.com/woofdoggo/go-obs"
 )
 
 var (
@@ -33,7 +32,6 @@ type Worker struct {
 	active sync.Mutex
 
 	conf cfg.ResetSettings
-	o    *obs.Client
 
 	reader   *bufio.Reader
 	watcher  *fsnotify.Watcher
@@ -87,10 +85,8 @@ func (w *Worker) SetConfig(c cfg.ResetSettings) {
 	w.Unlock()
 }
 
-// SetDeps provides certain objects required for the Worker to function. This
-// should be called once before Start and never again.
-func (w *Worker) SetDeps(i mc.Instance, o *obs.Client) {
-	w.o = o
+// SetInstance sets the instance the worker will manage.
+func (w *Worker) SetInstance(i mc.Instance) {
 	w.instance = i
 }
 
