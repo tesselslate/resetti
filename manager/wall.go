@@ -313,6 +313,7 @@ func (m *WallManager) run() {
 				if id >= len(m.workers) {
 					continue
 				}
+				m.lastMouseId = id
 				m.handleEvent(id, x11.Keymod(evt.State), evt.Timestamp)
 			}
 		case <-m.stop:
