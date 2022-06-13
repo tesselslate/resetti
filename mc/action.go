@@ -35,7 +35,7 @@ const SENS_PRESSES int = 142
 const RD_PRESSES int = 30
 
 // Reset resets an instance according to the user's reset settings.
-func (i Instance) Reset(settings *cfg.ResetSettings, t xproto.Timestamp) (xproto.Timestamp, error) {
+func (i Instance) Reset(settings *cfg.Config, t xproto.Timestamp) (xproto.Timestamp, error) {
 	// Pick the appropriate reset method based on the instance version.
 	// TODO: Implement 1.7, 1.8
 	switch i.Version {
@@ -47,8 +47,8 @@ func (i Instance) Reset(settings *cfg.ResetSettings, t xproto.Timestamp) (xproto
 	}
 }
 
-func v16_reset(i Instance, settings *cfg.ResetSettings, t *xproto.Timestamp) error {
-	delay := time.Duration(settings.Delay) * time.Millisecond
+func v16_reset(i Instance, settings *cfg.Config, t *xproto.Timestamp) error {
+	delay := time.Duration(settings.Reset.Delay) * time.Millisecond
 
 	// Act based on the instance's state.
 	switch i.State {
@@ -87,7 +87,7 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, t *xproto.Timestamp) err
 
 	// If the user does not want their settings reset, we can just
 	// press menu.quitWorld immediately.
-	if !settings.SetSettings {
+	if !settings.Reset.SetSettings {
 		x11.SendKeyPress(x11.KeyEscape, i.Window, t)
 		time.Sleep(delay)
 
@@ -111,7 +111,7 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, t *xproto.Timestamp) err
 	x11.SendKeyUp(x11.KeyShift, i.Window, t)
 
 	// Then, press F3+F the required amount of times to set it.
-	for j := uint8(0); j < settings.Mc.Render-2; j++ {
+	for j := int(0); j < settings.Mc.Rd-2; j++ {
 		x11.SendKeyPressAlt(x11.KeyF, i.Window, t)
 	}
 

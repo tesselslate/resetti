@@ -1,4 +1,4 @@
-package reset
+package cmd
 
 import (
 	"fmt"
@@ -34,22 +34,22 @@ func run(mode string, mgr manager.Manager) int {
 		os.Exit(1)
 	}
 	var resetHandle *os.File
-	if conf.CountPath != "" {
-		resetHandle, err = os.OpenFile(conf.CountPath, os.O_RDWR|os.O_CREATE, 0644)
+	if conf.General.CountResets {
+		resetHandle, err = os.OpenFile(conf.General.CountPath, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			fmt.Println("Failed to open reset count:", err)
 			os.Exit(1)
 		}
 		defer resetHandle.Close()
 	}
-	if mode == "wall" && !conf.OBS.Enabled {
+	if mode == "wall" && !conf.Obs.Enabled {
 		fmt.Println("OBS integration must be enabled for wall.")
 		fmt.Println("Please update your configuration.")
 		os.Exit(1)
 	}
 	var obserr <-chan error
-	if conf.OBS.Enabled {
-		errch, err := obs.Initialize(conf.OBS.Port, conf.OBS.Password)
+	if conf.Obs.Enabled {
+		errch, err := obs.Initialize(conf.Obs.Port, conf.Obs.Password)
 		obserr = errch
 		if err != nil {
 			fmt.Println("Failed to connect to OBS:", err)

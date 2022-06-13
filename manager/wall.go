@@ -47,7 +47,7 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 	if !m.active.TryLock() {
 		return errors.New("already running")
 	}
-	if m.conf.OBS.Enabled {
+	if m.conf.Obs.Enabled {
 		err := obs.SetupScenes(instances)
 		if err != nil {
 			return err
@@ -60,7 +60,7 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 		return err
 	}
 	m.locks = make([]bool, len(m.workers))
-	err := setAffinity(instances, m.conf.Affinity)
+	err := setAffinity(instances, m.conf.General.Affinity)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (m *WallManager) createWorkers(instances []mc.Instance) error {
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
-		w.SetConfig(m.conf.Reset)
+		w.SetConfig(m.conf)
 		w.SetInstance(i)
 		err := w.Start(m.workerErrors)
 		if err != nil {
@@ -139,16 +139,16 @@ func (m *WallManager) grabWallKeys() {
 		key := x11.Key{
 			Code: xproto.Keycode(i + 10),
 		}
-		key.Mod = m.conf.Wall.Play
+		key.Mod = m.conf.Keys.WallPlay
 		x11.GrabKey(key, 0)
-		key.Mod = m.conf.Wall.Reset
+		key.Mod = m.conf.Keys.WallReset
 		x11.GrabKey(key, 0)
-		key.Mod = m.conf.Wall.ResetOthers
+		key.Mod = m.conf.Keys.WallResetOthers
 		x11.GrabKey(key, 0)
-		key.Mod = m.conf.Wall.Lock
+		key.Mod = m.conf.Keys.WallLock
 		x11.GrabKey(key, 0)
 	}
-	if m.conf.Wall.Mouse {
+	if m.conf.Wall.UseMouse {
 		if err := x11.GrabPointer(0); err != nil {
 			ui.LogError("Failed to grab pointer: %s", err)
 		}
@@ -164,16 +164,16 @@ func (m *WallManager) ungrabWallKeys() {
 		key := x11.Key{
 			Code: xproto.Keycode(i + 10),
 		}
-		key.Mod = m.conf.Wall.Play
+		key.Mod = m.conf.Keys.WallPlay
 		x11.UngrabKey(key)
-		key.Mod = m.conf.Wall.Reset
+		key.Mod = m.conf.Keys.WallReset
 		x11.UngrabKey(key)
-		key.Mod = m.conf.Wall.ResetOthers
+		key.Mod = m.conf.Keys.WallResetOthers
 		x11.UngrabKey(key)
-		key.Mod = m.conf.Wall.Lock
+		key.Mod = m.conf.Keys.WallLock
 		x11.UngrabKey(key)
 	}
-	if m.conf.Wall.Mouse {
+	if m.conf.Wall.UseMouse {
 		if err := x11.UngrabPointer(); err != nil {
 			ui.LogError("Failed to release pointer: %s", err)
 		}
@@ -233,7 +233,7 @@ func (m *WallManager) run() {
 	ui.Log("Got screen size: %dx%d.", sw, sh)
 	m.screenWidth = sw
 	m.screenHeight = sh
-	if m.conf.Reset.Stretch {
+	if m.conf.Wall.StretchWindows {
 		for _, v := range m.workers {
 			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
 			if err != nil {
@@ -243,7 +243,7 @@ func (m *WallManager) run() {
 		}
 		ui.Log("Stretched instances.")
 	}
-	if m.conf.Wall.Mouse {
+	if m.conf.Wall.UseMouse {
 		ww, wh, err := obs.GetWallSize(len(m.workers))
 		ui.Log("Got wall size: %dx%d, %d.", ww, wh, len(m.workers))
 		if err != nil {
@@ -331,13 +331,13 @@ func (m *WallManager) run() {
 
 func (m *WallManager) handleEvent(id int, state x11.Keymod, time xproto.Timestamp) {
 	switch state {
-	case m.conf.Wall.Play:
+	case m.conf.Keys.WallPlay:
 		m.wallPlay(id, time)
-	case m.conf.Wall.Reset:
+	case m.conf.Keys.WallReset:
 		m.wallReset(id, time)
-	case m.conf.Wall.ResetOthers:
+	case m.conf.Keys.WallResetOthers:
 		m.wallResetOthers(id, time)
-	case m.conf.Wall.Lock:
+	case m.conf.Keys.WallLock:
 		m.wallLock(id, time)
 	}
 }
@@ -380,7 +380,7 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 		if err != nil {
 			ui.LogError("Failed to reset instance %d: %s", m.current, err)
 		}
-		if m.conf.Reset.Stretch {
+		if m.conf.Wall.StretchWindows {
 			err := m.workers[m.current].Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
 			if err != nil {
 				ui.LogError("Failed to resize instance: %s", err)
@@ -419,7 +419,7 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 		ui.LogError("Failed to focus instance %d: %s", id, err)
 		return
 	}
-	if m.conf.Reset.Stretch {
+	if m.conf.Wall.StretchWindows {
 		err := m.workers[m.current].Resize(m.screenWidth, m.screenHeight)
 		if err != nil {
 			ui.LogError("Failed to resize instance: %s", err)
@@ -448,7 +448,7 @@ func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
 		ui.LogError("Failed to focus instance %d: %s", id, err)
 		return
 	}
-	if m.conf.Reset.Stretch {
+	if m.conf.Wall.StretchWindows {
 		err := m.workers[m.current].Resize(m.screenWidth, m.screenHeight)
 		if err != nil {
 			ui.LogError("Failed to resize instance: %s", err)

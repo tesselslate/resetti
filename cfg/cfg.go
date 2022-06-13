@@ -4,10 +4,10 @@
 package cfg
 
 import (
-	"github.com/woofdoggo/resetti/x11"
 	"os"
 
-	"gopkg.in/yaml.v2"
+	"github.com/BurntSushi/toml"
+	"github.com/woofdoggo/resetti/x11"
 )
 
 const (
@@ -15,74 +15,51 @@ const (
 	KeyFocus int = 1
 )
 
-// Config contains all of the configuration for resetti.
 type Config struct {
-	OBS       ObsSettings   `yaml:"obs"`   // The settings to use for resetti's OBS integration.
-	Keys      ConfigKeys    `yaml:"keys"`  // The hotkeys to use for resetti's actions.
-	Wall      WallSettings  `yaml:"wall"`  // The user's wall settings.
-	Reset     ResetSettings `yaml:"reset"` // Reset settings
-	CountPath string        `yaml:"reset-file"`
-	Affinity  string        `yaml:"affinity"`
+	General ConfigGeneral `toml:"general"`
+	Obs     ConfigObs     `toml:"obs"`
+	Reset   ConfigReset   `toml:"reset"`
+	Mc      ConfigMc      `toml:"minecraft"`
+	Keys    ConfigKeys    `toml:"keybinds"`
+	Wall    ConfigWall    `toml:"wall"`
 }
 
-// ConfigKeys contains the user's keybindings.
+type ConfigGeneral struct {
+	Type        string `toml:"type"`
+	CountResets bool   `toml:"count_resets"`
+	CountPath   string `toml:"resets_file"`
+	Affinity    string `toml:"affinity"`
+}
+
+type ConfigObs struct {
+	Enabled  bool   `toml:"enabled"`
+	Port     uint16 `toml:"port"`
+	Password string `toml:"password"`
+}
+
+type ConfigReset struct {
+	SetSettings bool `toml:"set_settings"`
+	Delay       int  `toml:"delay"`
+}
+
+type ConfigMc struct {
+	Fov  int `toml:"fov"`
+	Rd   int `toml:"rd"`
+	Sens int `toml:"sensitivity"`
+}
+
 type ConfigKeys struct {
-	Reset x11.Key `yaml:"reset"`
-	Focus x11.Key `yaml:"focus"`
+	Focus           x11.Key    `toml:"focus"`
+	Reset           x11.Key    `toml:"reset"`
+	WallReset       x11.Keymod `toml:"wall_reset"`
+	WallResetOthers x11.Keymod `toml:"wall_reset_others"`
+	WallPlay        x11.Keymod `toml:"wall_play"`
+	WallLock        x11.Keymod `toml:"wall_lock"`
 }
 
-// WallSettings contains the user's wall settings, if applicable.
-type WallSettings struct {
-	Reset       x11.Keymod `yaml:"mod-reset"`
-	ResetOthers x11.Keymod `yaml:"mod-reset-others"`
-	Play        x11.Keymod `yaml:"mod-play"`
-	Lock        x11.Keymod `yaml:"mod-lock"`
-	Mouse       bool       `yaml:"use-mouse"`
-}
-
-// McSettings contains the user's preferred Minecraft settings for
-// automatically adjusting them when resetting.
-type McSettings struct {
-	Fov         uint8 `yaml:"fov"`
-	Render      uint8 `yaml:"rd"`
-	Sensitivity uint8 `yaml:"sensitivity"`
-}
-
-// ObsSettings contains the user's OBS settings.
-type ObsSettings struct {
-	Enabled  bool   `yaml:"enabled"`
-	Port     uint16 `yaml:"port"`
-	Password string `yaml:"password"` // If empty, no authentication will be used.
-}
-
-// ResetSettings contains the user's settings for resetting instances.
-type ResetSettings struct {
-	Mc          McSettings `yaml:"mc"`              // The Minecraft settings to use.
-	SetSettings bool       `yaml:"set-settings"`    // Whether or not Minecraft settings should be reset automatically.
-	Stretch     bool       `yaml:"stretch-windows"` // Whether or not to stretch windows for greater visibility.
-	Delay       uint16     `yaml:"delay"`           // Delay (in milliseconds) between menu switches.
-}
-
-var DefaultConfig = Config{
-	ObsSettings{
-		Enabled:  false,
-		Port:     4440,
-		Password: "password",
-	},
-	ConfigKeys{},
-	WallSettings{},
-	ResetSettings{
-		McSettings{
-			70,
-			16,
-			100,
-		},
-		false,
-		false,
-		50,
-	},
-	"",
-	"",
+type ConfigWall struct {
+	StretchWindows bool `toml:"stretch_windows"`
+	UseMouse       bool `toml:"use_mouse"`
 }
 
 // GetConfig attempts to read the user's configuration file and return it
@@ -104,7 +81,7 @@ func GetConfig() (*Config, error) {
 	}
 
 	var cfg Config
-	err = yaml.Unmarshal(cfgBytes, &cfg)
+	err = toml.Unmarshal(cfgBytes, &cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +89,7 @@ func GetConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-// GetPath returns the path to the user's configuration file.
+// GetPath returns the path to the user's configuration folder.
 func GetPath() (string, error) {
 	// Get configuration path.
 	cfgDir, err := os.UserConfigDir()
@@ -124,6 +101,6 @@ func GetPath() (string, error) {
 
 		cfgDir = home + "/.config"
 	}
-	cfgPath := cfgDir + "/resetti.yml"
+	cfgPath := cfgDir + "/resetti/"
 	return cfgPath, nil
 }

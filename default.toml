@@ -1,0 +1,99 @@
+# This is the default configuration for a resetti profile.
+# You can delete or ignore any sections which are not applicable.
+
+[general]
+# The type of reset style to use.
+# Available options:
+# - standard    Traditional single/multi-instance resetting for random seeds.
+# - wall        Wall-style resetting for random seeds.
+type = "standard"
+
+# Whether or not to count the amount of resets performed.
+count_resets = true
+
+# The file to use for counting resets. This can be left blank
+# if count_resets is disabled.
+resets_file = ""
+
+# Automatic process affinity management for better performance.
+# Leave blank to disable.
+# Available options:
+# - alternate   Set instances to run on every other CPU.
+# - sequence    Set instances to run on every CPU, 0 .. n.
+affinity = ""
+
+[obs]
+# Whether or not to enable OBS websocket support. This is *required* for wall.
+enabled = false
+
+# The port to connect to OBS websocket on.
+port = 4440
+
+# The password to use when connecting. This can be left blank if you have
+# authentication disabled in OBS websocket.
+password = ""
+
+[reset]
+# Whether or not to automatically set your settings to predefined values when
+# resetting. See the "minecraft" section for more details.
+set_settings = false
+
+# The delay (in milliseconds) to wait when switching between menus. Smaller
+# values will lead to faster resets, but may break. Increase this if you
+# experience issues.
+delay = 50
+
+# These settings are only applied if reset.set_settings is enabled.
+# Each setting corresponds to normal values ingame. Attempting to
+# set these outside of the normal ranges will not work.
+[minecraft]
+fov = 70
+rd = 16
+sensitivity = 100
+
+# - You can ignore any keybindings here which do not apply to your reset style.
+# - Alphanumerical and Fn keys (1-12) are supported.
+# - You can supply modifiers (Shift, Control, Alt) as well.
+# - The values written are not case sensitive (e.g. `a` and `A` are equivalent,
+#   specify the `Shift` modifier.)
+# - There is no distinction between the left and right modifier keys.
+# - For the wall keys, you may only specify modifiers. For example, if you specify
+#   Shift as your wall instance reset keybind, pressing Shift-1 will reset the
+#   first instance (if you have mouse support enabled, shift clicking will work
+#   as well.) You can leave the keybind blank for no modifier.
+#
+#   Examples:
+#               `A` => The A key.
+#               `a` => The A key.
+#         `Shift-A` => The A key, only when Shift is held.
+#  `Ctrl-Shift-F12` => The F12 key with Control and Shift held.
+[keybinds]
+# Pressing this will focus the current instance.
+# If you on the wall, pressing this will send you back to the OBS projector.
+focus = "Ctrl-Shift-F"
+
+# Pressing this will reset the current instance.
+# If you are on the wall, pressing this will reset all instances.
+reset = "Ctrl-Shift-R"
+
+# Pressing this will reset the selected instance.
+wall_reset = ""
+
+# Pressing this will play the selected instance and reset all other instances.
+wall_reset_others = "Ctrl-Shift"
+
+# Pressing this will play the selected instance.
+wall_play = "Shift"
+
+# Pressing this will lock the selected instance.
+wall_lock = "Ctrl"
+
+[wall]
+# Whether or not to stretch windows while on the wall for better visibility.
+# Works with or without fullscreen.
+stretch_windows = false
+
+# Whether or not to enable mouse support on the wall. Enabling this will allow
+# you to click on instances to perform various actions instead of having to use
+# the number keys. Note that enabling this does not disable the number keys.
+use_mouse = false

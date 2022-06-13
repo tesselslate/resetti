@@ -34,7 +34,7 @@ func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error
 	if !m.active.TryLock() {
 		return errors.New("already running")
 	}
-	if m.conf.OBS.Enabled {
+	if m.conf.Obs.Enabled {
 		err := obs.SetupScenes(instances)
 		if err != nil {
 			return err
@@ -46,7 +46,7 @@ func (m *StandardManager) Start(instances []mc.Instance, errch chan error) error
 	if err := m.createWorkers(instances); err != nil {
 		return err
 	}
-	err := setAffinity(instances, m.conf.Affinity)
+	err := setAffinity(instances, m.conf.General.Affinity)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (m *StandardManager) createWorkers(instances []mc.Instance) error {
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
-		w.SetConfig(m.conf.Reset)
+		w.SetConfig(m.conf)
 		w.SetInstance(i)
 		err := w.Start(m.workerErrors)
 		if err != nil {
@@ -164,7 +164,7 @@ func (m *StandardManager) run() {
 						}
 						m.current = next
 						ui.Log("Reset instance %d.", m.current)
-						if m.conf.OBS.Enabled {
+						if m.conf.Obs.Enabled {
 							err := obs.SetScene(fmt.Sprintf("Instance %d", m.current+1))
 							if err != nil {
 								ui.LogError("Failed to switch OBS scene: %s", err)

@@ -31,7 +31,7 @@ type Worker struct {
 	stop   chan struct{}
 	active sync.Mutex
 
-	conf cfg.ResetSettings
+	conf cfg.Config
 
 	reader   *bufio.Reader
 	watcher  *fsnotify.Watcher
@@ -79,7 +79,7 @@ func (w *Worker) Stop() {
 }
 
 // SetConfig sets the worker's configuration.
-func (w *Worker) SetConfig(c cfg.ResetSettings) {
+func (w *Worker) SetConfig(c cfg.Config) {
 	w.Lock()
 	w.conf = c
 	w.Unlock()
@@ -248,7 +248,7 @@ func (w *Worker) updateState() {
 	// to the WorldPreview menu or finished generating, press F3+Esc
 	// to get the transparent pause menu.
 	if !isActive && (isPreview || isReady) {
-		time.Sleep(time.Duration(w.conf.Delay) * time.Millisecond)
+		time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
 		x11.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
 		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
 		x11.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
