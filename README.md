@@ -3,9 +3,8 @@
 resetti is a utility for automatically managing and "resetting" one or more
 Minecraft instances for speedrunning. It supports Linux (X11 only).
 
-> As of now, resetti has only received a few hours of testing. I cannot
-> guarantee that everything will work as expected. Please report any bugs
-> which you encounter.
+> While resetti is still beta software, it should work reasonably well.
+> That being said, please report any bugs which you encounter.
 
 ## Table of Contents
 
@@ -123,6 +122,11 @@ wall:
   mod-reset-others: 0
   mod-play: 0
   mod-lock: 0
+  # Whether or not to enable mouse support on the wall.
+  # Please note that this will prevent you from using the
+  # mouse *entirely* while on the wall scene. You won't be
+  # able to click on other windows until you enter an instance.
+  use-mouse: false
 
 # Reset settings.
 reset:
