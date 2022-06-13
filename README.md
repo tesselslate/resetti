@@ -30,11 +30,15 @@ resetti's feature set ~~is~~ will soon be larger than most Windows-only reset ma
 
 - Standard single/multi-instance support
 - Wall-style resetting
-  - Reset an instance
-  - Reset all instances
-  - Play an instance
-  - Play an instance and reset all others
-  - Lock an instance
+  - Functions:
+    - Reset an instance
+    - Reset all instances
+    - Play an instance
+    - Play an instance and reset all others
+    - Lock an instance
+  - Stretch instances for visibility
+  - Mouse support for easier resetting
+- Set process affinity for better performance
 - Supports 1.14+ (Atum required)
 - Run with or without WorldPreview
 - **Out-of-the-box multi-version support**
@@ -47,10 +51,7 @@ resetti's feature set ~~is~~ will soon be larger than most Windows-only reset ma
 
 ## Planned Features
 
-- Mouse support on wall
-- Window stretching for better visibility on wall
 - Redetect instances without having to stop and restart
-- Process affinity for better performance
 - 1.7 and 1.8 support
 - Packages for various distributions
 
