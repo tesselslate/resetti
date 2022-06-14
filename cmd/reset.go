@@ -5,13 +5,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/logger"
-	"github.com/woofdoggo/resetti/manager"
-	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/obs"
-	"github.com/woofdoggo/resetti/ui"
-	"github.com/woofdoggo/resetti/x11"
+	"github.com/woofdoggo/resetti/internal/manager"
+	"github.com/woofdoggo/resetti/internal/mc"
+	"github.com/woofdoggo/resetti/internal/obs"
+	"github.com/woofdoggo/resetti/internal/ui"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 func CmdReset(conf *cfg.Config) int {

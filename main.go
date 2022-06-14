@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/woofdoggo/resetti/cfg"
 	"github.com/woofdoggo/resetti/cmd"
+	"github.com/woofdoggo/resetti/internal/cfg"
 )
 
 //go:embed .notice

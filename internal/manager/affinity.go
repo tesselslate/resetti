@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/internal/mc"
 	"golang.org/x/sys/unix"
 )
 

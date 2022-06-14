@@ -3,8 +3,8 @@
 package manager
 
 import (
-	"github.com/woofdoggo/resetti/cfg"
-	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/mc"
 )
 
 type Manager interface {

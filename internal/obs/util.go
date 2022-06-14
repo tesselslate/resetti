@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/internal/mc"
 )
 
 func appendUnique(s []float64, i float64) []float64 {

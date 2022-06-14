@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/logger"
+	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/terminal"
-	"github.com/woofdoggo/resetti/mc"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	go_obs "github.com/woofdoggo/go-obs"
-	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/internal/mc"
 )
 
 var client *go_obs.Client

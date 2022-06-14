@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/woofdoggo/resetti/x11"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 //go:embed default.toml

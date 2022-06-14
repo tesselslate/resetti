@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/logger"
-	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/obs"
-	"github.com/woofdoggo/resetti/x11"
+	"github.com/woofdoggo/resetti/internal/mc"
+	"github.com/woofdoggo/resetti/internal/obs"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // StandardManager provides a Manager implementation for resetting one or more

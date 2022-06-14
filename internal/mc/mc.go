@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
-	"github.com/woofdoggo/resetti/x11"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // InstanceState represents the state of a given instance.

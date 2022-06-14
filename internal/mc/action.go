@@ -2,8 +2,8 @@ package mc
 
 import (
 	"fmt"
-	"github.com/woofdoggo/resetti/cfg"
-	"github.com/woofdoggo/resetti/x11"
+	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/x11"
 	"math"
 	"time"
 

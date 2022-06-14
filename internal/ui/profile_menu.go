@@ -6,7 +6,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/terminal"
 )
 
