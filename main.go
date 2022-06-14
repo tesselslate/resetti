@@ -3,9 +3,11 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"github.com/woofdoggo/resetti/cmd"
 	"os"
 	"strings"
+
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/cmd"
 )
 
 //go:embed .notice
@@ -32,8 +34,12 @@ func main() {
 	case "obs":
 		cmd.CmdObs()
 	default:
-		printHelp()
-		os.Exit(1)
+		conf, err := cfg.GetProfile(os.Args[1])
+		if err != nil {
+			fmt.Println("Failed to get profile:", err)
+			os.Exit(1)
+		}
+		os.Exit(cmd.CmdReset(conf))
 	}
 }
 

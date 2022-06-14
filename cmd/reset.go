@@ -15,7 +15,7 @@ import (
 	"github.com/woofdoggo/resetti/x11"
 )
 
-func run(mode string, mgr manager.Manager) int {
+func CmdReset(conf *cfg.Config) int {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		fmt.Println("Failed to get log path:", err)
@@ -28,10 +28,15 @@ func run(mode string, mgr manager.Manager) int {
 	}
 	ui.SetLogWriter(logHandle)
 	defer logHandle.Close()
-	conf, err := cfg.GetConfig()
-	if err != nil {
-		fmt.Println("Failed to read config:", err)
-		os.Exit(1)
+	var mgr manager.Manager
+	switch conf.General.Type {
+	case "standard":
+		mgr = &manager.StandardManager{}
+	case "wall":
+		mgr = &manager.WallManager{}
+	default:
+		fmt.Println("Unrecognized profile type:", conf.General.Type)
+		return 1
 	}
 	var resetHandle *os.File
 	if conf.General.CountResets {
@@ -42,7 +47,7 @@ func run(mode string, mgr manager.Manager) int {
 		}
 		defer resetHandle.Close()
 	}
-	if mode == "wall" && !conf.Obs.Enabled {
+	if conf.General.Type == "wall" && !conf.Obs.Enabled {
 		fmt.Println("OBS integration must be enabled for wall.")
 		fmt.Println("Please update your configuration.")
 		os.Exit(1)
@@ -81,7 +86,7 @@ func run(mode string, mgr manager.Manager) int {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	ui.Log("Started up!")
-	ui.Log("Session type: %s", mode)
+	ui.Log("Session type: %s", conf.General.Type)
 	for {
 		select {
 		case <-signals:

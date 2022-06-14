@@ -4,11 +4,15 @@
 package cfg
 
 import (
+	_ "embed"
 	"os"
 
 	"github.com/BurntSushi/toml"
 	"github.com/woofdoggo/resetti/x11"
 )
+
+//go:embed default.toml
+var defaultConfig string
 
 const (
 	KeyReset int = 0
@@ -62,33 +66,6 @@ type ConfigWall struct {
 	UseMouse       bool `toml:"use_mouse"`
 }
 
-// GetConfig attempts to read the user's configuration file and return it
-// in its parsed form.
-func GetConfig() (*Config, error) {
-	cfgPath, err := GetPath()
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := os.Stat(cfgPath); err != nil {
-		return nil, err
-	}
-
-	// If the configuration file exists, read it.
-	cfgBytes, err := os.ReadFile(cfgPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg Config
-	err = toml.Unmarshal(cfgBytes, &cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
-}
-
 // GetPath returns the path to the user's configuration folder.
 func GetPath() (string, error) {
 	// Get configuration path.
@@ -103,4 +80,55 @@ func GetPath() (string, error) {
 	}
 	cfgPath := cfgDir + "/resetti/"
 	return cfgPath, nil
+}
+
+// GetProfile returns the configuration of a specific profile.
+func GetProfile(name string) (*Config, error) {
+	dir, err := GetPath()
+	if err != nil {
+		return nil, err
+	}
+	contents, err := os.ReadFile(dir + name + ".toml")
+	if err != nil {
+		return nil, err
+	}
+	c := &Config{}
+	err = toml.Unmarshal(contents, &c)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// GetProfiles returns a list of all available profiles.
+func GetProfiles() ([]string, error) {
+	dir, err := GetPath()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]string, 0)
+	for _, v := range entries {
+		if v.IsDir() {
+			continue
+		}
+		res = append(res, v.Name())
+	}
+	return res, nil
+}
+
+// MakeProfile makes a new profile with the default configuration.
+func MakeProfile(name string) error {
+	dir, err := GetPath()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(
+		dir+name+".toml",
+		[]byte(defaultConfig),
+		0644,
+	)
 }
