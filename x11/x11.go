@@ -5,14 +5,20 @@ package x11
 import (
 	"encoding/binary"
 	"errors"
+	"sync"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 )
 
+// TODO: This could make use of sync.Map (or some other equivalent) for
+// potentially better performance. Lock contention should not be a big
+// issue for this case, though.
 var atoms map[string]xproto.Atom
+var atomsMu sync.RWMutex
 var conn *xgb.Conn
 var grabbedKeys map[Key]xproto.Window
+var keysMu sync.Mutex
 var rootWindow xproto.Window
 var errCh chan<- error
 var evtCh chan<- any
@@ -26,6 +32,10 @@ const (
 )
 
 func Initialize() error {
+	atomsMu.Lock()
+	keysMu.Lock()
+	defer atomsMu.Unlock()
+	defer keysMu.Unlock()
 	if conn != nil {
 		return errors.New("already initialized")
 	}
@@ -132,6 +142,8 @@ func GetWindowTitle(win xproto.Window) (string, error) {
 }
 
 func GrabKey(key Key, win xproto.Window) error {
+	keysMu.Lock()
+	defer keysMu.Unlock()
 	if _, ok := grabbedKeys[key]; ok {
 		return errors.New("already grabbed key")
 	}
@@ -249,6 +261,8 @@ func SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timesta
 }
 
 func UngrabKey(key Key) error {
+	keysMu.Lock()
+	defer keysMu.Unlock()
 	win, ok := grabbedKeys[key]
 	if !ok {
 		return errors.New("key not grabbed")

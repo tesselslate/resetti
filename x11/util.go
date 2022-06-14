@@ -20,9 +20,12 @@ func closeAndWait() {
 }
 
 func getAtom(name string) (xproto.Atom, error) {
+	atomsMu.RLock() // Read lock
 	if val, ok := atoms[name]; ok {
+		atomsMu.RUnlock() // Read unlock
 		return val, nil
 	}
+	atomsMu.RUnlock() // Read unlock
 	res, err := xproto.InternAtom(
 		conn,
 		false,
@@ -32,7 +35,9 @@ func getAtom(name string) (xproto.Atom, error) {
 	if err != nil {
 		return 0, err
 	}
+	atomsMu.Lock() // Write lock
 	atoms[name] = res.Atom
+	atomsMu.Unlock() // Write unlock
 	return res.Atom, nil
 }
 
