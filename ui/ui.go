@@ -2,157 +2,145 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
-	"github.com/woofdoggo/resetti/mc"
 	"math"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/woofdoggo/resetti/internal/logger"
+	"github.com/woofdoggo/resetti/internal/terminal"
+	"github.com/woofdoggo/resetti/mc"
 )
 
-const ALTER_ENTER = "\x1b[?25l\x1b[?1049h"
-const ALTER_EXIT = "\x1b[?25h\x1b[?1049l"
-const CLEAR_END = "\x1b[J"
-const CURSOR_START = "\x1b[H"
-const DETAILS_BOLD = "\x1b[0;36m"
-const DETAILS_REG = "\x1b[0;37m"
-const INSTANCES_BOLD = "\x1b[1;36m"
-const INSTANCES_REG = "\x1b[0;37m"
-const RESET_STYLE = "\x1b[0m"
-const TIPS_COLOR = "\x1b[0;38;5;248m"
+const (
+	ch_size  = 32
+	log_size = 128
+)
 
-type Ui struct {
-	Errors      chan error
-	stop        chan struct{}
-	instances   []mc.Instance
-	recentLog   []string
-	start       time.Time
-	logCount    int
-	resetCount  int
-	resetHandle *os.File
+var ErrShutdown = errors.New("shutting down")
+
+var sub chan<- error
+var msg chan string
+var keys chan terminal.Key
+var stateCh chan []mc.Instance
+var stop chan struct{}
+var instances []mc.Instance
+var startTime time.Time
+var recentLog []string
+var logIdx = 0
+
+func Subscribe(ch chan<- error) {
+	sub = ch
 }
 
-func (u *Ui) Start(instances []mc.Instance, countHandle *os.File) {
-	u.Errors = make(chan error, 4)
-	u.stop = make(chan struct{})
-	u.instances = make([]mc.Instance, len(instances))
-	copy(u.instances, instances)
-	u.recentLog = make([]string, 0)
-	u.start = time.Now()
-	u.resetHandle = countHandle
-	fmt.Print(ALTER_ENTER)
-	go u.run()
-}
-
-func (u *Ui) Stop() {
-	u.stop <- struct{}{}
-}
-
-func (u *Ui) run() {
-	if u.resetHandle != nil {
-		bytebuf := make([]byte, 16)
-		n, err := u.resetHandle.Read(bytebuf)
-		if err != nil {
-			fmt.Print(ALTER_EXIT)
-			u.Errors <- err
-			return
-		}
-		count, err := strconv.Atoi(strings.Trim(string(bytebuf[:n]), "\n"))
-		if err != nil {
-			fmt.Print(ALTER_EXIT)
-			u.Errors <- err
-			return
-		}
-		u.resetCount = count
+func Init(i []mc.Instance) error {
+	msg = make(chan string, ch_size)
+	keys = make(chan terminal.Key, ch_size)
+	stateCh = make(chan []mc.Instance, ch_size)
+	stop = make(chan struct{})
+	instances = make([]mc.Instance, len(i))
+	copy(instances, i)
+	startTime = time.Now()
+	recentLog = make([]string, log_size)
+	logger.Subscribe(msg)
+	err := terminal.Init(keys)
+	if err != nil {
+		return err
 	}
+	go run()
+	return nil
+}
+
+func Fini() {
+	stop <- struct{}{}
+	<-stop
+	terminal.Fini()
+}
+
+func UpdateInstance(i ...mc.Instance) {
+	// TODO: Handle reset count updates
+	stateCh <- i
+}
+
+func run() {
+	defer terminal.Fini()
 	for {
-		// Process incoming UI updates.
 		select {
-		case logMsg := <-logCh:
-			if len(u.recentLog) > 10 {
-				u.recentLog = append(u.recentLog[1:], logMsg)
-			} else {
-				u.recentLog = append(u.recentLog, logMsg)
+		case logMsg := <-msg:
+			recentLog[logIdx] = logMsg
+			logIdx = (logIdx + 1) % log_size
+		case key := <-keys:
+			// TODO: Ctrl+R for reload instances
+			switch key {
+			case terminal.KeyCtrlC:
+				logger.Log("User pressed Ctrl+C, shutting down.")
+				sub <- ErrShutdown
+				return
 			}
-			u.logCount += 1
-		case instances := <-stateCh:
-			if len(instances) == 1 {
-				id := instances[0].Id
-				u.instances[id] = instances[0]
+		case states := <-stateCh:
+			if len(states) > len(instances) {
+				instances = make([]mc.Instance, len(states))
+				copy(instances, states)
 			} else {
-				u.instances = make([]mc.Instance, len(instances))
-				copy(u.instances, instances)
-			}
-			for _, v := range instances {
-				if v.State == mc.StateGenerating {
-					u.resetCount += 1
-					if u.resetHandle == nil {
-						continue
-					}
-					_, err := u.resetHandle.Seek(0, 0)
-					if err != nil {
-						LogError("Failed to seek in reset file: %s", err)
-						continue
-					}
-					_, err = u.resetHandle.WriteString(strconv.Itoa(u.resetCount))
-					if err != nil {
-						LogError("Failed to write reset count of %d: %s", u.resetCount, err)
-					}
+				for _, v := range states {
+					instances[v.Id] = v
 				}
 			}
 		case <-time.After(1 * time.Second):
-			// Timeout to force UI updates at least once per second.
-		case <-u.stop:
-			fmt.Print(ALTER_EXIT)
-			Log("UI received shutdown notification.")
+			// Force UI updates to occur at least once per second.
+		case <-stop:
+			logger.Log("UI received shutdown notification.")
+			stop <- struct{}{}
 			return
 		}
-		// Render new UI.
-		fmt.Print(CURSOR_START, CLEAR_END, "\n")
-		instances := make([]string, 0, len(u.instances))
-		for _, i := range u.instances {
-			str := INSTANCES_REG + "  "
-			str += pad(fmt.Sprintf("%d", i.Id), 4)
+		// Render UI.
+		terminal.Clear()
+		cyan := terminal.NewStyle().Foreground(terminal.Cyan).Bold()
+		cyan.RenderAt("ID  Version State", 3, 2)
+		style := terminal.NewStyle().Foreground(terminal.White)
+		for idx, i := range instances {
+			str := pad(fmt.Sprintf("%d", i.Id), 4)
 			str += pad(i.Version.String(), 8)
 			str += pad(i.State.String(), 16)
-			instances = append(instances, str)
+			style.RenderAt(str, 3, idx+3)
 		}
-		uptime := time.Since(u.start)
+		boldStyle := terminal.NewStyle().Foreground(terminal.Cyan).Bold()
+		regStyle := terminal.NewStyle()
 		details := []string{
-			fmt.Sprintf("%sInstances: %s%d", DETAILS_BOLD, DETAILS_REG, len(instances)),
-			fmt.Sprintf("%sResets: %s%d", DETAILS_BOLD, DETAILS_REG, u.resetCount),
-			fmt.Sprintf("%sRoutines: %s%d", DETAILS_BOLD, DETAILS_REG, runtime.NumGoroutine()),
-			fmt.Sprintf("%sLog Count: %s%d", DETAILS_BOLD, DETAILS_REG, u.logCount),
-			fmt.Sprintf("%sUptime: %s%s", DETAILS_BOLD, DETAILS_REG, prettifyTime(uptime)),
+			"Instances",
+			strconv.Itoa(len(instances)),
+			"Routines",
+			strconv.Itoa(runtime.NumGoroutine()),
+			"Uptime",
+			prettifyTime(time.Since(startTime)),
 		}
-		fmt.Printf("%s  ID  Version State           Details\n", INSTANCES_BOLD)
-		rows := max(len(details), len(instances))
-		for i := 0; i < rows; i++ {
-			if i < len(instances) {
-				fmt.Print(instances[i])
-			} else {
-				fmt.Print(pad("", 30))
-			}
-			if i < len(details) {
-				fmt.Print(details[i])
-			}
-			fmt.Print("\n")
+		cyan.RenderAt("Details", 40, 2)
+		for i := 0; i < len(details)/2; i += 1 {
+			boldStyle.RenderAt(details[i*2]+": ", 40, i+3)
+			regStyle.RenderAt(details[i*2+1], 40+len(details[i*2])+2, i+3)
 		}
-		fmt.Printf("\n%s  ctrl+c: exit%s\n\n", TIPS_COLOR, RESET_STYLE)
-		fmt.Print("\n\n")
-		for _, msg := range u.recentLog {
-			fmt.Print(msg)
+		terminal.NewStyle().Foreground(terminal.Gray).RenderAt("ctrl+c: exit", 3, len(instances)+4)
+		cyan.RenderAt("Log:", 3, len(instances)+6)
+		inc := 0
+		for i := 10; i > 0; i -= 1 {
+			msg := recentLog[(logIdx+100-i)%100]
+			if msg == "" {
+				continue
+			}
+			terminal.NewStyle().RenderAt(msg, 3, len(instances)+6+inc)
+			inc += 1
 		}
 	}
 }
 
-func pad(i string, strlen int) string {
-	if strlen-len(i) <= 0 {
-		return i
+func pad(txt string, strlen int) string {
+	if len(txt) >= strlen {
+		return txt
 	}
-	return i + strings.Repeat(" ", strlen-len(i))
+	return txt + strings.Repeat(" ", strlen-len(txt))
 }
 
 func prettifyTime(t time.Duration) string {
@@ -171,12 +159,4 @@ func prettifyTime(t time.Duration) string {
 		)
 	}
 	return fmt.Sprintf("%.0f sec", math.Floor(t.Seconds()))
-}
-
-func max(a int, b int) int {
-	if a > b {
-		return a
-	} else {
-		return b
-	}
 }

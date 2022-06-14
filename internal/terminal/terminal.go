@@ -33,6 +33,10 @@ func GetSize() (int, int, error) {
 	return term.GetSize(int(os.Stdin.Fd()))
 }
 
+func Clear() {
+	fmt.Print("\x1b[2J")
+}
+
 func listen() {
 	reader := bufio.NewReader(os.Stdin)
 	buf := make([]byte, 0)
@@ -57,18 +61,40 @@ func listen() {
 			continue
 		}
 		buf = append(buf, b)
-		switch string(buf) {
-		case "\x1b[A":
-			sub <- KeyUp
-		case "\x1b[B":
-			sub <- KeyDown
-		case "\x1b[D":
-			sub <- KeyLeft
-		case "\x1b[C":
-			sub <- KeyRight
-		default:
+		if len(buf) > 1 {
+			if len(buf) > 3 {
+				// Unknown key
+				buf = make([]byte, 0)
+				continue
+			}
+			if buf[1] != '[' {
+				sub <- '\x1b'
+				switch buf[1] {
+				case 3:
+					sub <- KeyCtrlC
+				case 18:
+					sub <- KeyCtrlR
+				default:
+					sub <- Key(buf[1])
+				}
+				buf = make([]byte, 0)
+				continue
+			}
+			switch string(buf) {
+			case "\x1b[A":
+				sub <- KeyUp
+			case "\x1b[B":
+				sub <- KeyDown
+			case "\x1b[D":
+				sub <- KeyLeft
+			case "\x1b[C":
+				sub <- KeyRight
+			default:
+				continue
+			}
+			buf = make([]byte, 0)
+		} else {
 			continue
 		}
-		buf = make([]byte, 0)
 	}
 }

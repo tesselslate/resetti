@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/internal/logger"
 	"github.com/woofdoggo/resetti/mc"
 	"github.com/woofdoggo/resetti/obs"
-	"github.com/woofdoggo/resetti/ui"
 	"github.com/woofdoggo/resetti/x11"
 )
 
@@ -103,13 +103,11 @@ func (m *StandardManager) stopWorkers() {
 }
 
 func (m *StandardManager) grabKeys() {
-	// TODO: check for errors
 	x11.GrabKey(m.conf.Keys.Focus, 0)
 	x11.GrabKey(m.conf.Keys.Reset, 0)
 }
 
 func (m *StandardManager) ungrabKeys() {
-	// TODO: check for errors
 	x11.UngrabKey(m.conf.Keys.Focus)
 	x11.UngrabKey(m.conf.Keys.Reset)
 }
@@ -147,27 +145,27 @@ func (m *StandardManager) run() {
 					case m.conf.Keys.Focus:
 						err := m.workers[m.current].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("Failed to focus worker %d: %s", m.current, err)
+							logger.LogError("Failed to focus worker %d: %s", m.current, err)
 							continue
 						}
 					case m.conf.Keys.Reset:
 						next := (m.current + 1) % len(m.workers)
 						err := m.workers[next].Focus(evt.Timestamp)
 						if err != nil {
-							ui.LogError("Failed to focus worker %d: %s", m.current, err)
+							logger.LogError("Failed to focus worker %d: %s", m.current, err)
 							continue
 						}
 						err = m.workers[m.current].Reset(evt.Timestamp)
 						if err != nil {
-							ui.LogError("Failed to reset worker %d: %s", m.current, err)
+							logger.LogError("Failed to reset worker %d: %s", m.current, err)
 							continue
 						}
 						m.current = next
-						ui.Log("Reset instance %d.", m.current)
+						logger.Log("Reset instance %d.", m.current)
 						if m.conf.Obs.Enabled {
 							err := obs.SetScene(fmt.Sprintf("Instance %d", m.current+1))
 							if err != nil {
-								ui.LogError("Failed to switch OBS scene: %s", err)
+								logger.LogError("Failed to switch OBS scene: %s", err)
 							}
 						}
 					}
@@ -180,7 +178,7 @@ func (m *StandardManager) run() {
 			}
 			cleanup = make([]func(), 0)
 			m.stop <- struct{}{}
-			ui.Log("Stopped manager!")
+			logger.Log("Stopped manager!")
 			return
 		}
 	}

@@ -8,6 +8,7 @@ require (
 	github.com/jezek/xgb v1.0.1
 	github.com/woofdoggo/go-obs v0.3.0
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
+	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 )
 
 require (

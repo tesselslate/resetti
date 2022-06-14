@@ -3,14 +3,16 @@ package manager
 import (
 	"bufio"
 	"errors"
-	"github.com/woofdoggo/resetti/cfg"
-	"github.com/woofdoggo/resetti/mc"
-	"github.com/woofdoggo/resetti/ui"
-	"github.com/woofdoggo/resetti/x11"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/woofdoggo/resetti/cfg"
+	"github.com/woofdoggo/resetti/internal/logger"
+	"github.com/woofdoggo/resetti/mc"
+	"github.com/woofdoggo/resetti/ui"
+	"github.com/woofdoggo/resetti/x11"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
@@ -75,7 +77,7 @@ func (w *Worker) Stop() {
 	// goroutine to send another value back to signal that it is finished.
 	w.stop <- struct{}{}
 	<-w.stop
-	ui.Log("Stopped worker %d!", w.instance.Id)
+	logger.Log("Stopped worker %d!", w.instance.Id)
 }
 
 // SetConfig sets the worker's configuration.
@@ -146,7 +148,7 @@ func (w *Worker) run(errch chan<- WorkerError) {
 				w.active.Unlock()
 				return
 			}
-			ui.LogError("File watcher error: %s", err)
+			logger.LogError("File watcher error: %s", err)
 		case evt, ok := <-w.watcher.Events:
 			if !ok {
 				errch <- WorkerError{
@@ -232,7 +234,7 @@ func (w *Worker) updateState() {
 	w.setState(state)
 	activeWin, err := x11.GetActiveWindow()
 	if err != nil {
-		ui.LogError("Failed to get active window: %s", err)
+		logger.LogError("Failed to get active window: %s", err)
 		return
 	}
 	isPreview := w.instance.State == mc.StatePreview

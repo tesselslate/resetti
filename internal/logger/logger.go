@@ -1,22 +1,22 @@
-package ui
+// Package logger implements a basic logging service.
+package logger
 
 import (
 	"fmt"
-	"github.com/woofdoggo/resetti/mc"
 	"io"
 	"runtime"
 	"time"
 )
 
-const CHAN_SIZE = 2048
+var sub chan<- string
+var writer io.Writer
 
-var logCh = make(chan string, CHAN_SIZE)
-var resetCh = make(chan struct{}, CHAN_SIZE)
-var stateCh = make(chan []mc.Instance, CHAN_SIZE)
-var logWriter io.Writer
+func SetWriter(w io.Writer) {
+	writer = w
+}
 
-func SetLogWriter(w io.Writer) {
-	logWriter = w
+func Subscribe(ch chan<- string) {
+	sub = ch
 }
 
 func Log(content ...any) {
@@ -26,12 +26,10 @@ func Log(content ...any) {
 	)
 	if len(content) == 1 {
 		line := prefix + fmt.Sprint(content[0]) + "\n"
-		logCh <- line
-		logWriter.Write([]byte(line))
+		write(line)
 	} else {
 		line := prefix + fmt.Sprintf(content[0].(string), content[1:]...) + "\n"
-		logCh <- line
-		logWriter.Write([]byte(line))
+		write(line)
 	}
 }
 
@@ -46,20 +44,17 @@ func LogError(content ...any) {
 	)
 	if len(content) == 1 {
 		line := prefix + fmt.Sprint(content[0]) + "\n"
-		logCh <- line
-		logWriter.Write([]byte(line))
+		write(line)
 	} else {
 		line := prefix + fmt.Sprintf(content[0].(string), content[1:]...) + "\n"
-		logCh <- line
-		logWriter.Write([]byte(line))
+		write(line)
 	}
 }
 
-func UpdateInstance(i ...mc.Instance) {
-	for _, v := range i {
-		if v.State == mc.StateGenerating {
-			resetCh <- struct{}{}
-		}
+func write(line string) {
+	sub <- line
+	_, err := writer.Write([]byte(line))
+	if err != nil {
+		sub <- fmt.Sprintf("failed to write log: %s", err)
 	}
-	stateCh <- i
 }

@@ -10,4 +10,5 @@ const (
 	KeyCtrlC Key = 260
 	KeyCtrlR Key = 261
 	KeyTab   Key = 262
+	KeyEnter Key = '\r'
 )
