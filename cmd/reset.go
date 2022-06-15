@@ -49,6 +49,8 @@ func CmdReset(conf *cfg.Config) int {
 		mgr = &manager.StandardManager{}
 	case "wall":
 		mgr = &manager.WallManager{}
+	case "setseed":
+		mgr = &manager.SetseedManager{}
 	default:
 		fmt.Println("Unrecognized profile type:", conf.General.Type)
 		return 1
@@ -62,8 +64,9 @@ func CmdReset(conf *cfg.Config) int {
 		}
 		defer resetHandle.Close()
 	}
-	if conf.General.Type == "wall" && !conf.Obs.Enabled {
-		fmt.Println("OBS integration must be enabled for wall.")
+	typeNeedsObs := conf.General.Type == "wall" || conf.General.Type == "setseed"
+	if typeNeedsObs && !conf.Obs.Enabled {
+		fmt.Println("OBS integration must be enabled for this resetter type.")
 		fmt.Println("Please update your configuration.")
 		os.Exit(1)
 	}

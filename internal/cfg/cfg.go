@@ -21,6 +21,7 @@ type Config struct {
 	Mc      ConfigMc      `toml:"minecraft"`
 	Keys    ConfigKeys    `toml:"keybinds"`
 	Wall    ConfigWall    `toml:"wall"`
+	SSG     ConfigSSG     `toml:"setseed"`
 }
 
 type ConfigGeneral struct {
@@ -37,8 +38,9 @@ type ConfigObs struct {
 }
 
 type ConfigReset struct {
-	SetSettings bool `toml:"set_settings"`
-	Delay       int  `toml:"delay"`
+	SetSettings  bool `toml:"set_settings"`
+	Delay        int  `toml:"delay"`
+	UnpauseFocus bool `toml:"unpause_on_focus"`
 }
 
 type ConfigMc struct {
@@ -59,6 +61,13 @@ type ConfigKeys struct {
 type ConfigWall struct {
 	StretchWindows bool `toml:"stretch_windows"`
 	UseMouse       bool `toml:"use_mouse"`
+}
+
+type ConfigSSG struct {
+	Seed   string  `toml:"seed"`
+	SpawnX float64 `toml:"spawn_x"`
+	SpawnZ float64 `toml:"spawn_z"`
+	Radius float64 `toml:"radius"`
 }
 
 // GetPath returns the path to the user's configuration folder.

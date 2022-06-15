@@ -15,11 +15,21 @@ import (
 )
 
 // InstanceState represents the state of a given instance.
-type InstanceState int
+type InstanceState struct {
+	Identifier int
+	World      string
+	Spawn      Position
+}
+
+// Position represents a position in a world.
+type Position struct {
+	X float64
+	Z float64
+}
 
 const (
 	// The instance's state is unknown; no actions have been performed yet.
-	StateUnknown InstanceState = iota
+	StateUnknown int = iota
 	// The instance is finished generating and ready to be played on.
 	StateReady
 	// The instance is currently being played on.
@@ -32,7 +42,7 @@ const (
 
 func (i InstanceState) String() string {
 	// NOTE: Update switch case with the InstanceState enum.
-	switch i {
+	switch i.Identifier {
 	case StateUnknown:
 		return "???"
 	case StateReady:
@@ -164,11 +174,13 @@ func GetInstances() ([]Instance, error) {
 		}
 
 		instance := Instance{
-			Id:      id,
-			Window:  win,
-			Dir:     dir,
-			Pid:     pid,
-			State:   StateUnknown,
+			Id:     id,
+			Window: win,
+			Dir:    dir,
+			Pid:    pid,
+			State: InstanceState{
+				Identifier: StateUnknown,
+			},
 			Version: version,
 		}
 

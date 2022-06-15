@@ -112,7 +112,9 @@ func (m *WallManager) stopWorkers() {
 	for i := 0; i < len(m.workers); i++ {
 		wg.Add(1)
 		go func(i int) {
-			m.workers[i].Stop()
+			if m.workers[i] != nil {
+				m.workers[i].Stop()
+			}
 			wg.Done()
 		}(i)
 	}
@@ -121,6 +123,7 @@ func (m *WallManager) stopWorkers() {
 
 func (m *WallManager) grabKeys() {
 	x11.GrabKey(m.conf.Keys.Focus, 0)
+	x11.GrabKey(m.conf.Keys.Reset, 0)
 }
 
 func (m *WallManager) ungrabKeys() {

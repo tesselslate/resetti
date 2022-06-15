@@ -95,7 +95,9 @@ func (m *StandardManager) stopWorkers() {
 	for i := 0; i < len(m.workers); i++ {
 		wg.Add(1)
 		go func(i int) {
-			m.workers[i].Stop()
+			if m.workers[i] != nil {
+				m.workers[i].Stop()
+			}
 			wg.Done()
 		}(i)
 	}

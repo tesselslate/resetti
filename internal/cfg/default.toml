@@ -6,6 +6,7 @@
 # Available options:
 # - standard    Traditional single/multi-instance resetting for random seeds.
 # - wall        Wall-style resetting for random seeds.
+# - setseed     Set-seed resetter for good spawns, like spawn-juicer.
 type = "standard"
 
 # Whether or not to count the amount of resets performed.
@@ -42,6 +43,9 @@ set_settings = false
 # values will lead to faster resets, but may break. Increase this if you
 # experience issues.
 delay = 50
+
+# Whether or not to automatically unpause the game when an instance is focused.
+unpause_on_focus = true
 
 # These settings are only applied if reset.set_settings is enabled.
 # Each setting corresponds to normal values ingame. Attempting to
@@ -97,3 +101,16 @@ stretch_windows = false
 # you to click on instances to perform various actions instead of having to use
 # the number keys. Note that enabling this does not disable the number keys.
 use_mouse = false
+
+# You can delete this section or leave it as is if you are not using the
+# set-seed resetter.
+[setseed]
+# The seed to use.
+seed = "my_seed"
+
+# The desired spawn X and Z coordinates.
+spawn_x = 123.0
+spawn_z = 456.0
+
+# The radius around the given X/Z coordinates which is considered "good."
+radius = 5.0

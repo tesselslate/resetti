@@ -3,7 +3,9 @@ package manager
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +41,7 @@ type Worker struct {
 	watcher  *fsnotify.Watcher
 	instance mc.Instance
 	lastTime xproto.Timestamp
+	update   chan<- mc.Instance
 }
 
 // Start begins running the Worker's goroutine in the background.
@@ -67,6 +70,12 @@ func (w *Worker) Start(errch chan<- WorkerError) error {
 	w.setState(state)
 	go w.run(errch)
 	return nil
+}
+
+// Subscribe allows the manager of the Worker to receive any state updates
+// and act upon them. This is primarily used for the set seed manager.
+func (w *Worker) Subscribe(ch chan<- mc.Instance) {
+	w.update = ch
 }
 
 // Stop stops the Worker's background goroutine. This function will hang
@@ -103,19 +112,13 @@ func (w *Worker) Focus(time xproto.Timestamp) error {
 		return err
 	}
 	// If the instance is ready (generated, paused), then unpause it.
-	if w.instance.State == mc.StateReady {
-		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
-		w.setState(mc.StateIngame)
+	if w.instance.State.Identifier == mc.StateReady {
+		w.setStateId(mc.StateIngame)
+		if w.conf.Reset.UnpauseFocus {
+			x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
+		}
 	}
 	return nil
-}
-
-// Fullscreen toggles the instance's fullscreen state.
-func (w *Worker) Fullscreen(timestamp xproto.Timestamp) {
-	w.Lock()
-	w.lastTime = timestamp
-	x11.SendKeyPress(x11.KeyF11, w.instance.Window, &w.lastTime)
-	w.Unlock()
 }
 
 // Reset waits for the Worker to finish its current task before focusing the
@@ -123,11 +126,15 @@ func (w *Worker) Fullscreen(timestamp xproto.Timestamp) {
 func (w *Worker) Reset(time xproto.Timestamp) error {
 	w.Lock()
 	defer w.Unlock()
-	if w.instance.State == mc.StateGenerating {
+	if w.instance.State.Identifier == mc.StateGenerating {
 		return ErrCannotReset
+	}
+	if time == xproto.TimeCurrentTime {
+		time = w.lastTime
 	}
 	time, err := w.instance.Reset(&w.conf, time)
 	w.lastTime = time
+	w.setStateId(mc.StateGenerating)
 	return err
 }
 
@@ -181,7 +188,7 @@ func (w *Worker) run(errch chan<- WorkerError) {
 }
 
 func (w *Worker) readState() (mc.InstanceState, bool) {
-	state := mc.StateUnknown
+	state := w.instance.State
 	updated := false
 	for {
 		lineBytes, _, err := w.reader.ReadLine()
@@ -191,21 +198,47 @@ func (w *Worker) readState() (mc.InstanceState, bool) {
 		line := string(lineBytes)
 		if strings.Contains(line, "CHAT") {
 			continue
-		}
-		if strings.Contains(line, "Resetting a random seed") {
-			state = mc.StateGenerating
+		} else if strings.Contains(line, "Resetting a random seed") || strings.Contains(line, "Resetting the set seed") {
+			state.Identifier = mc.StateGenerating
 			updated = true
-		}
-		if strings.Contains(line, "Saving and pausing game...") {
-			state = mc.StateReady
+		} else if strings.Contains(line, "Saving and pausing game...") {
+			state.Identifier = mc.StateReady
 			updated = true
-		}
-		if strings.Contains(line, "Starting Preview at") {
-			state = mc.StatePreview
+		} else if strings.Contains(line, "Starting Preview at") {
+			state.Identifier = mc.StatePreview
 			updated = true
-		}
-		if strings.Contains(line, "Leaving world generation") {
-			state = mc.StateGenerating
+			pos, err := readPos(line)
+			if err != nil {
+				logger.LogError("Failed to read position in 'preview' message: %s", err)
+				continue
+			}
+			state.Spawn = pos
+		} else if strings.Contains(line, "Leaving world generation") {
+			state.Identifier = mc.StateGenerating
+			updated = true
+		} else if strings.Contains(line, "Saving chunks for level") {
+			start := strings.Index(line, "ServerLevel")
+			if start == -1 {
+				logger.LogError("Failed to find world name in 'saving chunks' message")
+				continue
+			}
+			line = line[start:]
+			open := strings.IndexRune(line, '[')
+			end := strings.IndexRune(line, ']')
+			if open == -1 || end == -1 {
+				logger.LogError("Could not find index of brackets in 'saving chunks' message")
+				continue
+			}
+			state.World = line[open+1 : end]
+			updated = true
+		} else if strings.Contains(line, "logged in with entity id") {
+			pos, err := readPos(line)
+			if err != nil {
+				logger.LogError("Failed to read position in 'logged in' message: %s", err)
+				continue
+			}
+			state.Spawn = pos
+			state.Identifier = mc.StateReady
 			updated = true
 		}
 	}
@@ -213,6 +246,8 @@ func (w *Worker) readState() (mc.InstanceState, bool) {
 }
 
 func (w *Worker) updateState() {
+	w.Lock()
+	defer w.Unlock()
 	state, updated := w.readState()
 	// Preliminary checks:
 	// If no state updates were logged, then no action is needed.
@@ -220,36 +255,34 @@ func (w *Worker) updateState() {
 		return
 	}
 	// If the state did not change, then no action is needed.
-	if w.instance.State == state {
+	if w.instance.State.Identifier == state.Identifier {
 		return
 	}
 	// If the instance is already being played on, it cannot switch
 	// directly to the Ready state. This condition should only be met
 	// when playing on a LAN world.
-	if w.instance.State == mc.StateIngame && state == mc.StateReady {
+	if w.instance.State.Identifier == mc.StateIngame && state.Identifier == mc.StateReady {
 		return
 	}
-	w.Lock()
-	defer w.Unlock()
 	w.setState(state)
 	activeWin, err := x11.GetActiveWindow()
 	if err != nil {
 		logger.LogError("Failed to get active window: %s", err)
 		return
 	}
-	isPreview := w.instance.State == mc.StatePreview
-	isReady := w.instance.State == mc.StateReady
+	isPreview := w.instance.State.Identifier == mc.StatePreview
+	isReady := w.instance.State.Identifier == mc.StateReady
 	isActive := activeWin == w.instance.Window
 	// If the window is currently focused and enters the Ready state, then the
 	// player wants to play it and it can be switched to Ingame.
 	if isActive && isReady {
-		w.setState(mc.StateIngame)
+		w.setStateId(mc.StateIngame)
 		return
 	}
 	// If the instance is not currently focused and it has either switched
 	// to the WorldPreview menu or finished generating, press F3+Esc
 	// to get the transparent pause menu.
-	if !isActive && (isPreview || isReady) {
+	if (!isActive || !w.conf.Reset.UnpauseFocus) && (isPreview || isReady) {
 		time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
 		x11.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
 		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
@@ -260,4 +293,34 @@ func (w *Worker) updateState() {
 func (w *Worker) setState(s mc.InstanceState) {
 	w.instance.State = s
 	ui.UpdateInstance(w.instance)
+	if w.update != nil {
+		w.update <- w.instance
+	}
+}
+
+func (w *Worker) setStateId(s int) {
+	w.instance.State.Identifier = s
+	ui.UpdateInstance(w.instance)
+	if w.update != nil {
+		w.update <- w.instance
+	}
+}
+
+func readPos(s string) (mc.Position, error) {
+	pos := mc.Position{}
+	open := strings.IndexRune(s, '(')
+	end := strings.IndexRune(s, ')')
+	if open == -1 || end == -1 {
+		return pos, errors.New("could not find parentheses")
+	}
+	splits := strings.Split(s[open+1:end], ",")
+	x, err := strconv.ParseFloat(splits[0], 64)
+	if err != nil {
+		return pos, fmt.Errorf("could not parse X of 'logged in' message: %s", err)
+	}
+	z, err := strconv.ParseFloat(strings.TrimSpace(splits[2]), 64)
+	if err != nil {
+		return pos, fmt.Errorf("could not parse Z of 'logged in' message: %s", err)
+	}
+	return mc.Position{X: x, Z: z}, nil
 }

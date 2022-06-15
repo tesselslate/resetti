@@ -51,7 +51,7 @@ func v16_reset(i Instance, settings *cfg.Config, t *xproto.Timestamp) error {
 	delay := time.Duration(settings.Reset.Delay) * time.Millisecond
 
 	// Act based on the instance's state.
-	switch i.State {
+	switch i.State.Identifier {
 	case StateUnknown:
 		// If the state is unknown, assume the instance is on the title screen.
 		x11.SendKeyDown(x11.KeyShift, i.Window, t)
