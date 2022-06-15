@@ -13,7 +13,6 @@ import (
 
 type choices struct {
 	Instances       uint
-	Wall            bool
 	WallX           uint
 	WallY           uint
 	InstancesAlways bool
@@ -48,38 +47,6 @@ func CmdObs() {
 		}
 		info.Instances = uint(num)
 		break
-	}
-	fmt.Println("Do you want to create a Wall scene? (y/n)")
-outer:
-	for {
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Try again.")
-			continue
-		}
-		if len(input) == 0 {
-			fmt.Println("Try again.")
-			continue
-		}
-		switch unicode.ToLower(rune(input[0])) {
-		case 'y':
-			info.Wall = true
-			break outer
-		case 'n':
-			info.Wall = false
-			break outer
-		default:
-			fmt.Println("Try again.")
-			continue
-		}
-	}
-	if !info.Wall {
-		fmt.Println("Please create a new scene collection with the name:")
-		fmt.Printf("resetti - %d multi\n", info.Instances)
-		fmt.Println("Once done, press enter. Then resetti will create the")
-		fmt.Println("necessary scenes for you automatically.")
-		reader.ReadString('\n')
-		createScenes(info)
 	}
 	fmt.Println("How do you want your wall scene setup?")
 	fmt.Println("Please enter the number of rows and columns you want.")
@@ -212,13 +179,11 @@ func createScenes(info choices) {
 			return
 		}
 	}
-	if info.Wall {
-		fmt.Println("Creating wall scene.")
-		_, err := o.CreateScene("Wall")
-		if err != nil {
-			fmt.Println("Failed to create scene:", err)
-			return
-		}
+	fmt.Println("Creating wall scene.")
+	_, err = o.CreateScene("Wall")
+	if err != nil {
+		fmt.Println("Failed to create scene:", err)
+		return
 	}
 	// Get canvas size.
 	fmt.Println("Getting OBS canvas size.")
@@ -241,19 +206,17 @@ func createScenes(info choices) {
 			fmt.Println("Failed to create source:", err)
 			return
 		}
-		if info.Wall {
-			_, err = o.AddFilterToSource(
-				fmt.Sprintf("MC %d", i+1),
-				"Scaling/Aspect Ratio",
-				"scale_filter",
-				map[string]string{
-					"resolution": fmt.Sprintf("%dx%d", cw, ch),
-				},
-			)
-			if err != nil {
-				fmt.Println("Failed to set scale on instance:", err)
-				return
-			}
+		_, err = o.AddFilterToSource(
+			fmt.Sprintf("MC %d", i+1),
+			"Scaling/Aspect Ratio",
+			"scale_filter",
+			map[string]string{
+				"resolution": fmt.Sprintf("%dx%d", cw, ch),
+			},
+		)
+		if err != nil {
+			fmt.Println("Failed to set scale on instance:", err)
+			return
 		}
 	}
 	// Populate scene for each instance.
@@ -342,86 +305,84 @@ func createScenes(info choices) {
 	}
 	// Create wall scene.
 	fmt.Println("Populating wall scene.")
-	if info.Wall {
-		iw, ih := cw/info.WallX, ch/info.WallY
-		for x := uint(0); x < info.WallX; x++ {
-			for y := uint(0); y < info.WallY; y++ {
-				num := info.WallX*y + x + 1
-				if num > info.Instances {
-					break
-				}
-				source := fmt.Sprintf("MC %d", num)
-				res, err := o.AddSceneItem(
-					"Wall",
-					source,
-					ptr(true),
-				)
-				if err != nil {
-					fmt.Println("Failed to add scene item:", err)
-					return
-				}
-				_, err = o.SetSceneItemProperties(
-					"Wall",
-					obs.SetSceneItemPropertiesItem{
-						Id: ptr(res.ItemId),
-					},
-					obs.SetSceneItemPropertiesPosition{
-						X: ptr(float64(x * iw)),
-						Y: ptr(float64(y * ih)),
-					},
-					nil,
-					obs.SetSceneItemPropertiesScale{
-						X: ptr(1.0 / float64(info.WallX)),
-						Y: ptr(1.0 / float64(info.WallY)),
-					},
-					obs.SetSceneItemPropertiesCrop{},
-					ptr(true),
-					ptr(true),
-					obs.SetSceneItemPropertiesBounds{
-						X: ptr(float64(iw)),
-						Y: ptr(float64(ih)),
-					},
-				)
-				if err != nil {
-					fmt.Println("Failed to set scene item properties:", err)
-					return
-				}
-				_, err = o.CreateSource(
-					fmt.Sprintf("Lock %d", num),
-					"image_source",
-					"Wall",
-					map[string]interface{}{
-						"file": info.LockImg,
-					},
-					ptr(true),
-				)
-				if err != nil {
-					fmt.Println("Failed to create lock source:", err)
-					return
-				}
-				_, err = o.SetSceneItemProperties(
-					"Wall",
-					obs.SetSceneItemPropertiesItem{
-						Name: fmt.Sprintf("Lock %d", num),
-					},
-					obs.SetSceneItemPropertiesPosition{
-						X: ptr(float64(x * iw)),
-						Y: ptr(float64(y * ih)),
-					},
-					nil,
-					obs.SetSceneItemPropertiesScale{},
-					obs.SetSceneItemPropertiesCrop{},
-					ptr(true),
-					ptr(true),
-					obs.SetSceneItemPropertiesBounds{
-						X: ptr(float64(iw) * 0.25),
-						Y: ptr(float64(ih) * 0.25),
-					},
-				)
-				if err != nil {
-					fmt.Println("Failed to set scene item properties:", err)
-					return
-				}
+	iw, ih := cw/info.WallX, ch/info.WallY
+	for x := uint(0); x < info.WallX; x++ {
+		for y := uint(0); y < info.WallY; y++ {
+			num := info.WallX*y + x + 1
+			if num > info.Instances {
+				break
+			}
+			source := fmt.Sprintf("MC %d", num)
+			res, err := o.AddSceneItem(
+				"Wall",
+				source,
+				ptr(true),
+			)
+			if err != nil {
+				fmt.Println("Failed to add scene item:", err)
+				return
+			}
+			_, err = o.SetSceneItemProperties(
+				"Wall",
+				obs.SetSceneItemPropertiesItem{
+					Id: ptr(res.ItemId),
+				},
+				obs.SetSceneItemPropertiesPosition{
+					X: ptr(float64(x * iw)),
+					Y: ptr(float64(y * ih)),
+				},
+				nil,
+				obs.SetSceneItemPropertiesScale{
+					X: ptr(1.0 / float64(info.WallX)),
+					Y: ptr(1.0 / float64(info.WallY)),
+				},
+				obs.SetSceneItemPropertiesCrop{},
+				ptr(true),
+				ptr(true),
+				obs.SetSceneItemPropertiesBounds{
+					X: ptr(float64(iw)),
+					Y: ptr(float64(ih)),
+				},
+			)
+			if err != nil {
+				fmt.Println("Failed to set scene item properties:", err)
+				return
+			}
+			_, err = o.CreateSource(
+				fmt.Sprintf("Lock %d", num),
+				"image_source",
+				"Wall",
+				map[string]interface{}{
+					"file": info.LockImg,
+				},
+				ptr(true),
+			)
+			if err != nil {
+				fmt.Println("Failed to create lock source:", err)
+				return
+			}
+			_, err = o.SetSceneItemProperties(
+				"Wall",
+				obs.SetSceneItemPropertiesItem{
+					Name: fmt.Sprintf("Lock %d", num),
+				},
+				obs.SetSceneItemPropertiesPosition{
+					X: ptr(float64(x * iw)),
+					Y: ptr(float64(y * ih)),
+				},
+				nil,
+				obs.SetSceneItemPropertiesScale{},
+				obs.SetSceneItemPropertiesCrop{},
+				ptr(true),
+				ptr(true),
+				obs.SetSceneItemPropertiesBounds{
+					X: ptr(float64(iw) * 0.25),
+					Y: ptr(float64(ih) * 0.25),
+				},
+			)
+			if err != nil {
+				fmt.Println("Failed to set scene item properties:", err)
+				return
 			}
 		}
 	}
