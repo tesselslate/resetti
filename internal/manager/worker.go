@@ -143,6 +143,40 @@ func (w *Worker) Resize(width, height uint16) error {
 	return x11.MoveWindow(w.instance.Window, 0, 0, uint32(width), uint32(height))
 }
 
+// SetSeed sets the seed of the instance if it is on the main menu.
+func (w *Worker) SetSeed(timestamp xproto.Timestamp) {
+	w.lastTime = timestamp
+	w.Lock()
+	defer w.Unlock()
+	if w.instance.State.Identifier != mc.StateUnknown {
+		return
+	}
+	x11.SendKeyDown(x11.KeyShift, w.instance.Window, &w.lastTime)
+	x11.SendKeyPress(x11.KeyTab, w.instance.Window, &w.lastTime)
+	x11.SendKeyPress(x11.KeyEnter, w.instance.Window, &w.lastTime)
+	x11.SendKeyUp(x11.KeyShift, w.instance.Window, &w.lastTime)
+	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	x11.SendKeyDown(x11.KeyCtrl, w.instance.Window, &w.lastTime)
+	x11.SendKeyPress(x11.KeyA, w.instance.Window, &w.lastTime)
+	x11.SendKeyPress(x11.KeyBackspace, w.instance.Window, &w.lastTime)
+	x11.SendKeyUp(x11.KeyCtrl, w.instance.Window, &w.lastTime)
+	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	for _, c := range w.conf.SSG.Seed {
+		if c == '-' {
+			x11.SendKeyPressAlt(x11.KeyMinus, w.instance.Window, &w.lastTime)
+		} else if c >= '1' && c <= '9' {
+			x11.SendKeyPressAlt(xproto.Keycode(10+c-'1'), w.instance.Window, &w.lastTime)
+		} else if c == '0' {
+			x11.SendKeyPressAlt(x11.Key0, w.instance.Window, &w.lastTime)
+		}
+	}
+	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	x11.SendKeyPressAlt(x11.KeyTab, w.instance.Window, &w.lastTime)
+	x11.SendKeyPressAlt(x11.KeyTab, w.instance.Window, &w.lastTime)
+	x11.SendKeyPress(x11.KeyEnter, w.instance.Window, &w.lastTime)
+	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+}
+
 func (w *Worker) run(errch chan<- WorkerError) {
 	for {
 		select {

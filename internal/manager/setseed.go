@@ -63,8 +63,10 @@ func (m *SetseedManager) Start(instances []mc.Instance, errch chan error) error 
 	for i := 0; i < len(m.states); i++ {
 		m.states[i] = Idle
 	}
-	// TODO: Update affinity
-	// TODO: Input seeds on boot
+	err = setAffinity(instances, m.conf.General.Affinity)
+	if err != nil {
+		return err
+	}
 	go m.run()
 	return nil
 }
@@ -235,10 +237,14 @@ func (m *SetseedManager) run() {
 							logger.LogError("Failed to focus projector: %s", err)
 						}
 					case m.conf.Keys.Reset:
+						// Set seed if instance is on main menu.
+						for _, v := range m.workers {
+							v.SetSeed(evt.Timestamp)
+						}
 						foundReady := false
 						for i, v := range m.states {
 							if v == Idle || v == Resetting {
-								err := m.workers[i].Reset(evt.Timestamp)
+								err := m.workers[i].Reset(0)
 								if err != nil {
 									logger.LogError("Failed to background reset instance %d: %s", i, err)
 								}
