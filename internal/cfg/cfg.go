@@ -14,11 +14,6 @@ import (
 //go:embed default.toml
 var defaultConfig string
 
-const (
-	KeyReset int = 0
-	KeyFocus int = 1
-)
-
 type Config struct {
 	General ConfigGeneral `toml:"general"`
 	Obs     ConfigObs     `toml:"obs"`
