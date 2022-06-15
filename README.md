@@ -90,12 +90,19 @@ Go to the `.minecraft` folder of each instance you will be using. Inside,
 create a file named `instance_num` whose contents are nothing but the number
 of the instance. Make sure these are in sequential order **starting from 0.**
 
-> **NOTE:** Make sure all of your instances have pause on lost focus
-> (F3+P) disabled.
+Depending on how you have your instances named, you can do this with a shell
+one-liner. For example, in the fish shell:
+
+```fish
+for i in (seq 1 6); echo (math $i - 1) | tee 16_MULTI$i/.minecraft/instance_num > /dev/null; end
+```
 
 resetti will only detect instances with the `instance_num` file. It will
 refuse to start up when the instances it detects do not have IDs starting from
 0 and in sequential order (e.g. 0, 1, 2, ... n)
+
+> **NOTE:** Make sure all of your instances have pause on lost focus
+> (F3+P) disabled.
 
 # Configuration
 
