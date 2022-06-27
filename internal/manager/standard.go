@@ -105,8 +105,8 @@ func (m *StandardManager) stopWorkers() {
 }
 
 func (m *StandardManager) grabKeys() {
-	x11.GrabKey(m.conf.Keys.Focus, 0)
-	x11.GrabKey(m.conf.Keys.Reset, 0)
+	x11.GrabKey(m.conf.Keys.Focus)
+	x11.GrabKey(m.conf.Keys.Reset)
 }
 
 func (m *StandardManager) ungrabKeys() {

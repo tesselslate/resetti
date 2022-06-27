@@ -272,7 +272,6 @@ func (w *Worker) readState() (mc.InstanceState, bool) {
 				continue
 			}
 			state.Spawn = pos
-			state.Identifier = mc.StateReady
 			updated = true
 		}
 	}

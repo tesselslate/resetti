@@ -122,8 +122,8 @@ func (m *WallManager) stopWorkers() {
 }
 
 func (m *WallManager) grabKeys() {
-	x11.GrabKey(m.conf.Keys.Focus, 0)
-	x11.GrabKey(m.conf.Keys.Reset, 0)
+	x11.GrabKey(m.conf.Keys.Focus)
+	x11.GrabKey(m.conf.Keys.Reset)
 }
 
 func (m *WallManager) ungrabKeys() {
@@ -140,16 +140,16 @@ func (m *WallManager) grabWallKeys() {
 			Code: xproto.Keycode(i + 10),
 		}
 		key.Mod = m.conf.Keys.WallPlay
-		x11.GrabKey(key, 0)
+		x11.GrabKey(key)
 		key.Mod = m.conf.Keys.WallReset
-		x11.GrabKey(key, 0)
+		x11.GrabKey(key)
 		key.Mod = m.conf.Keys.WallResetOthers
-		x11.GrabKey(key, 0)
+		x11.GrabKey(key)
 		key.Mod = m.conf.Keys.WallLock
-		x11.GrabKey(key, 0)
+		x11.GrabKey(key)
 	}
 	if m.conf.Wall.UseMouse {
-		if err := x11.GrabPointer(0); err != nil {
+		if err := x11.GrabPointer(); err != nil {
 			logger.LogError("Failed to grab pointer: %s", err)
 		}
 	}
@@ -196,8 +196,16 @@ func (m *WallManager) run() {
 
 	m.grabKeys()
 	m.grabWallKeys()
+	// Get screen size.
+	sw, sh, err := x11.ScreenSize()
+	if err != nil {
+		m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
+		return
+	}
+	m.screenWidth = sw
+	m.screenHeight = sh
 	// Locate OBS projector.
-	err := m.findProjector()
+	err = m.findProjector()
 	if err != nil {
 		m.Errors <- err
 		return
@@ -225,14 +233,6 @@ func (m *WallManager) run() {
 	for i := range m.locks {
 		m.setLock(i, false)
 	}
-	sw, sh, err := x11.ScreenSize()
-	if err != nil {
-		m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
-		return
-	}
-	logger.Log("Got screen size: %dx%d.", sw, sh)
-	m.screenWidth = sw
-	m.screenHeight = sh
 	if m.conf.Wall.StretchWindows {
 		for _, v := range m.workers {
 			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)

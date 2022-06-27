@@ -17,7 +17,7 @@ import (
 var atoms map[string]xproto.Atom
 var atomsMu sync.RWMutex
 var conn *xgb.Conn
-var grabbedKeys map[Key]xproto.Window
+var grabbedKeys map[Key]struct{}
 var keysMu sync.Mutex
 var rootWindow xproto.Window
 var errCh chan<- error
@@ -45,7 +45,7 @@ func Initialize() error {
 	}
 	atoms = make(map[string]xproto.Atom)
 	conn = xc
-	grabbedKeys = make(map[Key]xproto.Window)
+	grabbedKeys = make(map[Key]struct{})
 	rootWindow = xproto.Setup(conn).DefaultScreen(conn).Root
 	done = make(chan struct{})
 	go listenForEvents()
@@ -141,20 +141,17 @@ func GetWindowTitle(win xproto.Window) (string, error) {
 	return title[0], nil
 }
 
-func GrabKey(key Key, win xproto.Window) error {
+func GrabKey(key Key) error {
 	keysMu.Lock()
 	defer keysMu.Unlock()
 	if _, ok := grabbedKeys[key]; ok {
 		return errors.New("already grabbed key")
 	}
-	if win == 0 {
-		win = rootWindow
-	}
-	grabbedKeys[key] = win
+	grabbedKeys[key] = struct{}{}
 	return xproto.GrabKeyChecked(
 		conn,
 		true,
-		win,
+		rootWindow,
 		uint16(key.Mod),
 		key.Code,
 		xproto.GrabModeAsync,
@@ -177,18 +174,15 @@ func GrabKeyboard(win xproto.Window) error {
 	return err
 }
 
-func GrabPointer(win xproto.Window) error {
-	if win == 0 {
-		win = rootWindow
-	}
+func GrabPointer() error {
 	_, err := xproto.GrabPointer(
 		conn,
 		true,
-		win,
+		rootWindow,
 		pointer_mask,
 		xproto.GrabModeAsync,
 		xproto.GrabModeAsync,
-		win,
+		rootWindow,
 		xproto.CursorNone,
 		xproto.TimeCurrentTime,
 	).Reply()
@@ -263,7 +257,7 @@ func SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timesta
 func UngrabKey(key Key) error {
 	keysMu.Lock()
 	defer keysMu.Unlock()
-	win, ok := grabbedKeys[key]
+	_, ok := grabbedKeys[key]
 	if !ok {
 		return errors.New("key not grabbed")
 	}
@@ -271,7 +265,7 @@ func UngrabKey(key Key) error {
 	return xproto.UngrabKeyChecked(
 		conn,
 		key.Code,
-		win,
+		rootWindow,
 		uint16(key.Mod),
 	).Check()
 }

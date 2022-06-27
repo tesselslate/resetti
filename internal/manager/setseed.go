@@ -125,8 +125,8 @@ func (m *SetseedManager) stopWorkers() {
 }
 
 func (m *SetseedManager) grabKeys() {
-	x11.GrabKey(m.conf.Keys.Focus, 0)
-	x11.GrabKey(m.conf.Keys.Reset, 0)
+	x11.GrabKey(m.conf.Keys.Focus)
+	x11.GrabKey(m.conf.Keys.Reset)
 }
 
 func (m *SetseedManager) ungrabKeys() {
