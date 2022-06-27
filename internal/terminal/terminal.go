@@ -10,7 +10,12 @@ import (
 )
 
 var initialTermState *term.State
-var sub chan<- Key
+var newSub chan chan<- Key
+
+func init() {
+	newSub = make(chan chan<- Key, 1)
+	go listen()
+}
 
 func Init(ch chan<- Key) error {
 	state, err := term.MakeRaw(int(os.Stdin.Fd()))
@@ -19,8 +24,7 @@ func Init(ch chan<- Key) error {
 	}
 	initialTermState = state
 	fmt.Print("\x1b[?25l\x1b[?1049h")
-	sub = ch
-	go listen()
+	newSub <- ch
 	return nil
 }
 
@@ -38,12 +42,21 @@ func Clear() {
 }
 
 func listen() {
+	var sub chan<- Key = nil
 	reader := bufio.NewReader(os.Stdin)
 	buf := make([]byte, 0)
 	for {
 		b, err := reader.ReadByte()
 		if err != nil {
 			break
+		}
+		select {
+		case newCh := <-newSub:
+			sub = newCh
+		default:
+		}
+		if sub == nil {
+			continue
 		}
 		if len(buf) == 0 {
 			if b != 0x1b {
