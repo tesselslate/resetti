@@ -288,7 +288,8 @@ func (w *Worker) updateState() {
 		return
 	}
 	// If the state did not change, then no action is needed.
-	if w.instance.State.Identifier == state.Identifier {
+	if w.instance.State.Identifier == state.Identifier &&
+		w.instance.State.Spawn == state.Spawn {
 		return
 	}
 	// If the instance is already being played on, it cannot switch
