@@ -23,6 +23,7 @@ const (
 	Playing
 	Resetting
 	Ready
+	ReadySoon
 )
 
 type SetseedManager struct {
@@ -271,8 +272,12 @@ func (m *SetseedManager) run() {
 				dz := math.Abs(m.conf.SSG.SpawnZ - u.State.Spawn.Z)
 				dist := math.Sqrt(dx*dx + dz*dz)
 				if dist <= m.conf.SSG.Radius {
-					logger.Log("Instance %d ready! Distance: %f", u.Id, dist)
-					m.states[u.Id] = Ready
+					if u.State.Identifier == mc.StateReady {
+						logger.Log("Instance %d ready! Distance: %f", u.Id, dist)
+						m.states[u.Id] = Ready
+					} else {
+						m.states[u.Id] = ReadySoon
+					}
 				} else {
 					m.states[u.Id] = Resetting
 					logger.Log("Instance %d: Bad spawn (%f, %f, %f)", u.Id, dist, u.State.Spawn.X, u.State.Spawn.Z)
