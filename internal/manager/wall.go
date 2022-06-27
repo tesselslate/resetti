@@ -16,9 +16,6 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-const RESIZE_WIDTH = 1600
-const RESIZE_HEIGHT = 300
-
 type WallManager struct {
 	stop   chan struct{}
 	active sync.Mutex
@@ -381,7 +378,7 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 			logger.LogError("Failed to reset instance %d: %s", m.current, err)
 		}
 		if m.conf.Wall.StretchWindows {
-			err := m.workers[m.current].Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
+			err := m.workers[m.current].Resize(m.conf.Wall.StretchWidth, m.conf.Wall.StretchHeight)
 			if err != nil {
 				logger.LogError("Failed to resize instance: %s", err)
 				return

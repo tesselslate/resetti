@@ -59,8 +59,10 @@ type ConfigKeys struct {
 }
 
 type ConfigWall struct {
-	StretchWindows bool `toml:"stretch_windows"`
-	UseMouse       bool `toml:"use_mouse"`
+	StretchWindows bool   `toml:"stretch_windows"`
+	StretchWidth   uint16 `toml:"stretch_width"`
+	StretchHeight  uint16 `toml:"stretch_height"`
+	UseMouse       bool   `toml:"use_mouse"`
 }
 
 type ConfigSSG struct {
