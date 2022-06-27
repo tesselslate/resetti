@@ -50,7 +50,6 @@ resetti's feature set ~~is~~ will soon be larger than most Windows-only reset ma
 
 ## Planned Features
 
-- Redetect instances without having to stop and restart
 - 1.7 and 1.8 support
 - Packages for various distributions
 

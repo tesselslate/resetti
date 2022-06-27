@@ -85,10 +85,6 @@ func (m *SetseedManager) Wait() {
 	m.active.Lock()
 }
 
-func (m *SetseedManager) Restart(instances []mc.Instance) error {
-	return m.createWorkers(instances)
-}
-
 func (m *SetseedManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }

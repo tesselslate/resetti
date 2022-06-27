@@ -65,10 +65,6 @@ func (m *StandardManager) Wait() {
 	m.active.Lock()
 }
 
-func (m *StandardManager) Restart(instances []mc.Instance) error {
-	return m.createWorkers(instances)
-}
-
 func (m *StandardManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }

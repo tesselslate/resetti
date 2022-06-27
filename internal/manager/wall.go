@@ -79,10 +79,6 @@ func (m *WallManager) Wait() {
 	m.active.Lock()
 }
 
-func (m *WallManager) Restart(instances []mc.Instance) error {
-	return m.createWorkers(instances)
-}
-
 func (m *WallManager) SetConfig(conf cfg.Config) {
 	m.conf = conf
 }

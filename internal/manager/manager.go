@@ -11,7 +11,6 @@ type Manager interface {
 	SetConfig(cfg.Config)
 	Wait()
 
-	Restart([]mc.Instance) error
 	Start([]mc.Instance, chan error) error
 	Stop()
 }
