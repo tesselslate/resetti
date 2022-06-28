@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/logger"
@@ -28,31 +31,40 @@ var keys chan terminal.Key
 var resetCh chan int
 var stateCh chan []mc.Instance
 var stop chan struct{}
+var winCh chan os.Signal
 var instances []mc.Instance
 var startTime time.Time
 var recentLog []string
 var resets int
 var logIdx = 0
+var width int
 
 func Subscribe(ch chan<- error) {
 	sub = ch
 }
 
 func Init(i []mc.Instance) error {
+	w, _, err := terminal.GetSize()
+	if err != nil {
+		return err
+	}
+	width = w
 	msg = make(chan string, ch_size)
 	keys = make(chan terminal.Key, ch_size)
 	resetCh = make(chan int, ch_size)
 	stateCh = make(chan []mc.Instance, ch_size)
 	stop = make(chan struct{})
+	winCh = make(chan os.Signal, ch_size)
 	instances = make([]mc.Instance, len(i))
 	copy(instances, i)
 	startTime = time.Now()
 	recentLog = make([]string, log_size)
 	logger.Subscribe(msg)
-	err := terminal.Init(keys)
+	err = terminal.Init(keys)
 	if err != nil {
 		return err
 	}
+	signal.Notify(winCh, syscall.SIGWINCH)
 	go run()
 	return nil
 }
@@ -96,6 +108,12 @@ func run() {
 					instances[v.Id] = v
 				}
 			}
+		case <-winCh:
+			w, _, err := terminal.GetSize()
+			if err != nil {
+				logger.LogError("Failed to get terminal size: %s", err)
+			}
+			width = w
 		case <-time.After(1 * time.Second):
 			// Force UI updates to occur at least once per second.
 		case <-stop:
@@ -138,6 +156,9 @@ func run() {
 			msg := recentLog[(logIdx+100-i)%100]
 			if msg == "" {
 				continue
+			}
+			if len(msg) > width-3 {
+				msg = msg[:width-3]
 			}
 			terminal.NewStyle().RenderAt(msg, 3, len(instances)+6+inc)
 			inc += 1

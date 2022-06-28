@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -35,11 +36,12 @@ func Log(content ...any) {
 
 func LogError(content ...any) {
 	pc, _, linenr, _ := runtime.Caller(1)
-	fn := runtime.FuncForPC(pc)
+	name := runtime.FuncForPC(pc).Name()
+	name = strings.TrimPrefix(name, "github.com/woofdoggo/resetti/internal/")
 	prefix := fmt.Sprintf(
 		"[%s] [ERROR] %s:%d | ",
 		time.Now().Format("2006-01-02_15:04:05"),
-		fn.Name(),
+		name,
 		linenr,
 	)
 	if len(content) == 1 {
