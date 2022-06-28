@@ -57,7 +57,12 @@ func UpdateInstance(i ...mc.Instance) {
 			}
 		}
 		if resetUpdated {
-			_, err := resetHandle.Write([]byte(strconv.Itoa(resetCount)))
+			_, err := resetHandle.Seek(0, 0)
+			if err != nil {
+				logger.LogError("Failed to update reset count: %s", err)
+				return
+			}
+			_, err = resetHandle.Write([]byte(strconv.Itoa(resetCount)))
 			if err != nil {
 				logger.LogError("Failed to update reset count: %s", err)
 			}
