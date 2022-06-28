@@ -3,14 +3,11 @@
 package manager
 
 import (
-	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 )
 
 type Manager interface {
-	SetConfig(cfg.Config)
 	Wait()
-
 	Start([]mc.Instance, chan error) error
 	Stop()
 }

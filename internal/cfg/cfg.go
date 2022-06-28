@@ -14,6 +14,8 @@ import (
 //go:embed default.toml
 var defaultConfig string
 
+var globalConfig Config
+
 type Config struct {
 	General ConfigGeneral `toml:"general"`
 	Obs     ConfigObs     `toml:"obs"`
@@ -72,6 +74,11 @@ type ConfigSSG struct {
 	Radius float64 `toml:"radius"`
 }
 
+// GetConfig returns the global configuration.
+func GetConfig() Config {
+	return globalConfig
+}
+
 // GetPath returns the path to the user's configuration folder.
 func GetPath() (string, error) {
 	// Get configuration path.
@@ -124,6 +131,16 @@ func GetProfiles() ([]string, error) {
 		res = append(res, v.Name())
 	}
 	return res, nil
+}
+
+// LoadProfile loads the given configuration profile.
+func LoadProfile(name string) error {
+	conf, err := GetProfile(name)
+	if err != nil {
+		return err
+	}
+	globalConfig = *conf
+	return nil
 }
 
 // MakeProfile makes a new profile with the default configuration.

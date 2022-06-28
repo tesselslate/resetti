@@ -13,7 +13,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/logger"
 	"github.com/woofdoggo/resetti/internal/mc"
-	"github.com/woofdoggo/resetti/internal/ui"
+	"github.com/woofdoggo/resetti/internal/srv"
 	"github.com/woofdoggo/resetti/internal/x11"
 
 	"github.com/fsnotify/fsnotify"
@@ -46,6 +46,7 @@ type Worker struct {
 
 // Start begins running the Worker's goroutine in the background.
 func (w *Worker) Start(errch chan<- WorkerError) error {
+	w.conf = cfg.GetConfig()
 	if !w.active.TryLock() {
 		return errors.New("worker already running")
 	}
@@ -87,13 +88,6 @@ func (w *Worker) Stop() {
 	w.stop <- struct{}{}
 	<-w.stop
 	logger.Log("Stopped worker %d!", w.instance.Id)
-}
-
-// SetConfig sets the worker's configuration.
-func (w *Worker) SetConfig(c cfg.Config) {
-	w.Lock()
-	w.conf = c
-	w.Unlock()
 }
 
 // SetInstance sets the instance the worker will manage.
@@ -326,7 +320,7 @@ func (w *Worker) updateState() {
 
 func (w *Worker) setState(s mc.InstanceState) {
 	w.instance.State = s
-	ui.UpdateInstance(w.instance)
+	srv.UpdateInstance(w.instance)
 	if w.update != nil {
 		w.update <- w.instance
 	}
@@ -334,7 +328,7 @@ func (w *Worker) setState(s mc.InstanceState) {
 
 func (w *Worker) setStateId(s int) {
 	w.instance.State.Identifier = s
-	ui.UpdateInstance(w.instance)
+	srv.UpdateInstance(w.instance)
 	if w.update != nil {
 		w.update <- w.instance
 	}

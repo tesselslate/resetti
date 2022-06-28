@@ -38,6 +38,7 @@ type WallManager struct {
 }
 
 func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
+	m.conf = cfg.GetConfig()
 	if len(instances) == 0 {
 		return errors.New("no instances")
 	}
@@ -79,16 +80,11 @@ func (m *WallManager) Wait() {
 	m.active.Lock()
 }
 
-func (m *WallManager) SetConfig(conf cfg.Config) {
-	m.conf = conf
-}
-
 func (m *WallManager) createWorkers(instances []mc.Instance) error {
 	m.stopWorkers()
 	m.workers = make([]*Worker, 0)
 	for _, i := range instances {
 		w := &Worker{}
-		w.SetConfig(m.conf)
 		w.SetInstance(i)
 		err := w.Start(m.workerErrors)
 		if err != nil {

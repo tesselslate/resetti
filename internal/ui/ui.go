@@ -25,11 +25,13 @@ var ErrShutdown = errors.New("shutting down")
 var sub chan<- error
 var msg chan string
 var keys chan terminal.Key
+var resetCh chan int
 var stateCh chan []mc.Instance
 var stop chan struct{}
 var instances []mc.Instance
 var startTime time.Time
 var recentLog []string
+var resets int
 var logIdx = 0
 
 func Subscribe(ch chan<- error) {
@@ -39,6 +41,7 @@ func Subscribe(ch chan<- error) {
 func Init(i []mc.Instance) error {
 	msg = make(chan string, ch_size)
 	keys = make(chan terminal.Key, ch_size)
+	resetCh = make(chan int, ch_size)
 	stateCh = make(chan []mc.Instance, ch_size)
 	stop = make(chan struct{})
 	instances = make([]mc.Instance, len(i))
@@ -61,8 +64,11 @@ func Fini() {
 }
 
 func UpdateInstance(i ...mc.Instance) {
-	// TODO: Handle reset count updates
 	stateCh <- i
+}
+
+func UpdateResets(count int) {
+	resetCh <- count
 }
 
 func run() {
@@ -73,13 +79,14 @@ func run() {
 			recentLog[logIdx] = logMsg
 			logIdx = (logIdx + 1) % log_size
 		case key := <-keys:
-			// TODO: Ctrl+R for reload instances
 			switch key {
 			case terminal.KeyCtrlC:
 				logger.Log("User pressed Ctrl+C, shutting down.")
 				sub <- ErrShutdown
 				return
 			}
+		case count := <-resetCh:
+			resets = count
 		case states := <-stateCh:
 			if len(states) > len(instances) {
 				instances = make([]mc.Instance, len(states))
@@ -116,6 +123,8 @@ func run() {
 			strconv.Itoa(runtime.NumGoroutine()),
 			"Uptime",
 			prettifyTime(time.Since(startTime)),
+			"Resets",
+			strconv.Itoa(resets),
 		}
 		cyan.RenderAt("Details", 40, 2)
 		for i := 0; i < len(details)/2; i += 1 {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/woofdoggo/resetti/cmd"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/ui"
 )
 
 //go:embed .notice
@@ -18,7 +19,20 @@ var version string
 
 func main() {
 	if len(os.Args) < 2 {
-		os.Exit(cmd.CmdReset(nil))
+		confName, err := ui.ShowProfileMenu()
+		if err != nil {
+			fmt.Println("Failed to open menu:", err)
+			os.Exit(1)
+		}
+		if confName == "" {
+			os.Exit(1)
+		}
+		err = cfg.LoadProfile(confName)
+		if err != nil {
+			fmt.Println("Failed to load config:", err)
+			os.Exit(1)
+		}
+		os.Exit(cmd.CmdReset())
 	}
 	switch os.Args[1] {
 	case "--help", "-h", "help":
@@ -44,12 +58,12 @@ func main() {
 			fmt.Println("Created profile!")
 		}
 	default:
-		conf, err := cfg.GetProfile(os.Args[1])
+		err := cfg.LoadProfile(os.Args[1])
 		if err != nil {
-			fmt.Println("Failed to get profile:", err)
+			fmt.Println("Failed to load config:", err)
 			os.Exit(1)
 		}
-		os.Exit(cmd.CmdReset(conf))
+		os.Exit(cmd.CmdReset())
 	}
 }
 

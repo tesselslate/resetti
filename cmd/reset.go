@@ -10,27 +10,13 @@ import (
 	"github.com/woofdoggo/resetti/internal/manager"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
+	"github.com/woofdoggo/resetti/internal/srv"
 	"github.com/woofdoggo/resetti/internal/ui"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
-func CmdReset(conf *cfg.Config) int {
-	if conf == nil {
-		confName, err := ui.ShowProfileMenu()
-		if err != nil {
-			fmt.Println("Failed to open menu:", err)
-			os.Exit(1)
-		}
-		if confName == "" {
-			os.Exit(1)
-		}
-		profile, err := cfg.GetProfile(confName)
-		if err != nil {
-			fmt.Println("Failed to get profile:", err)
-			os.Exit(1)
-		}
-		conf = profile
-	}
+func CmdReset() int {
+	conf := cfg.GetConfig()
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		fmt.Println("Failed to get log path:", err)
@@ -43,6 +29,12 @@ func CmdReset(conf *cfg.Config) int {
 	}
 	logger.SetWriter(logHandle)
 	defer logHandle.Close()
+	err = srv.Init()
+	if err != nil {
+		fmt.Println("Failed to start miscellaneous services:", err)
+		os.Exit(1)
+	}
+	defer srv.Fini()
 	var mgr manager.Manager
 	switch conf.General.Type {
 	case "standard":
@@ -54,15 +46,6 @@ func CmdReset(conf *cfg.Config) int {
 	default:
 		fmt.Println("Unrecognized profile type:", conf.General.Type)
 		return 1
-	}
-	var resetHandle *os.File
-	if conf.General.CountResets {
-		resetHandle, err = os.OpenFile(conf.General.CountPath, os.O_RDWR|os.O_CREATE, 0644)
-		if err != nil {
-			fmt.Println("Failed to open reset count:", err)
-			os.Exit(1)
-		}
-		defer resetHandle.Close()
 	}
 	typeNeedsObs := conf.General.Type == "wall" || conf.General.Type == "setseed"
 	if typeNeedsObs && !conf.Obs.Enabled {
@@ -98,7 +81,6 @@ func CmdReset(conf *cfg.Config) int {
 		fmt.Println("Failed to start UI:", err)
 		os.Exit(1)
 	}
-	mgr.SetConfig(*conf)
 	mgrErrors := make(chan error)
 	err = mgr.Start(instances, mgrErrors)
 	if err != nil {
