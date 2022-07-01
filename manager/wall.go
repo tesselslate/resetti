@@ -229,15 +229,15 @@ func (m *WallManager) run() {
 	for i := range m.locks {
 		m.setLock(i, false)
 	}
+	sw, sh, err := m.x.ScreenSize()
+	if err != nil {
+		m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
+		return
+	}
+	ui.Log("Got screen size: %dx%d.", sw, sh)
+	m.screenWidth = sw
+	m.screenHeight = sh
 	if m.conf.Reset.Stretch {
-		sw, sh, err := m.x.ScreenSize()
-		if err != nil {
-			m.Errors <- fmt.Errorf("failed to get screen size: %s", err)
-			return
-		}
-		ui.Log("Got screen size: %dx%d.", sw, sh)
-		m.screenWidth = sw
-		m.screenHeight = sh
 		for _, v := range m.workers {
 			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
 			if err != nil {
