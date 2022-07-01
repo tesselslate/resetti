@@ -201,26 +201,26 @@ func (m *WallManager) run() {
 	m.grabKeys()
 	m.grabWallKeys()
 	// Locate OBS projector.
-	windows, err := m.x.GetWindowList(m.x.Root)
+	err := m.findProjector()
 	if err != nil {
 		m.Errors <- err
 		return
-	}
-	for _, win := range windows {
-		title, err := m.x.GetWindowTitle(win)
-		if err != nil {
-			continue
-		}
-		if strings.Contains(title, "Projector (Scene)") {
-			m.projector = win
-			break
-		}
 	}
 	if m.projector == 0 {
 		// No projector found. Spawn one.
 		_, err := m.o.OpenProjector("Scene", nil, "", "Wall")
 		if err != nil {
 			m.Errors <- fmt.Errorf("failed to spawn projector: %s", err)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+		err = m.findProjector()
+		if err != nil {
+			m.Errors <- err
+			return
+		}
+		if m.projector == 0 {
+			m.Errors <- errors.New("still unable to find OBS projector")
 			return
 		}
 	}
@@ -516,4 +516,22 @@ func (m *WallManager) setLock(i int, state bool) {
 		ui.LogError("Failed to lock instance %d: %s", i, err)
 		return
 	}
+}
+
+func (m *WallManager) findProjector() error {
+	windows, err := m.x.GetWindowList(m.x.Root)
+	if err != nil {
+		return err
+	}
+	for _, win := range windows {
+		title, err := m.x.GetWindowTitle(win)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(title, "Projector (Scene)") {
+			m.projector = win
+			return nil
+		}
+	}
+	return nil
 }
