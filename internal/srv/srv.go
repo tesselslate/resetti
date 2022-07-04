@@ -1,6 +1,5 @@
-// Package srv implements a few miscellaneous services for resetti:
-// - World deletion/moving
-// - Reset counting
+// Package srv implements a few miscellaneous services for resetti.
+// Currently, that only includes the reset counter.
 package srv
 
 import (
