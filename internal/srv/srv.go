@@ -17,8 +17,12 @@ import (
 var conf cfg.Config
 var resetHandle *os.File
 var resetCount int
+var resetCh chan int
+var stopCh chan struct{}
 
 func Init() error {
+	resetCh = make(chan int, 32)
+	stopCh = make(chan struct{})
 	conf = cfg.GetConfig()
 	if conf.General.CountResets {
 		file, err := os.OpenFile(conf.General.CountPath, os.O_RDWR, 0644)
@@ -37,12 +41,35 @@ func Init() error {
 		}
 		resetCount = c
 	}
+	go updateResets()
 	return nil
 }
 
 func Fini() {
+	stopCh <- struct{}{}
 	if resetHandle != nil {
 		resetHandle.Close()
+	}
+}
+
+func updateResets() {
+	for {
+		select {
+		case resets := <-resetCh:
+			resetCount += resets
+			_, err := resetHandle.Seek(0, 0)
+			if err != nil {
+				logger.LogError("Failed to update reset count: %s", err)
+				return
+			}
+			_, err = resetHandle.WriteString(strconv.Itoa(resetCount))
+			if err != nil {
+				logger.LogError("Failed to update reset count: %s", err)
+			}
+			ui.UpdateResets(resetCount)
+		case <-stopCh:
+			return
+		}
 	}
 }
 
@@ -50,23 +77,15 @@ func UpdateInstance(i ...mc.Instance) {
 	ui.UpdateInstance(i...)
 	if resetHandle != nil {
 		resetUpdated := false
+		toAdd := 0
 		for _, v := range i {
 			if v.State.Identifier == mc.StateGenerating {
-				resetCount += 1
+				toAdd += 1
 				resetUpdated = true
 			}
 		}
 		if resetUpdated {
-			_, err := resetHandle.Seek(0, 0)
-			if err != nil {
-				logger.LogError("Failed to update reset count: %s", err)
-				return
-			}
-			_, err = resetHandle.Write([]byte(strconv.Itoa(resetCount)))
-			if err != nil {
-				logger.LogError("Failed to update reset count: %s", err)
-			}
-			ui.UpdateResets(resetCount)
+			resetCh <- toAdd
 		}
 	}
 }
