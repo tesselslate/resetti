@@ -39,7 +39,7 @@ lock = ""
 unlock = ""
 
 [obs]
-# Whether or not to enable OBS websocket support. This is *required* for wall.
+# Whether or not to enable OBS websocket support. This is *required* for wall and setseed.
 enabled = false
 
 # The port to connect to OBS websocket on.
@@ -80,12 +80,14 @@ sensitivity = 100
 #   Shift as your wall instance reset keybind, pressing Shift-1 will reset the
 #   first instance (if you have mouse support enabled, shift clicking will work
 #   as well.) You can leave the keybind blank for no modifier.
+# - Do not have multiple identical keybinds.
 #
 #   Examples:
 #               `A` => The A key.
 #               `a` => The A key.
 #         `Shift-A` => The A key, only when Shift is held.
 #  `Ctrl-Shift-F12` => The F12 key with Control and Shift held.
+#
 [keybinds]
 # Pressing this will focus the current instance.
 # If you on the wall, pressing this will send you back to the OBS projector.
