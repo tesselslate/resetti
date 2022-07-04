@@ -224,7 +224,7 @@ func (m *WallManager) run() {
 	}
 	if m.conf.Wall.StretchWindows {
 		for _, v := range m.workers {
-			err := v.Resize(RESIZE_WIDTH, RESIZE_HEIGHT)
+			err := v.Resize(m.conf.Wall.StretchWidth, m.conf.Wall.StretchHeight)
 			if err != nil {
 				m.Errors <- fmt.Errorf("failed to resize instance: %s", err)
 				return
@@ -473,7 +473,7 @@ func (m *WallManager) findProjector() error {
 		if err != nil {
 			continue
 		}
-		if strings.Contains(title, "Projector (Scene)") {
+		if strings.Contains(title, "Projector (Scene) - Wall") {
 			m.projector = win
 			return nil
 		}
