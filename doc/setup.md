@@ -4,7 +4,11 @@ This document contains instructions on how to set up resetti. Refer to the main
 README for details on how to install resetti.
 
 ## Table of Contents
-TODO TODO TODO
+
+- [Setting up Minecraft](#setting-up-minecraft)
+- [Setting up OBS](#setting-up-obs)
+- [Configuration](#configuration)
+- [Usage](#usage)
 
 ## Setting up Minecraft
 

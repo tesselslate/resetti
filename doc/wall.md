@@ -52,7 +52,7 @@ of your mouse.**
 > resetti thinks instances are will be different.
 
 For example, if your `wall_reset` bind is set to Shift, then shift clicking an
-instance will reset it. You could continue to hold Shift and the mouse button
+instance will reset it. You can continue to hold Shift and the mouse button
 down while dragging your cursor over other instances to apply the same action
 to multiple instances quickly.
 
