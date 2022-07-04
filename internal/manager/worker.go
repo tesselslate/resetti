@@ -129,6 +129,9 @@ func (w *Worker) Reset(time xproto.Timestamp) error {
 	time, err := w.instance.Reset(&w.conf, time)
 	w.lastTime = time
 	w.setStateId(mc.StateGenerating)
+	if w.conf.Hooks.Reset != "" {
+		go runHook(w.conf.Hooks.Reset)
+	}
 	return err
 }
 

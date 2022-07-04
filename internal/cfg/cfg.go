@@ -18,6 +18,7 @@ var globalConfig Config
 
 type Config struct {
 	General ConfigGeneral `toml:"general"`
+	Hooks   ConfigHooks   `toml:"hooks"`
 	Obs     ConfigObs     `toml:"obs"`
 	Reset   ConfigReset   `toml:"reset"`
 	Mc      ConfigMc      `toml:"minecraft"`
@@ -31,6 +32,13 @@ type ConfigGeneral struct {
 	CountResets bool   `toml:"count_resets"`
 	CountPath   string `toml:"resets_file"`
 	Affinity    string `toml:"affinity"`
+}
+
+type ConfigHooks struct {
+	WallReset string `toml:"wall_reset"`
+	Reset     string `toml:"reset"`
+	Lock      string `toml:"lock"`
+	Unlock    string `toml:"unlock"`
 }
 
 type ConfigObs struct {

@@ -371,14 +371,18 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 		for _, v := range m.workers {
 			wg.Add(1)
 			go func(v *Worker) {
-				defer wg.Done()
 				if m.locks[v.instance.Id] {
+					wg.Done()
 					return
 				}
 				logger.Log("Reset instance %d.", v.instance.Id)
 				err := v.Reset(evt.Timestamp)
 				if err != nil {
 					logger.LogError("Failed to reset instance %d: %s", m.current, err)
+				}
+				wg.Done()
+				if m.conf.Hooks.WallReset != "" {
+					runHook(m.conf.Hooks.WallReset)
 				}
 			}(v)
 		}
@@ -426,6 +430,9 @@ func (m *WallManager) wallReset(id int, t xproto.Timestamp) {
 	if err != nil {
 		logger.LogError("Failed to reset instance %d: %s", id, err)
 	}
+	if m.conf.Hooks.WallReset != "" {
+		go runHook(m.conf.Hooks.WallReset)
+	}
 }
 
 func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
@@ -452,6 +459,9 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 			err := m.workers[i].Reset(t)
 			if err != nil {
 				logger.LogError("Failed to reset instance %d: %s", id, err)
+			}
+			if m.conf.Hooks.WallReset != "" {
+				go runHook(m.conf.Hooks.WallReset)
 			}
 		}
 	}
@@ -483,6 +493,11 @@ func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
 func (m *WallManager) wallLock(id int, t xproto.Timestamp) {
 	m.setLock(id, !m.locks[id])
 	logger.Log("Lock %d (%t)", id, m.locks[id])
+	if m.locks[id] && m.conf.Hooks.Lock != "" {
+		go runHook(m.conf.Hooks.Lock)
+	} else if !m.locks[id] && m.conf.Hooks.Unlock != "" {
+		go runHook(m.conf.Hooks.Unlock)
+	}
 }
 
 func (m *WallManager) setLock(i int, state bool) {

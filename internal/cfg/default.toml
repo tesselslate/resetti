@@ -23,6 +23,21 @@ resets_file = ""
 # - sequence    Set instances to run on every CPU, 0 .. n.
 affinity = ""
 
+# Here, you can set various commands or shell scripts to run when certain
+# events occur. Anything left blank will be ignored.
+[hooks]
+# The command/script to run when a reset from the wall occurs.
+wall_reset = ""
+
+# The command/script to run when a reset occurs.
+reset = ""
+
+# The command/script to run when an instance is locked on the wall.
+lock = ""
+
+# The command/script to run when an instance is unlocked on the wall.
+unlock = ""
+
 [obs]
 # Whether or not to enable OBS websocket support. This is *required* for wall.
 enabled = false
