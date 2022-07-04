@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"os"
 	"os/signal"
 	"strings"
@@ -42,6 +43,9 @@ func ShowProfileMenu() (string, error) {
 		if strings.HasSuffix(name, ".toml") {
 			p.choices = append(p.choices, strings.TrimSuffix(name, ".toml"))
 		}
+	}
+	if len(p.choices) == 0 {
+		return "", errors.New("no configurations found")
 	}
 	sigs := make(chan os.Signal, 16)
 	signal.Notify(sigs, syscall.SIGWINCH)
