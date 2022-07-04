@@ -22,7 +22,9 @@ type WallManager struct {
 
 	workers      []*Worker
 	locks        []bool
+	ready        []bool
 	workerErrors chan WorkerError
+	updates      chan mc.Instance
 	current      int
 	onWall       bool
 	wallGrab     bool
@@ -53,11 +55,13 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 	}
 	m.stop = make(chan struct{})
 	m.workerErrors = make(chan WorkerError, len(instances))
+	m.updates = make(chan mc.Instance, len(instances)*4)
 	m.Errors = errch
 	if err := m.createWorkers(instances); err != nil {
 		return err
 	}
 	m.locks = make([]bool, len(m.workers))
+	m.ready = make([]bool, len(m.workers))
 	err := setAffinity(instances, m.conf.General.Affinity)
 	if err != nil {
 		return err
@@ -86,6 +90,7 @@ func (m *WallManager) createWorkers(instances []mc.Instance) error {
 	for _, i := range instances {
 		w := &Worker{}
 		w.SetInstance(i)
+		w.Subscribe(m.updates)
 		err := w.Start(m.workerErrors)
 		if err != nil {
 			m.stopWorkers()
@@ -303,6 +308,13 @@ func (m *WallManager) run() {
 				m.lastMouseId = id
 				m.handleEvent(id, x11.Keymod(evt.State), evt.Timestamp)
 			}
+		case u := <-m.updates:
+			switch u.State.Identifier {
+			case mc.StateReady:
+				m.ready[u.Id] = true
+			case mc.StateGenerating, mc.StatePreview:
+				m.ready[u.Id] = false
+			}
 		case <-m.stop:
 			// Delete cleanup tasks and run them before returning.
 			logger.Log("Stopping manager...")
@@ -315,6 +327,16 @@ func (m *WallManager) run() {
 			logger.Log("Stopped manager!")
 			return
 		}
+	}
+}
+
+func (m *WallManager) goToWall() {
+	go obs.SetScene("Wall")
+	m.grabWallKeys()
+	m.onWall = true
+	err := x11.FocusWindow(m.projector)
+	if err != nil {
+		logger.LogError("Failed to focus projector: %s", err)
 	}
 }
 
@@ -344,7 +366,7 @@ func (m *WallManager) focus(evt x11.KeyEvent) {
 
 func (m *WallManager) reset(evt x11.KeyEvent) {
 	if m.onWall {
-		logger.Log("Resetting all instances. Waiting...")
+		logger.Log("Resetting all instances...")
 		wg := sync.WaitGroup{}
 		for _, v := range m.workers {
 			wg.Add(1)
@@ -363,8 +385,6 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 		wg.Wait()
 		logger.Log("Reset all instances.")
 	} else {
-		go obs.SetScene("Wall")
-		logger.Log("Resetting instance %d; going to wall.", m.current)
 		err := m.workers[m.current].Reset(evt.Timestamp)
 		if err != nil {
 			logger.LogError("Failed to reset instance %d: %s", m.current, err)
@@ -377,13 +397,23 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 			}
 		}
 		time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
-		m.grabWallKeys()
-		m.onWall = true
-		err = x11.FocusWindow(m.projector)
-		if err != nil {
-			logger.LogError("Failed to focus projector: %s", err)
+		if !m.conf.Wall.GoToLocked {
+			logger.Log("Reset %d; going to wall.", m.current)
+			m.goToWall()
+		} else {
+			for idx, locked := range m.locks {
+				if locked {
+					if m.conf.Wall.NoPlayGen && !m.ready[idx] {
+						continue
+					}
+					m.wallPlay(idx, evt.Timestamp)
+					logger.Log("Reset, going to %d.", idx)
+					return
+				}
+			}
+			logger.Log("Reset %d; going to wall.", m.current)
+			m.goToWall()
 		}
-		logger.Log("Reset instance successfully.")
 	}
 }
 
@@ -418,7 +448,7 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 	m.setLock(id, false)
 	for i := 0; i < len(m.workers); i++ {
 		if i != id && !m.locks[i] {
-			logger.Log("Reset instance %d.", i)
+			logger.Log("Reset %d.", i)
 			err := m.workers[i].Reset(t)
 			if err != nil {
 				logger.LogError("Failed to reset instance %d: %s", id, err)
@@ -428,6 +458,9 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 }
 
 func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
+	if m.conf.Wall.NoPlayGen && !m.ready[id] {
+		return
+	}
 	go obs.SetScene(fmt.Sprintf("Instance %d", id+1))
 	m.ungrabWallKeys()
 	m.onWall = false
@@ -449,7 +482,7 @@ func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
 
 func (m *WallManager) wallLock(id int, t xproto.Timestamp) {
 	m.setLock(id, !m.locks[id])
-	logger.Log("Toggled lock state of instance %d (%t)", id, m.locks[id])
+	logger.Log("Lock %d (%t)", id, m.locks[id])
 }
 
 func (m *WallManager) setLock(i int, state bool) {

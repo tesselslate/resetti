@@ -193,7 +193,7 @@ func (m *SetseedManager) run() {
 						if err != nil {
 							logger.LogError("Failed to reset instance %d: %s", m.current, err)
 						} else {
-							logger.Log("Reset instance %d.", m.current)
+							logger.Log("Reset %d.", m.current)
 						}
 						// Check for new instance to play.
 						needToWait := true
@@ -214,7 +214,7 @@ func (m *SetseedManager) run() {
 						}
 						if needToWait {
 							m.waiting = true
-							logger.Log("No instances ready. Waiting...")
+							logger.Log("No instances ready...")
 							go obs.SetScene("Wall")
 							err := x11.FocusWindow(m.projector)
 							if err != nil {
@@ -250,7 +250,7 @@ func (m *SetseedManager) run() {
 								if err != nil {
 									logger.LogError("Failed to focus instance %d: %s", i, err)
 								}
-								logger.Log("Finished waiting! Found ready: %d", i)
+								logger.Log("Found ready: %d", i)
 								m.waiting = false
 							}
 						}
@@ -265,14 +265,14 @@ func (m *SetseedManager) run() {
 				dist := math.Sqrt(dx*dx + dz*dz)
 				if dist <= m.conf.SSG.Radius {
 					if u.State.Identifier == mc.StateReady {
-						logger.Log("Instance %d ready! Distance: %f", u.Id, dist)
+						logger.Log("%d ready! Distance: %.02f", u.Id, dist)
 						m.states[u.Id] = Ready
 					} else {
 						m.states[u.Id] = ReadySoon
 					}
 				} else {
 					m.states[u.Id] = Resetting
-					logger.Log("Instance %d: Bad spawn (%f, %f, %f)", u.Id, dist, u.State.Spawn.X, u.State.Spawn.Z)
+					logger.Log("%d: Bad spawn (%.02f)", u.Id, dist)
 					if initialTime != 0 {
 						err := m.workers[u.Id].Reset(0)
 						if err != nil {

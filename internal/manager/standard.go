@@ -155,7 +155,7 @@ func (m *StandardManager) run() {
 							continue
 						}
 						m.current = next
-						logger.Log("Reset instance %d.", m.current)
+						logger.Log("Reset %d.", m.current)
 						if m.conf.Obs.Enabled {
 							err := obs.SetScene(fmt.Sprintf("Instance %d", m.current+1))
 							if err != nil {

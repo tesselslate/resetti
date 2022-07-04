@@ -65,6 +65,8 @@ type ConfigWall struct {
 	StretchWidth   uint16 `toml:"stretch_width"`
 	StretchHeight  uint16 `toml:"stretch_height"`
 	UseMouse       bool   `toml:"use_mouse"`
+	GoToLocked     bool   `toml:"goto_locked"`
+	NoPlayGen      bool   `toml:"no_play_generating"`
 }
 
 type ConfigSSG struct {

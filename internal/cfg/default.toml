@@ -108,6 +108,14 @@ stretch_height = 300
 # the number keys. Note that enabling this does not disable the number keys.
 use_mouse = false
 
+# If enabled, resetting from within an instance will switch to the first locked
+# instance (if any) instead of going back to the wall.
+goto_locked = false
+
+# If enabled, you will not be able to switch to instances which are still generating
+# or on the world preview screen.
+no_play_generating = true
+
 # You can delete this section or leave it as is if you are not using the
 # set-seed resetter.
 [setseed]
