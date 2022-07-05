@@ -61,6 +61,9 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 		return err
 	}
 	m.locks = make([]bool, len(m.workers))
+	for i := 0; i < len(m.locks); i++ {
+		_ = obs.SetVisible("Wall", fmt.Sprintf("Lock %d", i+1), false)
+	}
 	m.ready = make([]bool, len(m.workers))
 	err := setAffinity(instances, m.conf.General.Affinity)
 	if err != nil {
