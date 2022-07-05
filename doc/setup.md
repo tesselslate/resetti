@@ -75,22 +75,38 @@ If you want to record your speedruns, then you should setup OBS. If you want to
 use either the wall or set-seed resetters, then OBS is *required.*
 
 Ensure that you have both OBS and [obs-websocket](https://github.com/obsproject/obs-websocket) installed.
-**resetti does not support `obs-websocket` 5.0, make sure that you have either
+**resetti does not support `obs-websocket` 5.0; make sure that you have either
 4.x or 4.x-compat installed.**
 
 With OBS and `obs-websocket`, you can run `resetti obs` to automatically
 generate a scene collection for the amount of instances you are running.
 
-> *Note:* The setup wizard will always ask for information about how to setup
-> the wall scene. Don't worry, this doesn't force you into using wall.
+### Arguments
+
+- `--port=PORT` - The port to connect to OBS on.
+- `--pass=PASSWORD` - The password to connect to OBS with. (Optional)
+- `--lockImg=PATH` - The path to the lock image. (Optional)
+
+### Verification
+
+The setup wizard will always ask for information about how to setup
+the wall scene and verification. Supply valid information for the wall,
+but you can ignore the verification prompts if you plan on using Source
+Record or 2 OBS instances.
+
+- `None` - No verification included on instance scenes.
+- `Wall` - Embeds wall scene on instance scenes.
+- `Inst` - Embeds individual instances on instance scenes.
+
+### Notes
 
 After generating a scene collection, you can make edits to it if you would like
 (e.g. adding a stream overlay or creating a magnifier scene for using
 Ninjabrain Bot.) Leave the existing scene items and scenes untouched, or
 resetti may not work.
 
-> *Note:* If you change your base/canvas resolution, you will have to delete
-> and recreate your scene collection(s).
+If you change your base/canvas resolution, you will have to delete
+and recreate your scene collection(s).
 
 ## Configuration
 

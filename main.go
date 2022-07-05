@@ -81,6 +81,9 @@ func printHelp() {
                                 the default configuration.
         resetti help            Print this message.
         resetti version         Get the version of resetti installed.
-        resetti obs             Setup OBS for resetti.
+        resetti obs [ARGUMENTS] Setup OBS for resetti.
+          --port=PORT
+          --pass=PASSWORD
+          --lockImg=PATH
     `)
 }

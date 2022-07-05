@@ -83,9 +83,12 @@ func ShowProfileMenu() (string, error) {
 				return "", nil
 			}
 		case <-sigs:
-			p.width = w
-			p.height = h
-			p.Draw()
+			w, h, err = terminal.GetSize()
+			if err == nil {
+				p.width = w
+				p.height = h
+				p.Draw()
+			}
 		}
 	}
 }
