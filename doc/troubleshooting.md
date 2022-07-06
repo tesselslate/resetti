@@ -5,7 +5,59 @@ how to solve them.
 
 ## Table of Contents
 
+- [resetti](#resetti)
+  - [Keybinds not working](#keybinds-not-working)
+  - [Mouse not working](#mouse-not-working)
+  - [Resetting not working](#resetting-not-working)
+  - [No instance with ID 0](#no-instance-with-id-0)
+  - [Instances do not have sequential IDs](#instances-do-not-have-sequential-ids)
 - [Minecraft](#minecraft)
+  - [Moving Minecraft's audio output](#moving-minecrafts-audio-output)
+  - [Excessive memory usage](#excessive-memory-usage)
+  - [Crashing with BadWindow (X_QueryPointer)](#crashing-with-badwindow-x_querypointer)
+
+## resetti
+
+This section contains information about issues with resetti.
+
+## Keybinds not working
+
+Make sure you are only pressing the keys for your keybind. If you have Caps
+Lock, Num Lock, or any other modifiers on, turn them off. If it still doesn't
+work, please open an issue with your configuration profile and the output of
+`xev` when pressing the keybind(s) in question.
+
+## Mouse not working
+
+If you are using the wall with mouse enabled, you will be unable to click on
+anything while resetti considers you to be on the wall. Enter an instance to
+regain control of your mouse.
+
+Sometimes, resetti will fail to grab the mouse pointer even though the X server
+does not report an error. In this case, clicking will have no action. Use the
+number keys to perform actions on the wall and try again the next time you go
+back to the wall.
+
+## Resetting not working
+
+Check that you have pause on lost focus (F3+P) disabled. Try increasing the
+`delay` value in your configuration profile. If you have SleepBackground, make
+sure that your framerates are not set to excessively low values (e.g. 1.) If
+none of these solve the problem, please open an issue with your configuration
+profile and more details on what problem you are experiencing.
+
+## No instance with ID 0
+
+resetti was not able to find an instance whose `instance_num` file contained an
+ID of 0. Ensure that you set up your `instance_num` files properly and that all
+of your instances are running.
+
+## Instances do not have sequential IDs
+
+As stated in the setup document, resetti requires that all instances have unique
+identifiers starting from 0 and increasing sequentially. If you are running `n`
+instances, check the `instance_num` files of each instance to ensure that they
+contain all numbers from 0 to `n-1`.
 
 ## Minecraft
 
@@ -62,7 +114,8 @@ but this configuration should help reduce memory usage substantially:
 sh -c "
 export LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so;
 export MALLOC_CONF=background_thread:true,narenas:2,dirty_decay_ms:10000,muzzy_decay_ms:10000;
-$INST_JAVA $@"
+$INST_JAVA $@
+"
 ```
 
 > The newlines are again only present for readability.
