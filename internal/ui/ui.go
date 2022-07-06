@@ -149,8 +149,8 @@ func run() {
 			boldStyle.RenderAt(details[i*2]+": ", 40, i+3)
 			regStyle.RenderAt(details[i*2+1], 40+len(details[i*2])+2, i+3)
 		}
-		terminal.NewStyle().Foreground(terminal.Gray).RenderAt("ctrl+c: exit", 3, len(instances)+4)
-		cyan.RenderAt("Log:", 3, len(instances)+6)
+		terminal.NewStyle().Foreground(terminal.Gray).RenderAt("ctrl+c: exit", 3, len(instances)+5)
+		cyan.RenderAt("Log:", 3, len(instances)+7)
 		inc := 0
 		for i := 10; i > 0; i -= 1 {
 			msg := recentLog[(logIdx+100-i)%100]
@@ -160,10 +160,17 @@ func run() {
 			if len(msg) > width-3 {
 				msg = msg[:width-3]
 			}
-			terminal.NewStyle().RenderAt(msg, 3, len(instances)+6+inc)
+			terminal.NewStyle().RenderAt(msg, 3, max(len(instances), 3)+6+inc)
 			inc += 1
 		}
 	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func pad(txt string, strlen int) string {

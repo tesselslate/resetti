@@ -5,6 +5,7 @@ package cfg
 
 import (
 	_ "embed"
+	"errors"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -55,6 +56,7 @@ type ConfigReset struct {
 
 type ConfigMc struct {
 	Fov  int `toml:"fov"`
+	Ed   int `toml:"ed"`
 	Rd   int `toml:"rd"`
 	Sens int `toml:"sensitivity"`
 }
@@ -119,6 +121,25 @@ func GetProfile(name string) (*Config, error) {
 	err = toml.Unmarshal(contents, &c)
 	if err != nil {
 		return nil, err
+	}
+	// Validate profile.
+	if c.Mc.Rd != 0 && (c.Mc.Rd < 2 || c.Mc.Rd > 32) {
+		return nil, errors.New("invalid render distance")
+	}
+	if c.Mc.Ed != 0 && (c.Mc.Ed < 50 || c.Mc.Ed > 500 || c.Mc.Ed%25 != 0) {
+		return nil, errors.New("invalid entity distance")
+	}
+	if c.Mc.Fov != 0 && (c.Mc.Fov < 30 || c.Mc.Fov > 110) {
+		return nil, errors.New("invalid fov")
+	}
+	if c.Mc.Sens < 0 || c.Mc.Sens > 200 {
+		return nil, errors.New("invalid sensitivity")
+	}
+	if c.General.Type != "standard" && c.General.Type != "wall" && c.General.Type != "setseed" {
+		return nil, errors.New("invalid resetter type")
+	}
+	if c.General.Affinity != "" && c.General.Affinity != "alternate" && c.General.Affinity != "sequence" {
+		return nil, errors.New("invalid affinity")
 	}
 	return c, nil
 }

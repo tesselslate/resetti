@@ -65,8 +65,10 @@ unpause_on_focus = true
 # These settings are only applied if reset.set_settings is enabled.
 # Each setting corresponds to normal values ingame. Attempting to
 # set these outside of the normal ranges will not work.
+# Individual settings can be set to 0 to skip setting them for faster resets.
 [minecraft]
 fov = 70
+ed = 500
 rd = 16
 sensitivity = 100
 
