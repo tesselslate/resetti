@@ -20,11 +20,6 @@ better for managing multiple instances than the vanilla Minecraft launcher.
 > *Tip:* MultiMC will allow you to duplicate instances. You can create one
 > with your desired mods and settings and then copy it multiple times.
 
-Apart from the normal setup required for speedrunning, you may want to put
-some effort into improving the memory usage of your Minecraft instance(s).
-See [this document](https://github.com/woofdoggo/resetti/blob/main/doc/tuning.md)
-for more details on the matter.
-
 Once you have created your Minecraft instances, you will have to place a text
 file in each one to let resetti know about their existence. Go to the `.minecraft`
 folder of each instance and create a text file named `instance_num` within.
@@ -65,9 +60,6 @@ for i in seq (1 3); echo (math $i - 1) | tee 16_MULTI$i/.minecraft/instance_num 
 
 Lastly, you will have to ensure that all of your instances have *pause on lost
 focus* disabled. To do so, you can press F3+P while ingame on each instance.
-
-> *Tip:* If you would like to have your instances on a separate audio sink,
-> you will have to [configure OpenAL](https://github.com/woofdoggo/resetti/blob/main/doc/openal.md).
 
 ## Setting up OBS
 

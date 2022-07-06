@@ -26,6 +26,8 @@ and built for AMD64 (x86-64) systems.
 You can refer to the documentation for detailed usage instructions:
 
 - [Setup](https://github.com/woofdoggo/resetti/blob/main/doc/setup.md)
+- [Troubleshooting](https://github.com/woofdoggo/resetti/blob/main/doc/troubleshooting.md)
+
 - [Traditional](https://github.com/woofdoggo/resetti/blob/main/doc/traditional.md)
 - [Wall](https://github.com/woofdoggo/resetti/blob/main/doc/wall.md)
 - [Set Seed](https://github.com/woofdoggo/resetti/blob/main/doc/setseed.md)
