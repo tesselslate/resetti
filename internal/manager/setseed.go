@@ -135,26 +135,26 @@ func (m *SetseedManager) run() {
 	xevt := make(chan any, 32)
 	x11.Subscribe(nil, xevt)
 	// Locate OBS projector.
-	windows, err := x11.GetAllWindows()
+	err := m.findProjector()
 	if err != nil {
 		m.Errors <- err
 		return
-	}
-	for _, win := range windows {
-		title, err := x11.GetWindowTitle(win)
-		if err != nil {
-			continue
-		}
-		if strings.Contains(title, "Projector (Scene)") {
-			m.projector = win
-			break
-		}
 	}
 	if m.projector == 0 {
 		// No projector found. Spawn one.
 		err := obs.OpenProjector()
 		if err != nil {
 			m.Errors <- fmt.Errorf("failed to spawn projector: %s", err)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+		err = m.findProjector()
+		if err != nil {
+			m.Errors <- err
+			return
+		}
+		if m.projector == 0 {
+			m.Errors <- errors.New("still unable to find OBS projector")
 			return
 		}
 	}
@@ -289,4 +289,22 @@ func (m *SetseedManager) run() {
 			return
 		}
 	}
+}
+
+func (m *SetseedManager) findProjector() error {
+	windows, err := x11.GetAllWindows()
+	if err != nil {
+		return err
+	}
+	for _, win := range windows {
+		title, err := x11.GetWindowTitle(win)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(title, "Projector (Scene) - Wall") {
+			m.projector = win
+			return nil
+		}
+	}
+	return nil
 }
