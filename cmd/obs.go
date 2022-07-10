@@ -172,7 +172,7 @@ func CmdObs() {
 				} else if m.instances <= m.wallWidth*m.wallHeight {
 					if k == terminal.KeyEnter {
 						terminal.Fini()
-						generateScenes(m, o)
+						generateScenes(m, &o)
 						return
 					}
 				}
@@ -191,7 +191,7 @@ func CmdObs() {
 	}
 }
 
-func generateScenes(m obsMenu, o obs.Client) {
+func generateScenes(m obsMenu, o *obs.Client) {
 	videoSettings, err := o.GetVideoInfo()
 	if err != nil {
 		fmt.Println("Failed to get resolution:", err)
