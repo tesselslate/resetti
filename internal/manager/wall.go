@@ -403,7 +403,7 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 				return
 			}
 		}
-		time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
+		time.Sleep(time.Duration(m.conf.Reset.MenuDelay) * time.Millisecond)
 		if !m.conf.Wall.GoToLocked {
 			logger.Log("Reset %d; going to wall.", m.current)
 			m.goToWall()

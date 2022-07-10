@@ -50,7 +50,8 @@ type ConfigObs struct {
 
 type ConfigReset struct {
 	SetSettings  bool `toml:"set_settings"`
-	Delay        int  `toml:"delay"`
+	MenuDelay    int  `toml:"menu_delay"`
+	PauseDelay   int  `toml:"pause_delay"`
 	UnpauseFocus bool `toml:"unpause_on_focus"`
 }
 

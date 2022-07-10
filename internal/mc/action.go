@@ -68,7 +68,7 @@ func (i Instance) Reset(settings *cfg.Config, t xproto.Timestamp) (xproto.Timest
 }
 
 func v16_reset(i Instance, settings *cfg.Config, t *xproto.Timestamp) error {
-	delay := time.Duration(settings.Reset.Delay) * time.Millisecond
+	delay := time.Duration(settings.Reset.MenuDelay) * time.Millisecond
 	// Act based on the instance's state.
 	switch i.State.Identifier {
 	case StateUnknown:
@@ -82,7 +82,7 @@ func v16_reset(i Instance, settings *cfg.Config, t *xproto.Timestamp) error {
 		// Press Escape twice to reach the normal menu after F3+Escape.
 		x11.SendKeyPressAlt(x11.KeyEscape, i.Window, t)
 		time.Sleep(delay)
-		x11.SendKeyPress(x11.KeyEscape, i.Window, t)
+		x11.SendKeyPressAlt(x11.KeyEscape, i.Window, t)
 		time.Sleep(delay)
 
 		x11.SendKeyDown(x11.KeyShift, i.Window, t)

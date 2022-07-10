@@ -54,10 +54,11 @@ password = ""
 # resetting. See the "minecraft" section for more details.
 set_settings = false
 
-# The delay (in milliseconds) to wait when switching between menus. Smaller
-# values will lead to faster resets, but may break. Increase this if you
-# experience issues.
-delay = 50
+# The amount of milliseconds to wait before switching menus.
+menu_delay = 50
+
+# The amount of milliseconds to wait before pausing an instance.
+pause_delay = 50
 
 # Whether or not to automatically unpause the game when an instance is focused.
 unpause_on_focus = true

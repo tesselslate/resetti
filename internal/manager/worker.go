@@ -152,12 +152,12 @@ func (w *Worker) SetSeed(timestamp xproto.Timestamp) {
 	x11.SendKeyPress(x11.KeyTab, w.instance.Window, &w.lastTime)
 	x11.SendKeyPress(x11.KeyEnter, w.instance.Window, &w.lastTime)
 	x11.SendKeyUp(x11.KeyShift, w.instance.Window, &w.lastTime)
-	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	time.Sleep(time.Duration(w.conf.Reset.MenuDelay) * time.Millisecond)
 	x11.SendKeyDown(x11.KeyCtrl, w.instance.Window, &w.lastTime)
 	x11.SendKeyPress(x11.KeyA, w.instance.Window, &w.lastTime)
 	x11.SendKeyPress(x11.KeyBackspace, w.instance.Window, &w.lastTime)
 	x11.SendKeyUp(x11.KeyCtrl, w.instance.Window, &w.lastTime)
-	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	time.Sleep(time.Duration(w.conf.Reset.MenuDelay) * time.Millisecond)
 	for _, c := range w.conf.SSG.Seed {
 		if c == '-' {
 			x11.SendKeyPressAlt(x11.KeyMinus, w.instance.Window, &w.lastTime)
@@ -167,11 +167,11 @@ func (w *Worker) SetSeed(timestamp xproto.Timestamp) {
 			x11.SendKeyPressAlt(x11.Key0, w.instance.Window, &w.lastTime)
 		}
 	}
-	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	time.Sleep(time.Duration(w.conf.Reset.MenuDelay) * time.Millisecond)
 	x11.SendKeyPressAlt(x11.KeyTab, w.instance.Window, &w.lastTime)
 	x11.SendKeyPressAlt(x11.KeyTab, w.instance.Window, &w.lastTime)
 	x11.SendKeyPress(x11.KeyEnter, w.instance.Window, &w.lastTime)
-	time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+	time.Sleep(time.Duration(w.conf.Reset.MenuDelay) * time.Millisecond)
 }
 
 func (w *Worker) run(errch chan<- WorkerError) {
@@ -314,7 +314,7 @@ func (w *Worker) updateState() {
 	// to the WorldPreview menu or finished generating, press F3+Esc
 	// to get the transparent pause menu.
 	if (!isActive || !w.conf.Reset.UnpauseFocus) && (isPreview || isReady) {
-		time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+		time.Sleep(time.Duration(w.conf.Reset.PauseDelay) * time.Millisecond)
 		x11.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
 		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
 		x11.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
