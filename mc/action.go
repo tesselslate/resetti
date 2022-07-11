@@ -16,7 +16,7 @@ import (
 // Pressing the right key moves the FOV slider by 1/142 of the
 // slider's width, and there are 81 possible FOV values: 30-110
 // inclusive.
-const FOV_RATIO float64 = 142.0 / 81.0
+const FOV_RATIO float64 = 142.0 / 80.0
 
 // The maximum amount of presses needed to reset FOV.
 const FOV_PRESSES int = 142
@@ -158,6 +158,10 @@ func v16_reset(i Instance, settings *cfg.ResetSettings, x *x11.Client, t *xproto
 	}
 
 	presses = int(math.Ceil(float64(settings.Mc.Sensitivity) * SENS_RATIO))
+	if settings.Mc.Sensitivity == 200 {
+		// 142 presses only brings the sensitivity bar to 199%, not hyperspeed.
+		presses += 1
+	}
 	for j := 0; j < presses; j++ {
 		x.SendKeyPress(x11.KeyRight, i.Window, t)
 	}
