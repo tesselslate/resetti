@@ -100,7 +100,9 @@ func (w *Worker) SetInstance(i mc.Instance) {
 func (w *Worker) Focus(time xproto.Timestamp) error {
 	w.Lock()
 	defer w.Unlock()
-	w.lastTime = time
+	if time > w.lastTime {
+		w.lastTime = time
+	}
 	err := x11.FocusWindow(w.instance.Window)
 	if err != nil {
 		return err
@@ -123,12 +125,11 @@ func (w *Worker) Reset(time xproto.Timestamp) error {
 	if w.instance.State.Identifier == mc.StateGenerating {
 		return ErrCannotReset
 	}
-	if time == xproto.TimeCurrentTime {
+	if time == xproto.TimeCurrentTime || time < w.lastTime {
 		time = w.lastTime
 	}
 	time, err := w.instance.Reset(&w.conf, time)
 	w.lastTime = time
-	w.setStateId(mc.StateGenerating)
 	if w.conf.Hooks.Reset != "" {
 		go runHook(w.conf.Hooks.Reset)
 	}
@@ -142,7 +143,9 @@ func (w *Worker) Resize(width, height uint16) error {
 
 // SetSeed sets the seed of the instance if it is on the main menu.
 func (w *Worker) SetSeed(timestamp xproto.Timestamp) {
-	w.lastTime = timestamp
+	if timestamp > w.lastTime {
+		w.lastTime = timestamp
+	}
 	w.Lock()
 	defer w.Unlock()
 	if w.instance.State.Identifier != mc.StateUnknown {
@@ -247,21 +250,6 @@ func (w *Worker) readState() (mc.InstanceState, bool) {
 		} else if strings.Contains(line, "Leaving world generation") {
 			state.Identifier = mc.StateGenerating
 			updated = true
-		} else if strings.Contains(line, "Saving chunks for level") {
-			start := strings.Index(line, "ServerLevel")
-			if start == -1 {
-				logger.LogError("Failed to find world name in 'saving chunks' message")
-				continue
-			}
-			line = line[start:]
-			open := strings.IndexRune(line, '[')
-			end := strings.IndexRune(line, ']')
-			if open == -1 || end == -1 {
-				logger.LogError("Could not find index of brackets in 'saving chunks' message")
-				continue
-			}
-			state.World = line[open+1 : end]
-			updated = true
 		} else if strings.Contains(line, "logged in with entity id") {
 			pos, err := readPos(line)
 			if err != nil {
@@ -318,6 +306,7 @@ func (w *Worker) updateState() {
 		x11.SendKeyDown(x11.KeyF3, w.instance.Window, &w.lastTime)
 		x11.SendKeyPress(x11.KeyEscape, w.instance.Window, &w.lastTime)
 		x11.SendKeyUp(x11.KeyF3, w.instance.Window, &w.lastTime)
+		x11.SendKeyPressAlt(x11.KeyCtrl, w.instance.Window, &w.lastTime)
 	}
 }
 

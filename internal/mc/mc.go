@@ -17,7 +17,6 @@ import (
 // InstanceState represents the state of a given instance.
 type InstanceState struct {
 	Identifier int
-	World      string
 	Spawn      Position
 }
 

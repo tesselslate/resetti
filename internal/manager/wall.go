@@ -439,6 +439,9 @@ func (m *WallManager) wallReset(id int, t xproto.Timestamp) {
 }
 
 func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
+	if m.conf.Wall.NoPlayGen && !m.ready[id] {
+		return
+	}
 	go obs.SetScene(fmt.Sprintf("Instance %d", id+1))
 	m.ungrabWallKeys()
 	m.onWall = false
