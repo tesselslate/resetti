@@ -98,12 +98,16 @@ each of your instances in MultiMC, go to `Edit Instance` -> `Settings` ->
 ```sh
 sh -c "
 export LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so;
-$INST_JAVA $@
+$INST_JAVA \"$@\"
 "
 ```
 
 > You cannot put newlines in the wrapper command text input. They are here
 > purely for readability.
+
+If this crashes with `/usr/bin/java: 1: jemalloc-config: not found`, then find
+the location of `libjemalloc.so` on your system and edit the LD_PRELOAD line
+to point directly to that library.
 
 However, this alone will likely not help much. To further improve Minecraft's
 memory usage, you can tune jemalloc with the `MALLOC_CONF` environment variable.
@@ -114,7 +118,7 @@ but this configuration should help reduce memory usage substantially:
 sh -c "
 export LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so;
 export MALLOC_CONF=background_thread:true,narenas:2,dirty_decay_ms:10000,muzzy_decay_ms:10000;
-$INST_JAVA $@
+$INST_JAVA \"$@\"
 "
 ```
 
