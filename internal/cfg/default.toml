@@ -10,7 +10,7 @@
 type = "standard"
 
 # Whether or not to count the amount of resets performed.
-count_resets = true
+count_resets = false
 
 # The file to use for counting resets. This can be left blank
 # if count_resets is disabled.

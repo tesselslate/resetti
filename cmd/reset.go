@@ -31,7 +31,8 @@ func CmdReset() int {
 	defer logHandle.Close()
 	err = srv.Init()
 	if err != nil {
-		fmt.Println("Failed to start miscellaneous services:", err)
+		fmt.Println("Failed to start reset counter:", err)
+		fmt.Println("Check that the path specified in resets_file is valid, or disable count_resets.")
 		os.Exit(1)
 	}
 	defer srv.Fini()
