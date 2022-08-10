@@ -9,40 +9,54 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var ErrLowCPU = errors.New("not enough CPUs to put each instance on its own core")
+var ErrLowCPU = errors.New("not enough CPUs for this affinity setting")
 
 // setAffinity sets the process affinity of each provided instances based
 // on the user's settings.
 func setAffinity(instances []mc.Instance, conf string) error {
-	var alternate bool
+	cpus := runtime.NumCPU()
 	switch conf {
 	case "alternate":
-		alternate = true
+		if len(instances) > cpus/2 {
+			return ErrLowCPU
+		}
+		for idx, inst := range instances {
+			set := unix.CPUSet{}
+			set.Set(idx * 2)
+			err := unix.SchedSetaffinity(int(inst.Pid), &set)
+			if err != nil {
+				return err
+			}
+		}
 	case "sequence":
-		alternate = false
+		if len(instances) > cpus {
+			return ErrLowCPU
+		}
+		for idx, inst := range instances {
+			set := unix.CPUSet{}
+			set.Set(idx * 2)
+			err := unix.SchedSetaffinity(int(inst.Pid), &set)
+			if err != nil {
+				return err
+			}
+		}
+	case "double":
+		if len(instances) > cpus/2 {
+			return ErrLowCPU
+		}
+		for idx, inst := range instances {
+			set := unix.CPUSet{}
+			set.Set(idx * 2)
+			set.Set(idx*2 + 1)
+			err := unix.SchedSetaffinity(int(inst.Pid), &set)
+			if err != nil {
+				return err
+			}
+		}
 	case "":
 		return nil
 	default:
 		return fmt.Errorf("invalid affinity config: %s", conf)
-	}
-	cpus := runtime.NumCPU()
-	if alternate && cpus/2 < len(instances) {
-		return ErrLowCPU
-	}
-	if cpus < len(instances) {
-		return ErrLowCPU
-	}
-	for idx, inst := range instances {
-		set := unix.CPUSet{}
-		if alternate {
-			set.Set(idx * 2)
-		} else {
-			set.Set(idx)
-		}
-		err := unix.SchedSetaffinity(int(inst.Pid), &set)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

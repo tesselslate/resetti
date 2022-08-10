@@ -21,6 +21,7 @@ resets_file = ""
 # Available options:
 # - alternate   Set instances to run on every other CPU.
 # - sequence    Set instances to run on every CPU, 0 .. n.
+# - double      Set instances to run on 2 CPUs each.
 affinity = ""
 
 # Here, you can set various commands or shell scripts to run when certain

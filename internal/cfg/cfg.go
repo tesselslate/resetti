@@ -117,7 +117,7 @@ func GetProfile(name string) (*Config, error) {
 	if c.General.Type != "standard" && c.General.Type != "wall" && c.General.Type != "setseed" {
 		return nil, errors.New("invalid resetter type")
 	}
-	if c.General.Affinity != "" && c.General.Affinity != "alternate" && c.General.Affinity != "sequence" {
+	if c.General.Affinity != "" && c.General.Affinity != "alternate" && c.General.Affinity != "sequence" && c.General.Affinity != "double" {
 		return nil, errors.New("invalid affinity")
 	}
 	return c, nil
