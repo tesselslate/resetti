@@ -85,6 +85,7 @@ func CmdReset() int {
 	mgrErrors := make(chan error)
 	err = mgr.Start(instances, mgrErrors)
 	if err != nil {
+		ui.Fini()
 		fmt.Println("Failed to start manager:", err)
 		os.Exit(1)
 	}

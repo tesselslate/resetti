@@ -16,13 +16,46 @@ count_resets = false
 # if count_resets is disabled.
 resets_file = ""
 
-# Automatic process affinity management for better performance.
-# Leave blank to disable.
-# Available options:
-# - alternate   Set instances to run on every other CPU.
-# - sequence    Set instances to run on every CPU, 0 .. n.
-# - double      Set instances to run on 2 CPUs each.
-affinity = ""
+# Process affinity settings.
+[affinity]
+# Whether or not to enable affinity management.
+enabled = false
+
+# The affinity setting to use. Available options:
+# - sequence    Set instances to run on every CPU       (0,   1,   2,   ..).
+# - alternate   Set instances to run on every other CPU (0,   2,   4,   ..).
+# - double      Set instances to run on 2 CPUs each     (0-1, 2-3, 4-5, ..).
+# - advanced    Set instances to run on certain CPUs based on their state.
+#               Only works with wall.
+#
+# Considerations:
+# - Unless you are using advanced, you can disregard the rest of the affinity
+#   options.
+# - If you are using advanced, the total number of allocated CPUs must be less
+#   than or equal to your processor's thread count. The values provided below
+#   are an example for a 6c/12t CPU.
+# - Advanced mode is likely not necessary unless you are running more instances
+#   than you have CPU cores.
+mode = "double"
+
+# The number of CPUs to allocate to idle instances.
+cpus_idle = 1
+
+# The number of CPUs to allocate to locked resetting instances and non-previewing instances.
+cpus_genfast = 4
+
+# The number of CPUs to allocate to unlocked resetting instances on the preview.
+cpus_genslow = 5
+
+# The number of CPUs to dedicate to the active (played) instance.
+cpus_active = 2
+
+# Which state the active CPUs should be reallocated to when no instance is
+# being played. Available options:
+# - none        Do not reallocate the CPUs dedicated to the active instance.
+# - genfast     Dedicate the unused active CPUs to the high-priority instances.
+# - genslow     Dedicate the unused active CPUs to the low-priority instances.
+reallocate = "genfast"
 
 # Here, you can set various commands or shell scripts to run when certain
 # events occur. Anything left blank will be ignored.

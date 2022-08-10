@@ -65,9 +65,11 @@ func (m *SetseedManager) Start(instances []mc.Instance, errch chan error) error 
 	for i := 0; i < len(m.states); i++ {
 		m.states[i] = Idle
 	}
-	err = setAffinity(instances, m.conf.General.Affinity)
-	if err != nil {
-		return err
+	if m.conf.Affinity.Enabled {
+		err = setAffinity(instances, m.conf.Affinity.Mode)
+		if err != nil {
+			return err
+		}
 	}
 	go m.run()
 	return nil

@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"errors"
 	"os"
+	"runtime"
 
 	"github.com/BurntSushi/toml"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -18,20 +19,30 @@ var defaultConfig string
 var globalConfig Config
 
 type Config struct {
-	General ConfigGeneral `toml:"general"`
-	Hooks   ConfigHooks   `toml:"hooks"`
-	Obs     ConfigObs     `toml:"obs"`
-	Reset   ConfigReset   `toml:"reset"`
-	Keys    ConfigKeys    `toml:"keybinds"`
-	Wall    ConfigWall    `toml:"wall"`
-	SSG     ConfigSSG     `toml:"setseed"`
+	General  ConfigGeneral  `toml:"general"`
+	Affinity ConfigAffinity `toml:"affinity"`
+	Hooks    ConfigHooks    `toml:"hooks"`
+	Obs      ConfigObs      `toml:"obs"`
+	Reset    ConfigReset    `toml:"reset"`
+	Keys     ConfigKeys     `toml:"keybinds"`
+	Wall     ConfigWall     `toml:"wall"`
+	SSG      ConfigSSG      `toml:"setseed"`
 }
 
 type ConfigGeneral struct {
 	Type        string `toml:"type"`
 	CountResets bool   `toml:"count_resets"`
 	CountPath   string `toml:"resets_file"`
-	Affinity    string `toml:"affinity"`
+}
+
+type ConfigAffinity struct {
+	Enabled    bool   `toml:"enabled"`
+	Mode       string `toml:"mode"`
+	CpuIdle    int    `toml:"cpus_idle"`
+	CpuFast    int    `toml:"cpus_genfast"`
+	CpuSlow    int    `toml:"cpus_genslow"`
+	CpuActive  int    `toml:"cpus_active"`
+	Reallocate string `toml:"reallocate"`
 }
 
 type ConfigHooks struct {
@@ -117,8 +128,27 @@ func GetProfile(name string) (*Config, error) {
 	if c.General.Type != "standard" && c.General.Type != "wall" && c.General.Type != "setseed" {
 		return nil, errors.New("invalid resetter type")
 	}
-	if c.General.Affinity != "" && c.General.Affinity != "alternate" && c.General.Affinity != "sequence" && c.General.Affinity != "double" {
-		return nil, errors.New("invalid affinity")
+	if c.Affinity.Enabled {
+		mode := c.Affinity.Mode
+		if mode != "sequence" && mode != "alternate" && mode != "double" && mode != "advanced" {
+			return nil, errors.New("invalid affinity mode")
+		}
+		if mode == "advanced" {
+			if c.General.Type != "wall" {
+				return nil, errors.New("cannot use advanced affinity without wall")
+			}
+			cpus := runtime.NumCPU()
+			count := c.Affinity.CpuIdle +
+				c.Affinity.CpuFast +
+				c.Affinity.CpuSlow +
+				c.Affinity.CpuActive
+			if count > cpus {
+				return nil, errors.New("affinity CPU count is greater than number of available CPUs")
+			}
+			if c.Affinity.Reallocate != "none" && c.Affinity.Reallocate != "genslow" && c.Affinity.Reallocate != "genfast" {
+				return nil, errors.New("invalid CPU reallocation")
+			}
+		}
 	}
 	return c, nil
 }

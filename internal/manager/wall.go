@@ -12,6 +12,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/sys/unix"
 
 	"github.com/jezek/xgb/xproto"
 )
@@ -34,6 +35,8 @@ type WallManager struct {
 	wallWidth    uint16
 	wallHeight   uint16
 	lastMouseId  int
+	sets         affinitySets
+	pids         []int
 
 	Errors chan error
 	conf   cfg.Config
@@ -65,9 +68,19 @@ func (m *WallManager) Start(instances []mc.Instance, errch chan error) error {
 		_ = obs.SetVisible("Wall", fmt.Sprintf("Lock %d", i+1), false)
 	}
 	m.ready = make([]bool, len(m.workers))
-	err := setAffinity(instances, m.conf.General.Affinity)
-	if err != nil {
-		return err
+	if m.conf.Affinity.Enabled {
+		if m.conf.Affinity.Mode == "advanced" {
+			m.sets = newAffinitySet()
+			m.pids = make([]int, len(m.workers))
+			for i, v := range instances {
+				m.pids[i] = int(v.Pid)
+			}
+		} else {
+			err := setAffinity(instances, m.conf.Affinity.Mode)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	m.lastMouseId = -1
 	go m.run()
@@ -315,8 +328,16 @@ func (m *WallManager) run() {
 			switch u.State.Identifier {
 			case mc.StateReady:
 				m.ready[u.Id] = true
-			case mc.StateGenerating, mc.StatePreview:
+				if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+					unix.SchedSetaffinity(int(u.Pid), &m.sets.Idle)
+				}
+			case mc.StateGenerating:
 				m.ready[u.Id] = false
+			case mc.StatePreview:
+				m.ready[u.Id] = false
+				if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+					unix.SchedSetaffinity(int(u.Pid), &m.sets.Slow)
+				}
 			}
 		case <-m.stop:
 			// Delete cleanup tasks and run them before returning.
@@ -371,23 +392,26 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 	if m.onWall {
 		logger.Log("Resetting all instances...")
 		wg := sync.WaitGroup{}
-		for _, v := range m.workers {
+		for i, v := range m.workers {
 			wg.Add(1)
-			go func(v *Worker) {
-				if m.locks[v.instance.Id] {
+			go func(v *Worker, i int) {
+				if m.locks[i] {
 					wg.Done()
 					return
 				}
-				logger.Log("Reset instance %d.", v.instance.Id)
+				logger.Log("Reset instance %d.", i)
 				err := v.Reset(evt.Timestamp)
 				if err != nil {
 					logger.LogError("Failed to reset instance %d: %s", m.current, err)
+				}
+				if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+					unix.SchedSetaffinity(m.pids[i], &m.sets.Fast)
 				}
 				wg.Done()
 				if m.conf.Hooks.WallReset != "" {
 					runHook(m.conf.Hooks.WallReset)
 				}
-			}(v)
+			}(v, i)
 		}
 		wg.Wait()
 		logger.Log("Reset all instances.")
@@ -395,6 +419,9 @@ func (m *WallManager) reset(evt x11.KeyEvent) {
 		err := m.workers[m.current].Reset(evt.Timestamp)
 		if err != nil {
 			logger.LogError("Failed to reset instance %d: %s", m.current, err)
+		}
+		if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+			unix.SchedSetaffinity(m.pids[m.current], &m.sets.Fast)
 		}
 		if m.conf.Wall.StretchWindows {
 			err := m.workers[m.current].Resize(m.conf.Wall.StretchWidth, m.conf.Wall.StretchHeight)
@@ -436,6 +463,9 @@ func (m *WallManager) wallReset(id int, t xproto.Timestamp) {
 	if m.conf.Hooks.WallReset != "" {
 		go runHook(m.conf.Hooks.WallReset)
 	}
+	if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+		unix.SchedSetaffinity(m.pids[id], &m.sets.Fast)
+	}
 }
 
 func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
@@ -450,6 +480,10 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 	if err != nil {
 		logger.LogError("Failed to focus instance %d: %s", id, err)
 		return
+	}
+	if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+		unix.SchedSetaffinity(m.pids[id], &m.sets.Active)
+		m.reallocate(false)
 	}
 	if m.conf.Wall.StretchWindows {
 		err := m.workers[m.current].Resize(m.screenWidth, m.screenHeight)
@@ -468,6 +502,9 @@ func (m *WallManager) wallResetOthers(id int, t xproto.Timestamp) {
 			}
 			if m.conf.Hooks.WallReset != "" {
 				go runHook(m.conf.Hooks.WallReset)
+			}
+			if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+				unix.SchedSetaffinity(m.pids[i], &m.sets.Fast)
 			}
 		}
 	}
@@ -494,6 +531,10 @@ func (m *WallManager) wallPlay(id int, t xproto.Timestamp) {
 		}
 	}
 	m.setLock(id, false)
+	if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+		unix.SchedSetaffinity(m.pids[id], &m.sets.Active)
+		m.reallocate(false)
+	}
 }
 
 func (m *WallManager) wallLock(id int, t xproto.Timestamp) {
@@ -503,6 +544,15 @@ func (m *WallManager) wallLock(id int, t xproto.Timestamp) {
 		go runHook(m.conf.Hooks.Lock)
 	} else if !m.locks[id] && m.conf.Hooks.Unlock != "" {
 		go runHook(m.conf.Hooks.Unlock)
+	}
+	if m.conf.Affinity.Enabled && m.conf.Affinity.Mode == "advanced" {
+		if !m.ready[id] {
+			if m.locks[id] {
+				unix.SchedSetaffinity(m.pids[id], &m.sets.Fast)
+			} else {
+				unix.SchedSetaffinity(m.pids[id], &m.sets.Slow)
+			}
+		}
 	}
 }
 
@@ -533,4 +583,18 @@ func (m *WallManager) findProjector() error {
 		}
 	}
 	return nil
+}
+
+func (m *WallManager) reallocate(active bool) {
+	m.sets.reallocate(active)
+	for i := 0; i < len(m.workers); i++ {
+		if m.ready[i] {
+			continue
+		}
+		if m.locks[i] {
+			unix.SchedSetaffinity(m.pids[i], &m.sets.Fast)
+		} else {
+			unix.SchedSetaffinity(m.pids[i], &m.sets.Slow)
+		}
+	}
 }
