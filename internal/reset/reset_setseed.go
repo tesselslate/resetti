@@ -1,0 +1,5 @@
+package reset
+
+func ResetSetseed() {
+
+}
