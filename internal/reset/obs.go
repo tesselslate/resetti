@@ -1,14 +1,36 @@
 package reset
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
+	"github.com/jezek/xgb/xproto"
 	go_obs "github.com/woofdoggo/go-obs"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
+// findProjector finds the OBS wall projector (if open.)
+func findProjector(c *x11.Client) (xproto.Window, error) {
+	windows, err := c.GetAllWindows()
+	if err != nil {
+		return 0, err
+	}
+	for _, win := range windows {
+		title, err := c.GetWindowTitle(win)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(title, "Projector (Scene) - Wall") {
+			return win, nil
+		}
+	}
+	return 0, errors.New("no projector")
+}
+
 // getWallSize returns the dimensions of the user's wall.
-func getWallSize(o *go_obs.Client, instances int) (int, int, error) {
+func getWallSize(o *go_obs.Client, instances int) (uint16, uint16, error) {
 	appendUnique := func(slice []float64, item float64) []float64 {
 		for _, v := range slice {
 			if item == v {
@@ -31,7 +53,7 @@ func getWallSize(o *go_obs.Client, instances int) (int, int, error) {
 		xs = appendUnique(xs, settings.Position.X)
 		ys = appendUnique(ys, settings.Position.Y)
 	}
-	return len(xs), len(ys), nil
+	return uint16(len(xs)), uint16(len(ys)), nil
 }
 
 // setScene sets the current OBS scene.

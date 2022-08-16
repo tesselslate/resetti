@@ -42,12 +42,13 @@ type Profile struct {
 		WallLock        x11.Keymod `toml:"wall_lock"`
 	} `toml:"keybinds"`
 	Wall struct {
-		StretchWindows bool   `toml:"stretch_windows"`
-		StretchWidth   uint16 `toml:"stretch_width"`
-		StretchHeight  uint16 `toml:"stretch_height"`
-		UseMouse       bool   `toml:"use_mouse"`
-		GoToLocked     bool   `toml:"goto_locked"`
-		NoPlayGen      bool   `toml:"no_play_generating"`
+		StretchWindows  bool   `toml:"stretch_windows"`
+		StretchWidth    uint32 `toml:"stretch_width"`
+		StretchHeight   uint32 `toml:"stretch_height"`
+		UnstretchWidth  uint32 `toml:"unstretch_width"`
+		UnstretchHeight uint32 `toml:"unstretch_height"`
+		UseMouse        bool   `toml:"use_mouse"`
+		GoToLocked      bool   `toml:"goto_locked"`
 	} `toml:"wall"`
 	SS struct {
 		Seed   string  `toml:"seed"`
