@@ -80,9 +80,27 @@ allow-moves = true
 
 ### Excessive memory usage
 
-You can provide some additional arguments to the JVM to tune the garbage
-collector (see [here](https://www.reddit.com/r/feedthebeast/comments/921woe/comment/e32ndog))
-and cap heap allocation at 1.5-2GB, although this is usually not the main issue.
+There are two main things to improve memory usage:
+1. GC tuning
+2. Malloc tuning
+
+#### Tuning the Java garbage collector
+
+If you are limited primarily by your RAM, then use Shenandoah with the following
+JVM arguments:
+
+```
+-XX:+UseShenandoahGC
+-XX:ShenandoahGCHeuristics=compact
+```
+
+If memory usage is not an issue, try using ZGC instead to improve performance:
+
+```
+-XX:+UseZGC
+```
+
+#### Improving malloc performance
 
 On most distributions, glibc is the default (or only) libc available. glibc's
 malloc implementation has been known to perform poorly with Java. A band-aid
@@ -135,10 +153,17 @@ not focused can cause a crash. The bug was fixed in version 3.3.3, which is
 newer than what Minecraft uses. You can fix the issue by forcing Minecraft to
 use a newer version of GLFW.
 
+#### Using system GLFW
+
+On MultiMC and forks, go to `Edit Instance` -> `Settings` -> `Workarounds` and
+enable `Use system installation of GLFW`. Ensure that you have installed an
+up-to-date (>= 3.3.3) version of GLFW from your package manager.
+
+#### Compiling your own GLFW build
+
 Create an empty directory (henceforth referred to as `GLFW_DIR`) anywhere of
 your choosing. Place an up-to-date (>= 3.3.3) version of `libglfw.so` inside
-`GLFW_DIR`. You can get it either from your distribution's package manager or
-by [compiling it yourself](https://https://www.glfw.org/docs/latest/compile.html)
+`GLFW_DIR`. You can follow the instructions for [compiling it yourself](https://https://www.glfw.org/docs/latest/compile.html)
 from source.
 
 Lastly, add this additional JVM argument to all of your Minecraft instances:
