@@ -51,6 +51,38 @@ func (a *atomMap) Get(c *Client, name string) (xproto.Atom, error) {
 	return reply.Atom, nil
 }
 
+// Click fakes a mouse click on the given window.
+func (c *Client) Click(win xproto.Window) error {
+	send := func(evt string) error {
+		return xproto.SendEventChecked(
+			c.conn,
+			true,
+			win,
+			xproto.EventMaskButtonPress|xproto.EventMaskButtonRelease,
+			evt,
+		).Check()
+	}
+	evt := xproto.ButtonPressEvent{
+		Sequence:   0,
+		Detail:     1,
+		Time:       xproto.TimeCurrentTime,
+		Root:       win,
+		Event:      win,
+		Child:      win,
+		RootX:      0,
+		RootY:      0,
+		EventX:     0,
+		EventY:     0,
+		SameScreen: true,
+	}
+	raw := evt.Bytes()
+	if err := send(string(raw)); err != nil {
+		return err
+	}
+	raw[0] = 5
+	return send(string(raw))
+}
+
 // FocusWindow switches input focus to the given window. It does so by sending
 // a message to the root window indicating that it should update the
 // _NET_ACTIVE_WINDOW property.

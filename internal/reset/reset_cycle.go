@@ -124,6 +124,10 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 							&lastTime[next],
 						)
 					}
+					if conf.Reset.ClickFocus {
+						time.Sleep(time.Millisecond * time.Duration(conf.Reset.Delay))
+						x.Click(instances[next].Wid)
+					}
 					v14_reset(x, instances[current], &lastTime[current])
 					log.Printf("ResetCycle: reset %d", current)
 					current = next

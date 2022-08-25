@@ -34,6 +34,7 @@ type Profile struct {
 	Reset struct {
 		Delay        int  `toml:"delay"`
 		UnpauseFocus bool `toml:"unpause_on_focus"`
+		ClickFocus   bool `toml:"click_on_focus"`
 	} `toml:"reset"`
 	Keys struct {
 		Focus           x11.Key    `toml:"focus"`

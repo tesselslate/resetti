@@ -256,9 +256,9 @@ func wallUngrabKeys(w *wallState) error {
 	return nil
 }
 
-func wallUpdateLastTime(w *wallState, id int, time xproto.Timestamp) {
-	if w.lastTime[id] < time {
-		w.lastTime[id] = time
+func wallUpdateLastTime(w *wallState, id int, timestamp xproto.Timestamp) {
+	if w.lastTime[id] < timestamp {
+		w.lastTime[id] = timestamp
 	}
 }
 
@@ -284,7 +284,7 @@ func wallGotoWall(w *wallState) {
 	wallGrabKeys(w)
 }
 
-func wallPlay(w *wallState, id int, time xproto.Timestamp) {
+func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 	if w.states[id].State != StIdle {
 		return
 	}
@@ -294,9 +294,13 @@ func wallPlay(w *wallState, id int, time xproto.Timestamp) {
 		log.Printf("ResetWall err: failed ungrab wall keys: %s", err)
 	}
 	w.x.FocusWindow(w.instances[id].Wid)
-	wallUpdateLastTime(w, id, time)
+	wallUpdateLastTime(w, id, timestamp)
 	if w.conf.Reset.UnpauseFocus {
 		w.x.SendKeyPress(x11.KeyEscape, w.instances[id].Wid, &w.lastTime[id])
+	}
+	if w.conf.Reset.ClickFocus {
+		time.Sleep(time.Millisecond * time.Duration(w.conf.Reset.Delay))
+		w.x.Click(w.instances[id].Wid)
 	}
 	if w.conf.Wall.StretchWindows {
 		err := w.x.MoveWindow(
@@ -314,20 +318,20 @@ func wallPlay(w *wallState, id int, time xproto.Timestamp) {
 	w.current = id
 }
 
-func wallReset(w *wallState, id int, time xproto.Timestamp) {
+func wallReset(w *wallState, id int, timestamp xproto.Timestamp) {
 	if w.locks[id] || w.states[id].State == StGenerating {
 		return
 	}
-	wallUpdateLastTime(w, id, time)
+	wallUpdateLastTime(w, id, timestamp)
 	v14_reset(w.x, w.instances[id], &w.lastTime[id])
 	go runHook(w.conf.Hooks.WallReset)
 }
 
-func wallResetOthers(w *wallState, id int, time xproto.Timestamp) {
+func wallResetOthers(w *wallState, id int, timestamp xproto.Timestamp) {
 	if w.states[id].State != StIdle {
 		return
 	}
-	wallPlay(w, id, time)
+	wallPlay(w, id, timestamp)
 	for i := 0; i < len(w.instances); i++ {
 		if i != id && !w.locks[i] && w.states[i].State != StGenerating {
 			v14_reset(w.x, w.instances[i], &w.lastTime[i])
@@ -346,14 +350,14 @@ func wallLock(w *wallState, id int) {
 	}
 }
 
-func wallHandleEvent(w *wallState, id int, state x11.Keymod, time xproto.Timestamp) {
+func wallHandleEvent(w *wallState, id int, state x11.Keymod, timestamp xproto.Timestamp) {
 	switch state {
 	case w.conf.Keys.WallPlay:
-		wallPlay(w, id, time)
+		wallPlay(w, id, timestamp)
 	case w.conf.Keys.WallReset:
-		wallReset(w, id, time)
+		wallReset(w, id, timestamp)
 	case w.conf.Keys.WallResetOthers:
-		wallResetOthers(w, id, time)
+		wallResetOthers(w, id, timestamp)
 	case w.conf.Keys.WallLock:
 		wallLock(w, id)
 	}
