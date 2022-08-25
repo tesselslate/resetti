@@ -1,7 +1,6 @@
 package reset
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -32,21 +31,15 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 	// Start OBS connection.
 	var obs *go_obs.Client
 	if conf.Obs.Enabled {
-		obs = &go_obs.Client{}
-		needsAuth, obsErr, err := obs.Connect(fmt.Sprintf("localhost:%d", conf.Obs.Port))
+		client, obsErr, err := connectObs(conf, len(instances))
 		if err != nil {
 			return err
 		}
-		if needsAuth {
-			err := obs.Login(conf.Obs.Password)
-			if err != nil {
-				return err
-			}
-		}
-		err = setSceneCollection(obs, fmt.Sprintf("resetti - %d multi", len(instances)))
+		err = setSources(client, instances)
 		if err != nil {
 			return err
 		}
+		obs = client
 		go func() {
 			for err := range obsErr {
 				log.Printf("OBS err: %s", err)
@@ -65,31 +58,11 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 	setScene(obs, "Instance 1")
 
 	// Start log readers.
-	logUpdates := make(chan LogUpdate, UPDATE_CHANNEL_SIZE)
-	logCtx, stopLogReaders := context.WithCancel(context.Background())
-	defer stopLogReaders()
-	for i, inst := range instances {
-		ctx, cancel := context.WithCancel(logCtx)
-		ch, err := readLog(inst, ctx)
-		if err != nil {
-			cancel()
-			return err
-		}
-		go func(id int) {
-			for {
-				update, more := <-ch
-				logUpdates <- LogUpdate{
-					Id:    id,
-					State: update,
-					Done:  !more,
-				}
-				if !more {
-					cancel()
-					return
-				}
-			}
-		}(i)
+	logUpdates, stopLogReaders, err := startLogReaders(instances)
+	if err != nil {
+		return err
 	}
+	defer stopLogReaders()
 
 	// Start main loop.
 	current := 0
@@ -110,8 +83,17 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 			states[update.Id] = update.State
 			// If an instance entered preview or finished generating and is *not*
 			// the active instance, press F3+Escape.
-			if update.State.State == StPreview ||
-				(current != update.Id && update.State.State == StIdle) {
+			active, err := x.GetActiveWindow()
+			if err != nil {
+				// If we can't get the current focused window, just assume the
+				// active instance is not focused.
+				active = 0
+			}
+			unpause := conf.Reset.UnpauseFocus
+			idle := update.State.State == StIdle
+			preview := update.State.State == StPreview
+			focused := active == instances[update.Id].Wid
+			if preview || (idle && !focused) || (idle && !unpause) {
 				go func() {
 					time.Sleep(time.Duration(conf.Reset.Delay) * time.Millisecond)
 					v14_pause(x, instances[update.Id], &lastTime[update.Id])
@@ -133,6 +115,8 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 						log.Printf("ResetCycle err: failed to focus %d: %s", current, err)
 						continue
 					}
+					lastTime[current] = key.Time
+					lastTime[next] = key.Time
 					if conf.Reset.UnpauseFocus && states[next].State == StIdle {
 						x.SendKeyPress(
 							x11.KeyEscape,
@@ -140,7 +124,6 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 							&lastTime[next],
 						)
 					}
-					lastTime[current] = key.Time
 					v14_reset(x, instances[current], &lastTime[current])
 					log.Printf("ResetCycle: reset %d", current)
 					current = next

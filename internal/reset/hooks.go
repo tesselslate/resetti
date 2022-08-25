@@ -6,8 +6,11 @@ import (
 	"strings"
 )
 
-// runCmd runs the given command.
-func runCmd(str string) {
+// runHook runs the given command.
+func runHook(str string) {
+	if str == "" {
+		return
+	}
 	splits := strings.Split(str, " ")
 	var cmd *exec.Cmd
 	if len(splits) == 1 {

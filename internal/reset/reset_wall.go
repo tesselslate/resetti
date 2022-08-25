@@ -1,7 +1,6 @@
 package reset
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -12,6 +11,20 @@ import (
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
+
+type wallState struct {
+	conf        cfg.Profile
+	x           *x11.Client
+	obs         *go_obs.Client
+	instances   []Instance
+	states      []InstanceState
+	lastTime    []xproto.Timestamp
+	locks       []bool
+	current     int
+	onWall      bool
+	lastMouseId int
+	projector   xproto.Window
+}
 
 func ResetWall(conf cfg.Profile, instances []Instance) error {
 	// Start X connection.
@@ -31,18 +44,7 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 	}()
 
 	// Start OBS connection.
-	obs := &go_obs.Client{}
-	needsAuth, obsErr, err := obs.Connect(fmt.Sprintf("localhost:%d", conf.Obs.Port))
-	if err != nil {
-		return err
-	}
-	if needsAuth {
-		err := obs.Login(conf.Obs.Password)
-		if err != nil {
-			return err
-		}
-	}
-	err = setSceneCollection(obs, fmt.Sprintf("resetti - %d multi", len(instances)))
+	obs, obsErr, err := connectObs(conf, len(instances))
 	if err != nil {
 		return err
 	}
@@ -76,31 +78,11 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 	instanceWidth, instanceHeight := screenWidth/wallWidth, screenHeight/wallHeight
 
 	// Start log readers.
-	logUpdates := make(chan LogUpdate, UPDATE_CHANNEL_SIZE)
-	logCtx, stopLogReaders := context.WithCancel(context.Background())
-	defer stopLogReaders()
-	for i, inst := range instances {
-		ctx, cancel := context.WithCancel(logCtx)
-		ch, err := readLog(inst, ctx)
-		if err != nil {
-			cancel()
-			return err
-		}
-		go func(id int) {
-			for {
-				update, more := <-ch
-				logUpdates <- LogUpdate{
-					Id:    id,
-					State: update,
-					Done:  !more,
-				}
-				if !more {
-					cancel()
-					return
-				}
-			}
-		}(i)
+	logUpdates, stopLogReaders, err := startLogReaders(instances)
+	if err != nil {
+		return err
 	}
+	defer stopLogReaders()
 
 	// Grab global keys.
 	x.GrabKey(conf.Keys.Focus, x.RootWindow())
@@ -109,233 +91,22 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 	defer x.UngrabKey(conf.Keys.Reset, x.RootWindow())
 
 	// Prepare to start main loop.
-	current := 0
-	onWall := true
-	states := make([]InstanceState, len(instances))
-	lastTime := make([]xproto.Timestamp, len(instances))
-	locks := make([]bool, len(instances))
-	lastMouseId := -1
-
-	grabWallKeys := func() error {
-		win := x.RootWindow()
-		for i := 0; i < len(instances); i++ {
-			key := x11.Key{
-				Code: xproto.Keycode(i + 10),
-			}
-			key.Mod = conf.Keys.WallPlay
-			err := x.GrabKey(key, win)
-			if err != nil {
-				return err
-			}
-			key.Mod = conf.Keys.WallReset
-			err = x.GrabKey(key, win)
-			if err != nil {
-				return err
-			}
-			key.Mod = conf.Keys.WallResetOthers
-			err = x.GrabKey(key, win)
-			if err != nil {
-				return err
-			}
-			key.Mod = conf.Keys.WallLock
-			err = x.GrabKey(key, win)
-			if err != nil {
-				return err
-			}
-		}
-		if conf.Wall.UseMouse {
-			err := x.GrabPointer(x.RootWindow())
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	ungrabWallKeys := func() error {
-		win := x.RootWindow()
-		for i := 0; i < len(instances); i++ {
-			key := x11.Key{
-				Code: xproto.Keycode(i + 10),
-			}
-			key.Mod = conf.Keys.WallPlay
-			err := x.UngrabKey(key, win)
-			if err != nil {
-				return err
-			}
-			key.Mod = conf.Keys.WallReset
-			err = x.UngrabKey(key, win)
-			if err != nil {
-				return err
-			}
-			key.Mod = conf.Keys.WallResetOthers
-			err = x.UngrabKey(key, win)
-			if err != nil {
-				return err
-			}
-			key.Mod = conf.Keys.WallLock
-			err = x.UngrabKey(key, win)
-			if err != nil {
-				return err
-			}
-		}
-		if conf.Wall.UseMouse {
-			err := x.UngrabPointer()
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	updateLastTime := func(id int, time xproto.Timestamp) {
-		if lastTime[id] < time {
-			lastTime[id] = time
-		}
-	}
-	setLock := func(id int, state bool) {
-		if locks[id] == state {
-			return
-		}
-		locks[id] = state
-		err := setVisible(obs, "Wall", fmt.Sprintf("Lock %d", id+1), state)
-		if err != nil {
-			log.Printf("ResetWall: setLock err: %s", err)
-		}
-	}
-	goToWall := func() {
-		onWall = true
-		go setScene(obs, "Wall")
-		err := x.FocusWindow(projector)
-		if err != nil {
-			log.Printf("ResetWall err: goToWall: %s", err)
-		}
-		grabWallKeys()
-	}
-	wallPlay := func(id int, time xproto.Timestamp) {
-		if states[id].State != StIdle {
-			return
-		}
-		go setScene(obs, fmt.Sprintf("Instance %d", id+1))
-		err := ungrabWallKeys()
-		if err != nil {
-			log.Printf("ResetWall err: failed ungrab wall keys: %s", err)
-		}
-		x.FocusWindow(instances[id].Wid)
-		updateLastTime(id, time)
-		if conf.Reset.UnpauseFocus {
-			x.SendKeyPress(x11.KeyEscape, instances[id].Wid, &lastTime[id])
-		}
-		if conf.Wall.StretchWindows {
-			err := x.MoveWindow(
-				instances[id].Wid,
-				0, 0,
-				uint32(conf.Wall.UnstretchWidth),
-				uint32(conf.Wall.UnstretchHeight),
-			)
-			if err != nil {
-				log.Printf("ResetWall err: failed to unstretch window: %s", err)
-			}
-		}
-		setLock(id, false)
-		onWall = false
-		current = id
-	}
-	wallReset := func(id int, time xproto.Timestamp) {
-		if locks[id] || states[id].State == StGenerating {
-			return
-		}
-		updateLastTime(id, time)
-		v14_reset(x, instances[id], &lastTime[id])
-		if conf.Hooks.WallReset != "" {
-			go runCmd(conf.Hooks.WallReset)
-		}
-	}
-	wallResetOthers := func(id int, time xproto.Timestamp) {
-		if states[id].State != StIdle {
-			return
-		}
-		wallPlay(id, time)
-		for i := 0; i < len(instances); i++ {
-			if i != id && !locks[i] && states[i].State != StGenerating {
-				v14_reset(x, instances[i], &lastTime[i])
-				if conf.Hooks.WallReset != "" {
-					go runCmd(conf.Hooks.WallReset)
-				}
-			}
-		}
-	}
-	wallLock := func(id int) {
-		setLock(id, !locks[id])
-		log.Printf("ResetWall: lock %d %t", id, locks[id])
-		if locks[id] && conf.Hooks.Lock != "" {
-			go runCmd(conf.Hooks.Lock)
-		} else if !locks[id] && conf.Hooks.Unlock != "" {
-			go runCmd(conf.Hooks.Unlock)
-		}
-	}
-	handleEvent := func(id int, state x11.Keymod, time xproto.Timestamp) {
-		switch state {
-		case conf.Keys.WallPlay:
-			wallPlay(id, time)
-		case conf.Keys.WallReset:
-			wallReset(id, time)
-		case conf.Keys.WallResetOthers:
-			wallResetOthers(id, time)
-		case conf.Keys.WallLock:
-			wallLock(id)
-		}
-	}
-	handleReset := func(evt x11.KeyEvent) {
-		if onWall {
-			wg := sync.WaitGroup{}
-			for i, v := range instances {
-				if locks[i] || states[i].State == StGenerating {
-					continue
-				}
-				wg.Add(1)
-				go func(inst Instance) {
-					updateLastTime(inst.Id, evt.Time)
-					v14_reset(x, inst, &lastTime[inst.Id])
-					wg.Done()
-					if conf.Hooks.WallReset != "" {
-						runCmd(conf.Hooks.WallReset)
-					}
-				}(v)
-			}
-			wg.Wait()
-		} else {
-			updateLastTime(current, evt.Time)
-			v14_reset(x, instances[current], &lastTime[current])
-			if conf.Wall.StretchWindows {
-				err := x.MoveWindow(
-					instances[current].Wid,
-					0, 0,
-					uint32(conf.Wall.StretchWidth),
-					uint32(conf.Wall.StretchHeight),
-				)
-				if err != nil {
-					log.Printf("ResetWall err: failed to unstretch window: %s", err)
-				}
-			}
-			time.Sleep(time.Duration(conf.Reset.Delay) * time.Millisecond)
-			if !conf.Wall.GoToLocked {
-				goToWall()
-			} else {
-				for idx, locked := range locks {
-					if locked {
-						if states[idx].State != StIdle {
-							continue
-						}
-						wallPlay(idx, evt.Time)
-						return
-					}
-				}
-				goToWall()
-			}
-		}
+	wall := wallState{
+		conf:        conf,
+		x:           x,
+		obs:         obs,
+		instances:   instances,
+		states:      make([]InstanceState, len(instances)),
+		lastTime:    make([]xproto.Timestamp, len(instances)),
+		locks:       make([]bool, len(instances)),
+		current:     0,
+		onWall:      true,
+		lastMouseId: -1,
+		projector:   projector,
 	}
 
 	// Start main loop.
-	grabWallKeys()
+	wallGrabKeys(&wall)
 	x.FocusWindow(projector)
 	for {
 		select {
@@ -348,41 +119,41 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 
 			// If the instance finished generating or entered the preview
 			// screen, pause it.
-			prev := states[update.Id]
+			prev := wall.states[update.Id]
 			if prev.State != update.State.State {
 				if update.State.State == StPreview || update.State.State == StIdle {
-					x.SendKeyDown(x11.KeyF3, instances[update.Id].Wid, &lastTime[update.Id])
-					x.SendKeyPress(x11.KeyEscape, instances[update.Id].Wid, &lastTime[update.Id])
-					x.SendKeyUp(x11.KeyF3, instances[update.Id].Wid, &lastTime[update.Id])
+					x.SendKeyDown(x11.KeyF3, instances[update.Id].Wid, &wall.lastTime[update.Id])
+					x.SendKeyPress(x11.KeyEscape, instances[update.Id].Wid, &wall.lastTime[update.Id])
+					x.SendKeyUp(x11.KeyF3, instances[update.Id].Wid, &wall.lastTime[update.Id])
 				}
 			}
 
 			// TODO: Update affinity.
 
 			// Update state.
-			states[update.Id] = update.State
+			wall.states[update.Id] = update.State
 		case evt := <-xEvt:
 			switch evt := evt.(type) {
 			case x11.KeyEvent:
 				if evt.State == x11.KeyDown {
 					switch evt.Key {
 					case conf.Keys.Focus:
-						if onWall {
+						if wall.onWall {
 							x.FocusWindow(projector)
 						} else {
-							x.FocusWindow(instances[current].Wid)
+							x.FocusWindow(instances[wall.current].Wid)
 						}
 					case conf.Keys.Reset:
-						handleReset(evt)
+						wallHandleReset(&wall, evt)
 					default:
-						if !onWall {
+						if !wall.onWall {
 							continue
 						}
 						id := int(evt.Key.Code - 10)
 						if id < 0 || id > 8 || id > len(instances) {
 							continue
 						}
-						handleEvent(id, evt.Key.Mod, evt.Time)
+						wallHandleEvent(&wall, id, evt.Key.Mod, evt.Time)
 					}
 				}
 			case x11.MoveEvent:
@@ -393,11 +164,11 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 					if id >= len(instances) {
 						continue
 					}
-					if lastMouseId == id {
+					if wall.lastMouseId == id {
 						continue
 					}
-					lastMouseId = id
-					handleEvent(id, x11.Keymod(evt.State)^xproto.ButtonMask1, evt.Time)
+					wall.lastMouseId = id
+					wallHandleEvent(&wall, id, x11.Keymod(evt.State)^xproto.ButtonMask1, evt.Time)
 				}
 			case x11.ButtonEvent:
 				x := uint16(evt.X) / instanceWidth
@@ -406,9 +177,232 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 				if id >= len(instances) {
 					continue
 				}
-				lastMouseId = id
-				handleEvent(id, x11.Keymod(evt.State), evt.Time)
+				wall.lastMouseId = id
+				wallHandleEvent(&wall, id, x11.Keymod(evt.State), evt.Time)
 			}
+		}
+	}
+}
+
+func wallGrabKeys(w *wallState) error {
+	win := w.x.RootWindow()
+	for i := 0; i < len(w.instances); i++ {
+		key := x11.Key{
+			Code: xproto.Keycode(i + 10),
+		}
+		key.Mod = w.conf.Keys.WallPlay
+		err := w.x.GrabKey(key, win)
+		if err != nil {
+			return err
+		}
+		key.Mod = w.conf.Keys.WallReset
+		err = w.x.GrabKey(key, win)
+		if err != nil {
+			return err
+		}
+		key.Mod = w.conf.Keys.WallResetOthers
+		err = w.x.GrabKey(key, win)
+		if err != nil {
+			return err
+		}
+		key.Mod = w.conf.Keys.WallLock
+		err = w.x.GrabKey(key, win)
+		if err != nil {
+			return err
+		}
+	}
+	if w.conf.Wall.UseMouse {
+		err := w.x.GrabPointer(w.x.RootWindow())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func wallUngrabKeys(w *wallState) error {
+	win := w.x.RootWindow()
+	for i := 0; i < len(w.instances); i++ {
+		key := x11.Key{
+			Code: xproto.Keycode(i + 10),
+		}
+		key.Mod = w.conf.Keys.WallPlay
+		err := w.x.UngrabKey(key, win)
+		if err != nil {
+			return err
+		}
+		key.Mod = w.conf.Keys.WallReset
+		err = w.x.UngrabKey(key, win)
+		if err != nil {
+			return err
+		}
+		key.Mod = w.conf.Keys.WallResetOthers
+		err = w.x.UngrabKey(key, win)
+		if err != nil {
+			return err
+		}
+		key.Mod = w.conf.Keys.WallLock
+		err = w.x.UngrabKey(key, win)
+		if err != nil {
+			return err
+		}
+	}
+	if w.conf.Wall.UseMouse {
+		err := w.x.UngrabPointer()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func wallUpdateLastTime(w *wallState, id int, time xproto.Timestamp) {
+	if w.lastTime[id] < time {
+		w.lastTime[id] = time
+	}
+}
+
+func wallSetLock(w *wallState, id int, state bool) {
+	if w.locks[id] == state {
+		return
+	}
+	w.locks[id] = state
+	err := setVisible(w.obs, "Wall", fmt.Sprintf("Lock %d", id+1), state)
+	if err != nil {
+
+		log.Printf("ResetWall: setLock err: %s", err)
+	}
+}
+
+func wallGotoWall(w *wallState) {
+	w.onWall = true
+	go setScene(w.obs, "Wall")
+	err := w.x.FocusWindow(w.projector)
+	if err != nil {
+		log.Printf("ResetWall err: goToWall: %s", err)
+	}
+	wallGrabKeys(w)
+}
+
+func wallPlay(w *wallState, id int, time xproto.Timestamp) {
+	if w.states[id].State != StIdle {
+		return
+	}
+	go setScene(w.obs, fmt.Sprintf("Instance %d", id+1))
+	err := wallUngrabKeys(w)
+	if err != nil {
+		log.Printf("ResetWall err: failed ungrab wall keys: %s", err)
+	}
+	w.x.FocusWindow(w.instances[id].Wid)
+	wallUpdateLastTime(w, id, time)
+	if w.conf.Reset.UnpauseFocus {
+		w.x.SendKeyPress(x11.KeyEscape, w.instances[id].Wid, &w.lastTime[id])
+	}
+	if w.conf.Wall.StretchWindows {
+		err := w.x.MoveWindow(
+			w.instances[id].Wid,
+			0, 0,
+			uint32(w.conf.Wall.UnstretchWidth),
+			uint32(w.conf.Wall.UnstretchHeight),
+		)
+		if err != nil {
+			log.Printf("ResetWall err: failed to unstretch window: %s", err)
+		}
+	}
+	wallSetLock(w, id, false)
+	w.onWall = false
+	w.current = id
+}
+
+func wallReset(w *wallState, id int, time xproto.Timestamp) {
+	if w.locks[id] || w.states[id].State == StGenerating {
+		return
+	}
+	wallUpdateLastTime(w, id, time)
+	v14_reset(w.x, w.instances[id], &w.lastTime[id])
+	go runHook(w.conf.Hooks.WallReset)
+}
+
+func wallResetOthers(w *wallState, id int, time xproto.Timestamp) {
+	if w.states[id].State != StIdle {
+		return
+	}
+	wallPlay(w, id, time)
+	for i := 0; i < len(w.instances); i++ {
+		if i != id && !w.locks[i] && w.states[i].State != StGenerating {
+			v14_reset(w.x, w.instances[i], &w.lastTime[i])
+			go runHook(w.conf.Hooks.WallReset)
+		}
+	}
+}
+
+func wallLock(w *wallState, id int) {
+	wallSetLock(w, id, !w.locks[id])
+	log.Printf("ResetWall: lock %d %t", id, w.locks[id])
+	if w.locks[id] {
+		go runHook(w.conf.Hooks.Lock)
+	} else {
+		go runHook(w.conf.Hooks.Unlock)
+	}
+}
+
+func wallHandleEvent(w *wallState, id int, state x11.Keymod, time xproto.Timestamp) {
+	switch state {
+	case w.conf.Keys.WallPlay:
+		wallPlay(w, id, time)
+	case w.conf.Keys.WallReset:
+		wallReset(w, id, time)
+	case w.conf.Keys.WallResetOthers:
+		wallResetOthers(w, id, time)
+	case w.conf.Keys.WallLock:
+		wallLock(w, id)
+	}
+}
+
+func wallHandleReset(w *wallState, evt x11.KeyEvent) {
+	if w.onWall {
+		wg := sync.WaitGroup{}
+		for i, v := range w.instances {
+			if w.locks[i] || w.states[i].State == StGenerating {
+				continue
+			}
+			wg.Add(1)
+			go func(inst Instance) {
+				wallUpdateLastTime(w, inst.Id, evt.Time)
+				v14_reset(w.x, inst, &w.lastTime[inst.Id])
+				wg.Done()
+				runHook(w.conf.Hooks.WallReset)
+			}(v)
+		}
+		wg.Wait()
+	} else {
+		wallUpdateLastTime(w, w.current, evt.Time)
+		v14_reset(w.x, w.instances[w.current], &w.lastTime[w.current])
+		if w.conf.Wall.StretchWindows {
+			err := w.x.MoveWindow(
+				w.instances[w.current].Wid,
+				0, 0,
+				uint32(w.conf.Wall.StretchWidth),
+				uint32(w.conf.Wall.StretchHeight),
+			)
+			if err != nil {
+				log.Printf("ResetWall err: failed to unstretch window: %s", err)
+			}
+		}
+		time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
+		if !w.conf.Wall.GoToLocked {
+			wallGotoWall(w)
+		} else {
+			for idx, locked := range w.locks {
+				if locked {
+					if w.states[idx].State != StIdle {
+						continue
+					}
+					wallPlay(w, idx, evt.Time)
+					return
+				}
+			}
+			wallGotoWall(w)
 		}
 	}
 }
