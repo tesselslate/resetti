@@ -1,6 +1,7 @@
 package reset
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -64,18 +65,32 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 	}
 	defer stopLogReaders()
 
+	// Start UI.
+	display := newResetDisplay(instances)
+	uiStateUpdates, _, uiStopped, err := display.Init()
+	if err != nil {
+		return err
+	}
+	ctx, cancelUi := context.WithCancel(context.Background())
+	display.Run(ctx, false)
+	defer display.Fini()
+	defer cancelUi()
+
 	// Start main loop.
 	current := 0
 	states := make([]InstanceState, len(instances))
 	lastTime := make([]xproto.Timestamp, len(instances))
 	for {
 		select {
+		case <-uiStopped:
+			return nil
 		case update := <-logUpdates:
 			// If a log reader channel was closed, something went wrong.
 			if update.Done {
 				log.Println("ResetCycle err: log reader closed")
 				return nil
 			}
+			uiStateUpdates <- update
 			// Ignore updates which do not modify the main state.
 			if update.State.State == states[update.Id].State {
 				continue
@@ -129,7 +144,6 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 						x.Click(instances[next].Wid)
 					}
 					v14_reset(x, instances[current], &lastTime[current])
-					log.Printf("ResetCycle: reset %d", current)
 					current = next
 					err = setScene(obs, fmt.Sprintf("Instance %d", current+1))
 					if err != nil {

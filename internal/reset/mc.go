@@ -32,6 +32,22 @@ type InstanceState struct {
 	Spawn    [2]float64 // Spawn location (only relevant for setseed)
 }
 
+func (i *InstanceState) String() string {
+	states := []string{
+		"Menu",
+		"Generating",
+		"Preview",
+		"Idle",
+		"Ingame",
+	}
+	switch i.State {
+	case StMenu, StIdle, StIngame:
+		return states[i.State]
+	default:
+		return fmt.Sprintf("%s (%d%%)", states[i.State], i.Progress)
+	}
+}
+
 // FindInstances returns a list of all running Minecraft instances.
 func FindInstances(x *x11.Client) ([]Instance, error) {
 	instances := make([]Instance, 0)

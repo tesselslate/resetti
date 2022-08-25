@@ -11,7 +11,7 @@ import (
 
 type Key int
 
-type style struct {
+type Style struct {
 	fg   int
 	bg   int
 	bold bool
@@ -51,25 +51,25 @@ const (
 	BrightWhite   int = 97
 )
 
-// clearTerminal clears the terminal.
-func clearTerminal() {
+// ClearTerminal clears the terminal.
+func ClearTerminal() {
 	fmt.Print("\x1b[2J")
 }
 
-// finiTerminal restores the terminal to its normal state.
-func finiTerminal() {
+// FiniTerminal restores the terminal to its normal state.
+func FiniTerminal() {
 	// Disable invisible cursor and alternative terminal buffer.
 	fmt.Print("\x1b[?25h\x1b[?1049l")
 	term.Restore(int(os.Stdin.Fd()), initialState)
 }
 
-// getSize returns the terminal size.
-func getSize() (int, int, error) {
+// GetSize returns the terminal size.
+func GetSize() (int, int, error) {
 	return term.GetSize(int(os.Stdin.Fd()))
 }
 
-// initTerminal initializes the terminal to display any UI components.
-func initTerminal() error {
+// InitTerminal initializes the terminal to display any UI components.
+func InitTerminal() error {
 	state, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		return err
@@ -81,9 +81,9 @@ func initTerminal() error {
 	return nil
 }
 
-// listen returns a channel of keypress events from the terminal. The channel
+// Listen returns a channel of keypress events from the terminal. The channel
 // will be closed either when the context is cancelled or an error occurs.
-func listen(ctx context.Context) <-chan Key {
+func Listen(ctx context.Context) <-chan Key {
 	ch := make(chan Key, KEY_CHANNEL_SIZE)
 	reader := bufio.NewReader(os.Stdin)
 	buf := make([]byte, 32)
@@ -130,30 +130,30 @@ func listen(ctx context.Context) <-chan Key {
 	return ch
 }
 
-// newStyle returns a new style with the default colors.
-func newStyle() style {
-	return style{
+// NewStyle returns a new style with the default colors.
+func NewStyle() Style {
+	return Style{
 		fg: 49,
 		bg: 49,
 	}
 }
 
-func (s style) Bold() style {
+func (s Style) Bold() Style {
 	s.bold = true
 	return s
 }
 
-func (s style) Background(c int) style {
+func (s Style) Background(c int) Style {
 	s.bg = c + 10
 	return s
 }
 
-func (s style) Foreground(c int) style {
+func (s Style) Foreground(c int) Style {
 	s.fg = c
 	return s
 }
 
-func (s style) Render(in string) {
+func (s Style) Render(in string) {
 	txt := fmt.Sprintf("\x1b[0;%d;%d", s.fg, s.bg)
 	if s.bold {
 		txt += ";1"
@@ -162,6 +162,6 @@ func (s style) Render(in string) {
 	fmt.Print(txt, in)
 }
 
-func (s style) RenderAt(in string, x, y int) {
+func (s Style) RenderAt(in string, x, y int) {
 	s.Render(fmt.Sprintf("\x1b[%d;%dH", y, x) + in)
 }

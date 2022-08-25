@@ -1,6 +1,7 @@
 package reset
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -110,11 +111,24 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		projector:   projector,
 	}
 
+	// Start UI.
+	display := newResetDisplay(instances)
+	uiStateUpdates, _, uiStopped, err := display.Init()
+	if err != nil {
+		return err
+	}
+	ctx, cancelUi := context.WithCancel(context.Background())
+	display.Run(ctx, false) // TODO: Toggle affinity display
+	defer display.Fini()
+	defer cancelUi()
+
 	// Start main loop.
 	wallGrabKeys(&wall)
 	x.FocusWindow(projector)
 	for {
 		select {
+		case <-uiStopped:
+			return nil
 		case update := <-logUpdates:
 			// If a log reader channel was closed, something went wrong.
 			if update.Done {
@@ -137,6 +151,7 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 
 			// Update state.
 			wall.states[update.Id] = update.State
+			uiStateUpdates <- update
 		case evt := <-xEvt:
 			switch evt := evt.(type) {
 			case x11.KeyEvent:
@@ -274,7 +289,6 @@ func wallSetLock(w *wallState, id int, state bool) {
 	w.locks[id] = state
 	err := setVisible(w.obs, "Wall", fmt.Sprintf("Lock %d", id+1), state)
 	if err != nil {
-
 		log.Printf("ResetWall: setLock err: %s", err)
 	}
 }
@@ -347,7 +361,6 @@ func wallResetOthers(w *wallState, id int, timestamp xproto.Timestamp) {
 
 func wallLock(w *wallState, id int) {
 	wallSetLock(w, id, !w.locks[id])
-	log.Printf("ResetWall: lock %d %t", id, w.locks[id])
 	if w.locks[id] {
 		go runHook(w.conf.Hooks.Lock)
 	} else {
