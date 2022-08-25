@@ -90,6 +90,11 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 	defer x.UngrabKey(conf.Keys.Focus, x.RootWindow())
 	defer x.UngrabKey(conf.Keys.Reset, x.RootWindow())
 
+	// Turn off any lock indicators from the last time resetti was run.
+	for i := 0; i < len(instances); i++ {
+		setVisible(obs, "Wall", fmt.Sprintf("Lock %d", i+1), false)
+	}
+
 	// Prepare to start main loop.
 	wall := wallState{
 		conf:        conf,
