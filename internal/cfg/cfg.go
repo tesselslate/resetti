@@ -2,6 +2,8 @@ package cfg
 
 import (
 	_ "embed"
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -116,6 +118,16 @@ func MakeProfile(name string) error {
 	dir, err := GetFolder()
 	if err != nil {
 		return err
+	}
+	if stat, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			err := os.Mkdir(dir, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to create config dir: %s", err)
+			}
+		} else if !stat.IsDir() {
+			return errors.New("config path is not a directory")
+		}
 	}
 	return os.WriteFile(
 		dir+name+".toml",
