@@ -14,11 +14,12 @@ import (
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/ui"
+	"golang.org/x/sys/unix"
 )
 
 type affinityUpdate struct {
 	Id   int
-	Cpus uint64
+	Cpus unix.CPUSet
 }
 
 type resetDisplay struct {
@@ -110,7 +111,7 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 	signal.Notify(sigs, syscall.SIGWINCH)
 	defer signal.Stop(sigs)
 	width, height, _ := ui.GetSize()
-	affinities := make([]uint64, len(d.instances))
+	affinities := make([]unix.CPUSet, len(d.instances))
 	logMsgs := make([]string, 0, 64)
 	numCpu := runtime.NumCPU()
 	for {
@@ -164,6 +165,7 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 			b.WriteString(rightPad(fmt.Sprintf("1.%d", inst.Version), 8))
 			b.WriteString(rightPad(d.states[id].String(), 18))
 			plain.RenderAt(b.String(), 3, id+3)
+			cpuString(affinities[id], id)
 		}
 		details := []string{
 			"Instances",
@@ -199,6 +201,15 @@ func (d *resetDisplay) Fini() {
 	d.cancel()
 	d.log.file.Close()
 	ui.FiniTerminal()
+}
+
+func cpuString(cpus unix.CPUSet, id int) {
+	numCpu := runtime.NumCPU()
+	for i := 0; i < numCpu; i++ {
+		if cpus.IsSet(i) {
+			ui.NewStyle().Background(ui.BrightGreen).RenderAt(" ", 31+i, id+3)
+		}
+	}
 }
 
 func rightPad(text string, strlen int) string {

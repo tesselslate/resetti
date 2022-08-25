@@ -39,20 +39,20 @@ func ShowProfileMenu() (string, error) {
 	if len(choices) == 0 {
 		return "", errors.New("no configuration profiles found - make one")
 	}
-	keys := listen(context.Background())
+	keys := Listen(context.Background())
 	sigs := make(chan os.Signal, 16)
 	signal.Notify(sigs, syscall.SIGWINCH)
-	width, height, err := getSize()
+	width, height, err := GetSize()
 	if err != nil {
 		return "", err
 	}
-	err = initTerminal()
+	err = InitTerminal()
 	if err != nil {
 		return "", err
 	}
-	defer finiTerminal()
+	defer FiniTerminal()
 	draw := func() {
-		clearTerminal()
+		ClearTerminal()
 		const HELP_STR = "enter: select | ctrl-c: quit"
 
 		// Calculate UI size.
@@ -72,13 +72,13 @@ func ShowProfileMenu() (string, error) {
 		rows := len(choices) + 2
 		sx, sy := width/2-cols/2, height/2-rows/2
 		if width < cols || height < rows || sx < 3 || sy < 1 {
-			newStyle().RenderAt("Terminal too small", 0, 0)
+			NewStyle().RenderAt("Terminal too small", 0, 0)
 			return
 		}
-		newStyle().Foreground(Cyan).RenderAt(HELP_STR, sx, sy+rows)
-		newStyle().Foreground(BrightYellow).Bold().RenderAt("Profiles", sx, sy)
+		NewStyle().Foreground(Cyan).RenderAt(HELP_STR, sx, sy+rows)
+		NewStyle().Foreground(BrightYellow).Bold().RenderAt("Profiles", sx, sy)
 		for i, choice := range choices {
-			style := newStyle()
+			style := NewStyle()
 			if i == current {
 				style = style.Foreground(BrightMagenta).Bold()
 				style.RenderAt(">", sx-2, sy+i+1)
@@ -115,7 +115,7 @@ func ShowProfileMenu() (string, error) {
 				return "", nil
 			}
 		case <-sigs:
-			width, height, err = getSize()
+			width, height, err = GetSize()
 			if err == nil {
 				draw()
 			}

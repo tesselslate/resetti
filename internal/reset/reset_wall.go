@@ -11,6 +11,7 @@ import (
 	go_obs "github.com/woofdoggo/go-obs"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/sys/unix"
 )
 
 type wallState struct {
@@ -25,6 +26,13 @@ type wallState struct {
 	onWall      bool
 	lastMouseId int
 	projector   xproto.Window
+
+	stateUpdates    chan<- LogUpdate
+	affinityUpdates chan<- affinityUpdate
+	idleAffinity    unix.CPUSet
+	lowAffinity     unix.CPUSet
+	highAffinity    unix.CPUSet
+	activeAffinity  unix.CPUSet
 }
 
 func ResetWall(conf cfg.Profile, instances []Instance) error {
@@ -78,23 +86,33 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 	}
 	instanceWidth, instanceHeight := screenWidth/wallWidth, screenHeight/wallHeight
 
-	// Start log readers.
-	logUpdates, stopLogReaders, err := startLogReaders(instances)
-	if err != nil {
-		return err
-	}
-	defer stopLogReaders()
-
 	// Grab global keys.
 	x.GrabKey(conf.Keys.Focus, x.RootWindow())
 	x.GrabKey(conf.Keys.Reset, x.RootWindow())
 	defer x.UngrabKey(conf.Keys.Focus, x.RootWindow())
 	defer x.UngrabKey(conf.Keys.Reset, x.RootWindow())
 
-	// Turn off any lock indicators from the last time resetti was run.
+	// Turn off any lock indicators from the last time resetti was run
+	// and switch to the wall scene.
 	for i := 0; i < len(instances); i++ {
 		setVisible(obs, "Wall", fmt.Sprintf("Lock %d", i+1), false)
 	}
+	setScene(obs, "Wall")
+
+	// Set instance affinities if using simple affinity.
+	if !conf.AdvancedWall.Affinity && conf.General.Affinity != "" {
+		err := setSimpleAffinity(conf, instances)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Start log readers.
+	logUpdates, stopLogReaders, err := startLogReaders(instances)
+	if err != nil {
+		return err
+	}
+	defer stopLogReaders()
 
 	// Prepare to start main loop.
 	wall := wallState{
@@ -110,15 +128,23 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		lastMouseId: -1,
 		projector:   projector,
 	}
+	if conf.AdvancedWall.Affinity {
+		wall.idleAffinity = makeCpuSet(conf.AdvancedWall.CpusIdle)
+		wall.lowAffinity = makeCpuSet(conf.AdvancedWall.CpusLow)
+		wall.highAffinity = makeCpuSet(conf.AdvancedWall.CpusHigh)
+		wall.activeAffinity = makeCpuSet(conf.AdvancedWall.CpusActive)
+	}
 
 	// Start UI.
 	display := newResetDisplay(instances)
-	uiStateUpdates, _, uiStopped, err := display.Init()
+	uiStateUpdates, uiAffinityUpdates, uiStopped, err := display.Init()
 	if err != nil {
 		return err
 	}
 	ctx, cancelUi := context.WithCancel(context.Background())
-	display.Run(ctx, false) // TODO: Toggle affinity display
+	display.Run(ctx, conf.AdvancedWall.Affinity)
+	wall.stateUpdates = uiStateUpdates
+	wall.affinityUpdates = uiAffinityUpdates
 	defer display.Fini()
 	defer cancelUi()
 
@@ -147,11 +173,28 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 				}
 			}
 
-			// TODO: Update affinity.
-
 			// Update state.
 			wall.states[update.Id] = update.State
 			uiStateUpdates <- update
+
+			// Update the instance's affinity state if needed.
+			if !conf.AdvancedWall.Affinity {
+				continue
+			}
+			if wall.locks[update.Id] && update.State.State != StIdle {
+				wallSetAffinity(&wall, instances[update.Id], wall.highAffinity)
+				continue
+			}
+			switch update.State.State {
+			case StGenerating:
+				wallSetAffinity(&wall, instances[update.Id], wall.highAffinity)
+			case StPreview:
+				if update.State.Progress >= conf.AdvancedWall.LowThreshold {
+					wallSetAffinity(&wall, instances[update.Id], wall.lowAffinity)
+				}
+			case StIdle:
+				wallSetAffinity(&wall, instances[update.Id], wall.idleAffinity)
+			}
 		case evt := <-xEvt:
 			switch evt := evt.(type) {
 			case x11.KeyEvent:
@@ -307,6 +350,14 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 	if w.states[id].State != StIdle {
 		return
 	}
+	if w.conf.AdvancedWall.Affinity {
+		wallSetAffinity(w, w.instances[id], w.activeAffinity)
+	}
+	w.states[id].State = StIngame
+	w.stateUpdates <- LogUpdate{
+		Id:    id,
+		State: w.states[id],
+	}
 	go setScene(w.obs, fmt.Sprintf("Instance %d", id+1))
 	err := wallUngrabKeys(w)
 	if err != nil {
@@ -363,6 +414,9 @@ func wallLock(w *wallState, id int) {
 	wallSetLock(w, id, !w.locks[id])
 	if w.locks[id] {
 		go runHook(w.conf.Hooks.Lock)
+		if w.states[id].State == StPreview {
+			wallSetAffinity(w, w.instances[id], w.highAffinity)
+		}
 	} else {
 		go runHook(w.conf.Hooks.Unlock)
 	}
@@ -427,4 +481,12 @@ func wallHandleReset(w *wallState, evt x11.KeyEvent) {
 			wallGotoWall(w)
 		}
 	}
+}
+
+func wallSetAffinity(w *wallState, inst Instance, affinity unix.CPUSet) {
+	w.affinityUpdates <- affinityUpdate{
+		Id:   inst.Id,
+		Cpus: affinity,
+	}
+	unix.SchedSetaffinity(int(inst.Pid), &affinity)
 }

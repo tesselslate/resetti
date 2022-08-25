@@ -53,6 +53,15 @@ type Profile struct {
 		UseMouse        bool   `toml:"use_mouse"`
 		GoToLocked      bool   `toml:"goto_locked"`
 	} `toml:"wall"`
+	AdvancedWall struct {
+		Affinity     bool `toml:"affinity"`
+		CpusIdle     int  `toml:"affinity_idle"`
+		CpusLow      int  `toml:"affinity_low"`
+		CpusHigh     int  `toml:"affinity_high"`
+		CpusActive   int  `toml:"affinity_active"`
+		LowThreshold int  `toml:"low_threshold"`
+		ConcResets   int  `toml:"max_concurrent_resets"`
+	} `toml:"advanced_wall"`
 	SS struct {
 		Seed   string  `toml:"seed"`
 		SpawnX float64 `toml:"spawn_x"`

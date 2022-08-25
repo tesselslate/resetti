@@ -58,6 +58,14 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 	x.FocusWindow(instances[0].Wid)
 	setScene(obs, "Instance 1")
 
+	// Set instance affinities.
+	if conf.General.Affinity != "" {
+		err := setSimpleAffinity(conf, instances)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Start log readers.
 	logUpdates, stopLogReaders, err := startLogReaders(instances)
 	if err != nil {
