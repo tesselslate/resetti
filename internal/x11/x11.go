@@ -89,7 +89,36 @@ func (c *Client) Click(win xproto.Window) error {
 // _NET_ACTIVE_WINDOW property.
 // See: https://specifications.freedesktop.org/wm-spec/1.3/ar01s03.html
 func (c *Client) FocusWindow(win xproto.Window) error {
-	active_window, err := c.atoms.Get(c, "_NET_ACTIVE_WINDOW")
+	// If possible, update the _NET_CURRENT_DESKTOP property.
+	setDesktop := func() {
+		currentDesktop, err := c.atoms.Get(c, "_NET_CURRENT_DESKTOP")
+		if err != nil {
+			return
+		}
+		desktop, err := c.getPropertyInt(win, "_NET_WM_DESKTOP", xproto.AtomCardinal)
+		if err != nil {
+			return
+		}
+		data := make([]uint32, 5)
+		// Source indication (1 = application)
+		data[0] = desktop
+		evt := xproto.ClientMessageEvent{
+			Format: 32,
+			Window: c.root,
+			Type:   currentDesktop,
+			Data:   xproto.ClientMessageDataUnionData32New(data),
+		}
+		xproto.SendEvent(
+			c.conn,
+			true,
+			c.root,
+			xproto.EventMaskSubstructureNotify|xproto.EventMaskSubstructureRedirect,
+			string(evt.Bytes()),
+		)
+	}
+	setDesktop()
+	// Switch active window.
+	activeWindow, err := c.atoms.Get(c, "_NET_ACTIVE_WINDOW")
 	if err != nil {
 		return err
 	}
@@ -99,7 +128,7 @@ func (c *Client) FocusWindow(win xproto.Window) error {
 	evt := xproto.ClientMessageEvent{
 		Format: 32,
 		Window: win,
-		Type:   active_window,
+		Type:   activeWindow,
 		Data:   xproto.ClientMessageDataUnionData32New(data),
 	}
 	return xproto.SendEventChecked(
