@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"syscall"
 	"time"
@@ -38,6 +39,10 @@ type wallState struct {
 	lowAffinity     unix.CPUSet
 	highAffinity    unix.CPUSet
 	activeAffinity  unix.CPUSet
+
+	resetFile  *os.File
+	resetCount int
+	resetCh    chan<- int
 }
 
 func ResetWall(conf cfg.Profile) error {
@@ -97,6 +102,12 @@ func ResetWall(conf cfg.Profile) error {
 	}
 	instanceWidth, instanceHeight := screenWidth/wallWidth, screenHeight/wallHeight
 
+	// Open reset count.
+	resetFile, resetCount, err := openCounter(conf)
+	if err != nil {
+		return err
+	}
+
 	// Grab global keys.
 	x.GrabKey(conf.Keys.Focus, x.RootWindow())
 	x.GrabKey(conf.Keys.Reset, x.RootWindow())
@@ -142,6 +153,8 @@ func ResetWall(conf cfg.Profile) error {
 		forceFreeze: make(chan int, 128),
 		toFreeze:    make(chan int, 128),
 		toUnfreeze:  make(chan int, 128),
+		resetFile:   resetFile,
+		resetCount:  resetCount,
 	}
 	if conf.AdvancedWall.Affinity {
 		wall.idleAffinity = makeCpuSet(conf.AdvancedWall.CpusIdle)
@@ -159,7 +172,7 @@ func ResetWall(conf cfg.Profile) error {
 
 	// Start UI.
 	display := newResetDisplay(instances)
-	uiStateUpdates, uiAffinityUpdates, uiStopped, err := display.Init()
+	uiStateUpdates, uiAffinityUpdates, uiResetUpdates, uiStopped, err := display.Init()
 	if err != nil {
 		return err
 	}
@@ -167,6 +180,8 @@ func ResetWall(conf cfg.Profile) error {
 	display.Run(ctx, conf.AdvancedWall.Affinity)
 	wall.stateUpdates = uiStateUpdates
 	wall.affinityUpdates = uiAffinityUpdates
+	wall.resetCh = uiResetUpdates
+	uiResetUpdates <- resetCount
 	defer display.Fini()
 	defer cancelUi()
 
@@ -502,6 +517,7 @@ func wallHandleResetKey(w *wallState, evt x11.KeyEvent) {
 	} else {
 		wallUpdateLastTime(w, w.current, evt.Time)
 		v14_reset(w.x, w.instances[w.current], &w.lastTime[w.current])
+		incrementResets(w.resetFile, w.resetCount, w.resetCh)
 		w.states[w.current].State = StGenerating
 		if w.conf.AdvancedWall.ConcResets != 0 &&
 			wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
@@ -570,6 +586,7 @@ func wallResetInstance(w *wallState, id int, timestamp xproto.Timestamp) {
 		}()
 	}
 	go runHook(w.conf.Hooks.WallReset)
+	incrementResets(w.resetFile, w.resetCount, w.resetCh)
 }
 
 func wallSetAffinity(w *wallState, inst Instance, affinity unix.CPUSet) {

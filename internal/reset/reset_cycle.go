@@ -54,6 +54,12 @@ func ResetCycle(conf cfg.Profile) error {
 		}()
 	}
 
+	// Open reset count.
+	resetFile, resetCount, err := openCounter(conf)
+	if err != nil {
+		return err
+	}
+
 	// Grab keys.
 	x.GrabKey(conf.Keys.Focus, x.RootWindow())
 	x.GrabKey(conf.Keys.Reset, x.RootWindow())
@@ -81,10 +87,11 @@ func ResetCycle(conf cfg.Profile) error {
 
 	// Start UI.
 	display := newResetDisplay(instances)
-	uiStateUpdates, _, uiStopped, err := display.Init()
+	uiStateUpdates, _, uiResetUpdates, uiStopped, err := display.Init()
 	if err != nil {
 		return err
 	}
+	uiResetUpdates <- resetCount
 	ctx, cancelUi := context.WithCancel(context.Background())
 	display.Run(ctx, false)
 	defer display.Fini()
@@ -164,6 +171,7 @@ func ResetCycle(conf cfg.Profile) error {
 						log.Printf("ResetCycle err: failed to set scene: %s", err)
 					}
 					go runHook(conf.Hooks.Reset)
+					incrementResets(resetFile, resetCount, uiResetUpdates)
 				}
 			}
 		}

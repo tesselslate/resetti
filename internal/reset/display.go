@@ -32,6 +32,7 @@ type resetDisplay struct {
 	keys     <-chan ui.Key
 	updates  <-chan LogUpdate
 	affinity <-chan affinityUpdate
+	resets   <-chan int
 	stop     chan<- struct{}
 }
 
@@ -64,11 +65,11 @@ func newResetDisplay(instances []Instance) resetDisplay {
 }
 
 // Init initializes the state of the terminal and sets the log output.
-func (d *resetDisplay) Init() (chan<- LogUpdate, chan<- affinityUpdate, <-chan struct{}, error) {
+func (d *resetDisplay) Init() (chan<- LogUpdate, chan<- affinityUpdate, chan<- int, <-chan struct{}, error) {
 	// Setup terminal.
 	err := ui.InitTerminal()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	keys := ui.Listen(ctx)
@@ -78,11 +79,11 @@ func (d *resetDisplay) Init() (chan<- LogUpdate, chan<- affinityUpdate, <-chan s
 	// Setup log display.
 	logPath, err := os.UserCacheDir()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	logFile, err := os.OpenFile(logPath+"/resetti.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	d.log = logger{
 		file:     logFile,
@@ -95,10 +96,12 @@ func (d *resetDisplay) Init() (chan<- LogUpdate, chan<- affinityUpdate, <-chan s
 	state := make(chan LogUpdate, 128)
 	affinity := make(chan affinityUpdate, 128)
 	stop := make(chan struct{})
+	resets := make(chan int, 128)
 	d.updates = state
 	d.affinity = affinity
 	d.stop = stop
-	return state, affinity, stop, nil
+	d.resets = resets
+	return state, affinity, resets, stop, nil
 }
 
 // Run runs the reset display.
@@ -114,6 +117,7 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 	affinities := make([]unix.CPUSet, len(d.instances))
 	logMsgs := make([]string, 0, 64)
 	numCpu := runtime.NumCPU()
+	resets := 0
 	for {
 		// Process events.
 		select {
@@ -138,6 +142,8 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 				logMsgs = logMsgs[1:]
 				logMsgs = append(logMsgs, msg)
 			}
+		case reset := <-d.resets:
+			resets = reset
 		}
 
 		// Style definitions.
@@ -172,6 +178,8 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 			strconv.Itoa(len(d.instances)),
 			"Routines",
 			strconv.Itoa(runtime.NumGoroutine()),
+			"Resets",
+			strconv.Itoa(resets),
 		}
 		start := 40
 		if affinity {
@@ -182,7 +190,7 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 			cyan.RenderAt(details[i*2]+": ", start, i+3)
 			plain.RenderAt(details[i*2+1], start+2+len(details[i*2]), i+3)
 		}
-		cyan.RenderAt("Error Log:", 3, len(d.instances)+6)
+		cyan.RenderAt("Log:", 3, len(d.instances)+6)
 		if len(logMsgs) == 0 {
 			continue
 		}
