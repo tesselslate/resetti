@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/BurntSushi/toml"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -101,7 +102,44 @@ func GetProfile(name string) (*Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Config validation
+
+	// Validate configuration.
+	{
+		cpus := runtime.NumCPU()
+		if conf.AdvancedWall.Affinity {
+			idle := cpus < conf.AdvancedWall.CpusIdle
+			low := cpus < conf.AdvancedWall.CpusLow
+			high := cpus < conf.AdvancedWall.CpusHigh
+			active := cpus < conf.AdvancedWall.CpusActive
+			if idle || low || high || active {
+				return nil, errors.New("too many CPUs set in advanced affinity")
+			}
+		}
+		if conf.AdvancedWall.ConcResets > 0 && !conf.AdvancedWall.Freeze {
+			return nil, errors.New("instance freezing must be enabled for maximum concurrent resets")
+		}
+		if conf.Keys.Focus == conf.Keys.Reset {
+			return nil, errors.New("keybinds cannot be the same")
+		}
+		a := conf.Keys.WallReset
+		b := conf.Keys.WallResetOthers
+		c := conf.Keys.WallPlay
+		d := conf.Keys.WallLock
+		if a == b || a == c || a == d || b == c || b == d || c == d {
+			return nil, errors.New("keybinds cannot be the same")
+		}
+		mode := conf.General.ResetType
+		if mode != "standard" && mode != "wall" && mode != "setseed" {
+			return nil, errors.New("invalid reset type")
+		}
+		affinity := conf.General.Affinity
+		if affinity != "" && affinity != "sequence" && affinity != "alternate" && affinity != "double" {
+			return nil, errors.New("invalid affinity setting")
+		}
+		if mode != "standard" && !conf.Obs.Enabled {
+			return nil, errors.New("obs must be enabled for this reset mode")
+		}
+	}
 	return conf, nil
 }
 

@@ -100,7 +100,6 @@ func (c *Client) FocusWindow(win xproto.Window) error {
 			return
 		}
 		data := make([]uint32, 5)
-		// Source indication (1 = application)
 		data[0] = desktop
 		evt := xproto.ClientMessageEvent{
 			Format: 32,
