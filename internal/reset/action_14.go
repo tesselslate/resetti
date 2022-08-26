@@ -12,5 +12,5 @@ func v14_pause(x *x11.Client, inst Instance, time *xproto.Timestamp) {
 }
 
 func v14_reset(x *x11.Client, inst Instance, time *xproto.Timestamp) {
-	x.SendKeyPress(x11.KeyF12, inst.Wid, time)
+	x.SendKeyPress(inst.ResetKey.Code, inst.Wid, time)
 }

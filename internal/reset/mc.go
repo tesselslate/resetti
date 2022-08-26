@@ -23,11 +23,12 @@ const (
 )
 
 type Instance struct {
-	Id      int           // Instance number
-	Pid     uint32        // Process ID
-	Wid     xproto.Window // Window ID
-	Dir     string        // .minecraft directory
-	Version int           // Minecraft version
+	Id       int           // Instance number
+	Pid      uint32        // Process ID
+	Wid      xproto.Window // Window ID
+	Dir      string        // .minecraft directory
+	Version  int           // Minecraft version
+	ResetKey x11.Key       // The Atum reset key.
 }
 
 type InstanceState struct {
@@ -125,12 +126,41 @@ func findInstances(x *x11.Client) ([]Instance, error) {
 			// is added.
 			continue
 		}
+		options, err := os.ReadFile(gameDir + "/options.txt")
+		if err != nil {
+			continue
+		}
+		var resetKey *x11.Key = nil
+		for _, line := range strings.Split(string(options), "\n") {
+			if !strings.Contains(line, "key_Create New World") {
+				continue
+			}
+			splits := strings.Split(line, ".")
+			if len(splits) <= 1 {
+				break
+			}
+			key := splits[len(splits)-1]
+			if key == "unknown" {
+				break
+			}
+			resetKey = &x11.Key{}
+			err := resetKey.UnmarshalTOML(key)
+			if err != nil {
+				return nil, fmt.Errorf("unable to determine atum reset key: %s", err)
+			}
+		}
+		if resetKey == nil {
+			resetKey = &x11.Key{
+				Code: x11.KeyF6,
+			}
+		}
 		instance := Instance{
-			Id:      id,
-			Pid:     pid,
-			Wid:     win,
-			Dir:     gameDir,
-			Version: version,
+			Id:       id,
+			Pid:      pid,
+			Wid:      win,
+			Dir:      gameDir,
+			Version:  version,
+			ResetKey: *resetKey,
 		}
 		instances = append(instances, instance)
 	}
