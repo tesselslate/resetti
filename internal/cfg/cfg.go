@@ -60,6 +60,8 @@ type Profile struct {
 		CpusHigh     int  `toml:"affinity_high"`
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
+		Freeze       bool `toml:"freeze_idle"`
+		FreezeDelay  int  `toml:"freeze_delay"`
 		ConcResets   int  `toml:"max_concurrent_resets"`
 	} `toml:"advanced_wall"`
 	SS struct {

@@ -66,9 +66,9 @@ This section contains information about Minecraft-specific issues.
 ### Moving Minecraft's audio output
 
 Minecraft uses [OpenAL](https://www.openal.org/) for audio. By default, it may
-prevent you from switching Minecraft's audio output. If you have PulseAudio
-(or `pipewire-pulse`), create a file named `~/.alsoftrc` with the following
-contents:
+prevent you from switching Minecraft's audio output with the PulseAudio backend.
+To fix this, create a file named `~/.alsoftrc` (or `~/.config/alsoft.conf`) with
+the following contents:
 
 ```
 [general]
@@ -77,6 +77,10 @@ drivers = pulse
 [pulse]
 allow-moves = true
 ```
+
+> *Note:* If you have Pipewire but are using `pipewire-pulse`, switching your
+> OpenAL driver to `pipewire` also works just fine (and is necessary if you
+> want to use instance freezing.)
 
 ### Excessive memory usage
 

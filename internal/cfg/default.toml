@@ -150,8 +150,18 @@ affinity_active = 12
 # from high priority to low priority.
 low_threshold = 20
 
+# Whether or not to freeze instances after they have been idle for some time.
+# NOTE: DO NOT enable this with the OpenAL PulseAudio backend. You will likely
+# experience increased CPU utilization on all of your instances. Switch to
+# the `pipewire` driver if possible or do not use this setting.
+freeze_idle = false
+
+# The delay in milliseconds before freezing an instance after it has finished
+# generating.
+freeze_delay = 1000
+
 # The maximum number of instances which can reset at the same time. Set to 0 to
-# disable.
+# disable. Requires instance freezing to be enabled.
 max_concurrent_resets = 0
 
 # You can delete this section or leave it as is if you are not using the

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jezek/xgb/xproto"
@@ -134,6 +135,7 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		wall.highAffinity = makeCpuSet(conf.AdvancedWall.CpusHigh)
 		wall.activeAffinity = makeCpuSet(conf.AdvancedWall.CpusActive)
 	}
+	toFreeze := make(chan int, 128)
 
 	// Start UI.
 	display := newResetDisplay(instances)
@@ -155,6 +157,10 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		select {
 		case <-uiStopped:
 			return nil
+		case id := <-toFreeze:
+			if wall.states[id].State == StIdle {
+				wallFreeze(instances[id])
+			}
 		case update := <-logUpdates:
 			// If a log reader channel was closed, something went wrong.
 			if update.Done {
@@ -171,6 +177,14 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 					x.SendKeyPress(x11.KeyEscape, instances[update.Id].Wid, &wall.lastTime[update.Id])
 					x.SendKeyUp(x11.KeyF3, instances[update.Id].Wid, &wall.lastTime[update.Id])
 				}
+			}
+
+			// Freeze the instance if needed.
+			if conf.AdvancedWall.Freeze && update.State.State == StIdle {
+				go func() {
+					time.Sleep(time.Millisecond * time.Duration(conf.AdvancedWall.FreezeDelay))
+					toFreeze <- update.Id
+				}()
 			}
 
 			// Update state.
@@ -350,6 +364,7 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 	if w.states[id].State != StIdle {
 		return
 	}
+	wallUnfreeze(w.instances[id])
 	if w.conf.AdvancedWall.Affinity {
 		wallSetAffinity(w, w.instances[id], w.activeAffinity)
 	}
@@ -393,6 +408,7 @@ func wallReset(w *wallState, id int, timestamp xproto.Timestamp) {
 		return
 	}
 	wallUpdateLastTime(w, id, timestamp)
+	wallUnfreeze(w.instances[id])
 	v14_reset(w.x, w.instances[id], &w.lastTime[id])
 	go runHook(w.conf.Hooks.WallReset)
 }
@@ -404,6 +420,7 @@ func wallResetOthers(w *wallState, id int, timestamp xproto.Timestamp) {
 	wallPlay(w, id, timestamp)
 	for i := 0; i < len(w.instances); i++ {
 		if i != id && !w.locks[i] && w.states[i].State != StGenerating {
+			wallUnfreeze(w.instances[i])
 			v14_reset(w.x, w.instances[i], &w.lastTime[i])
 			go runHook(w.conf.Hooks.WallReset)
 		}
@@ -445,6 +462,7 @@ func wallHandleReset(w *wallState, evt x11.KeyEvent) {
 			wg.Add(1)
 			go func(inst Instance) {
 				wallUpdateLastTime(w, inst.Id, evt.Time)
+				wallUnfreeze(inst)
 				v14_reset(w.x, inst, &w.lastTime[inst.Id])
 				wg.Done()
 				runHook(w.conf.Hooks.WallReset)
@@ -489,4 +507,12 @@ func wallSetAffinity(w *wallState, inst Instance, affinity unix.CPUSet) {
 		Cpus: affinity,
 	}
 	unix.SchedSetaffinity(int(inst.Pid), &affinity)
+}
+
+func wallFreeze(inst Instance) {
+	syscall.Kill(int(inst.Pid), syscall.SIGSTOP)
+}
+
+func wallUnfreeze(inst Instance) {
+	syscall.Kill(int(inst.Pid), syscall.SIGCONT)
 }
