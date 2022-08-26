@@ -18,6 +18,8 @@ const (
 	StPreview               // World preview
 	StIdle                  // Instance finished generating
 	StIngame                // Instance being played
+	StFrozenGen             // Frozen world generation
+	StFrozenIdle            // Frozen idle
 )
 
 type Instance struct {
@@ -41,11 +43,13 @@ func (i *InstanceState) String() string {
 		"Preview",
 		"Idle",
 		"Ingame",
+		"Frozen (Gen)",
+		"Frozen (Idle)",
 	}
 	switch i.State {
-	case StMenu, StIdle, StIngame:
-		return states[i.State]
 	default:
+		return states[i.State]
+	case StGenerating, StPreview:
 		return fmt.Sprintf("%s (%d%%)", states[i.State], i.Progress)
 	}
 }
