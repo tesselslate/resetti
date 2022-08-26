@@ -23,11 +23,15 @@ type wallState struct {
 	states      []InstanceState
 	lastTime    []xproto.Timestamp
 	locks       []bool
+	frozen      []bool
 	current     int
 	onWall      bool
 	lastMouseId int
 	projector   xproto.Window
 
+	forceFreeze     chan int
+	toFreeze        chan int
+	toUnfreeze      chan int
 	stateUpdates    chan<- LogUpdate
 	affinityUpdates chan<- affinityUpdate
 	idleAffinity    unix.CPUSet
@@ -124,10 +128,14 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		states:      make([]InstanceState, len(instances)),
 		lastTime:    make([]xproto.Timestamp, len(instances)),
 		locks:       make([]bool, len(instances)),
+		frozen:      make([]bool, len(instances)),
 		current:     0,
 		onWall:      true,
 		lastMouseId: -1,
 		projector:   projector,
+		forceFreeze: make(chan int, 128),
+		toFreeze:    make(chan int, 128),
+		toUnfreeze:  make(chan int, 128),
 	}
 	if conf.AdvancedWall.Affinity {
 		wall.idleAffinity = makeCpuSet(conf.AdvancedWall.CpusIdle)
@@ -135,7 +143,13 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		wall.highAffinity = makeCpuSet(conf.AdvancedWall.CpusHigh)
 		wall.activeAffinity = makeCpuSet(conf.AdvancedWall.CpusActive)
 	}
-	toFreeze := make(chan int, 128)
+
+	// Unfreeze all instances before starting.
+	if conf.AdvancedWall.Freeze {
+		for _, v := range instances {
+			syscall.Kill(int(v.Pid), syscall.SIGCONT)
+		}
+	}
 
 	// Start UI.
 	display := newResetDisplay(instances)
@@ -157,9 +171,21 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 		select {
 		case <-uiStopped:
 			return nil
-		case id := <-toFreeze:
+		case id := <-wall.forceFreeze:
+			wallFreeze(instances[id])
+			uiAffinityUpdates <- affinityUpdate{
+				Id:   id,
+				Cpus: unix.CPUSet{},
+			}
+			wall.toUnfreeze <- id
+			wall.frozen[id] = true
+		case id := <-wall.toFreeze:
 			if wall.states[id].State == StIdle {
 				wallFreeze(instances[id])
+				uiAffinityUpdates <- affinityUpdate{
+					Id:   id,
+					Cpus: unix.CPUSet{},
+				}
 			}
 		case update := <-logUpdates:
 			// If a log reader channel was closed, something went wrong.
@@ -183,8 +209,20 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 			if conf.AdvancedWall.Freeze && update.State.State == StIdle {
 				go func() {
 					time.Sleep(time.Millisecond * time.Duration(conf.AdvancedWall.FreezeDelay))
-					toFreeze <- update.Id
+					wall.toFreeze <- update.Id
 				}()
+			}
+
+			// Unfreeze the instance if needed.
+			if conf.AdvancedWall.ConcResets > 0 {
+				if update.State.State == StIdle {
+					select {
+					case id := <-wall.toUnfreeze:
+						wallUnfreeze(instances[id])
+						wall.frozen[id] = false
+					default:
+					}
+				}
 			}
 
 			// Update state.
@@ -221,7 +259,7 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 							x.FocusWindow(instances[wall.current].Wid)
 						}
 					case conf.Keys.Reset:
-						wallHandleReset(&wall, evt)
+						wallHandleResetKey(&wall, evt)
 					default:
 						if !wall.onWall {
 							continue
@@ -403,26 +441,14 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 	w.current = id
 }
 
-func wallReset(w *wallState, id int, timestamp xproto.Timestamp) {
-	if w.locks[id] || w.states[id].State == StGenerating {
-		return
-	}
-	wallUpdateLastTime(w, id, timestamp)
-	wallUnfreeze(w.instances[id])
-	v14_reset(w.x, w.instances[id], &w.lastTime[id])
-	go runHook(w.conf.Hooks.WallReset)
-}
-
 func wallResetOthers(w *wallState, id int, timestamp xproto.Timestamp) {
 	if w.states[id].State != StIdle {
 		return
 	}
 	wallPlay(w, id, timestamp)
 	for i := 0; i < len(w.instances); i++ {
-		if i != id && !w.locks[i] && w.states[i].State != StGenerating {
-			wallUnfreeze(w.instances[i])
-			v14_reset(w.x, w.instances[i], &w.lastTime[i])
-			go runHook(w.conf.Hooks.WallReset)
+		if i != id {
+			wallResetInstance(w, i, timestamp)
 		}
 	}
 }
@@ -444,7 +470,7 @@ func wallHandleEvent(w *wallState, id int, state x11.Keymod, timestamp xproto.Ti
 	case w.conf.Keys.WallPlay:
 		wallPlay(w, id, timestamp)
 	case w.conf.Keys.WallReset:
-		wallReset(w, id, timestamp)
+		wallResetInstance(w, id, timestamp)
 	case w.conf.Keys.WallResetOthers:
 		wallResetOthers(w, id, timestamp)
 	case w.conf.Keys.WallLock:
@@ -452,7 +478,7 @@ func wallHandleEvent(w *wallState, id int, state x11.Keymod, timestamp xproto.Ti
 	}
 }
 
-func wallHandleReset(w *wallState, evt x11.KeyEvent) {
+func wallHandleResetKey(w *wallState, evt x11.KeyEvent) {
 	if w.onWall {
 		wg := sync.WaitGroup{}
 		for i, v := range w.instances {
@@ -461,17 +487,23 @@ func wallHandleReset(w *wallState, evt x11.KeyEvent) {
 			}
 			wg.Add(1)
 			go func(inst Instance) {
-				wallUpdateLastTime(w, inst.Id, evt.Time)
-				wallUnfreeze(inst)
-				v14_reset(w.x, inst, &w.lastTime[inst.Id])
+				wallResetInstance(w, inst.Id, evt.Time)
 				wg.Done()
-				runHook(w.conf.Hooks.WallReset)
 			}(v)
 		}
 		wg.Wait()
 	} else {
 		wallUpdateLastTime(w, w.current, evt.Time)
 		v14_reset(w.x, w.instances[w.current], &w.lastTime[w.current])
+		w.states[w.current].State = StGenerating
+		if w.conf.AdvancedWall.ConcResets != 0 &&
+			wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
+			go func() {
+				log.Printf("Max resets, freeze %d\n", w.current)
+				time.Sleep(time.Millisecond * 500)
+				w.forceFreeze <- w.current
+			}()
+		}
 		if w.conf.Wall.StretchWindows {
 			err := w.x.MoveWindow(
 				w.instances[w.current].Wid,
@@ -499,6 +531,35 @@ func wallHandleReset(w *wallState, evt x11.KeyEvent) {
 			wallGotoWall(w)
 		}
 	}
+}
+
+func wallGetResettingCount(w *wallState) int {
+	resetting := 0
+	for _, v := range w.states {
+		if v.State == StGenerating || v.State == StPreview {
+			resetting += 1
+		}
+	}
+	return resetting
+}
+
+func wallResetInstance(w *wallState, id int, timestamp xproto.Timestamp) {
+	if w.locks[id] || w.frozen[id] || w.states[id].State == StGenerating {
+		return
+	}
+	wallUpdateLastTime(w, id, timestamp)
+	wallUnfreeze(w.instances[id])
+	v14_reset(w.x, w.instances[id], &w.lastTime[id])
+	w.states[id].State = StGenerating
+	if w.conf.AdvancedWall.ConcResets != 0 &&
+		wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
+		go func() {
+			log.Printf("Max resets, freeze %d\n", id)
+			time.Sleep(time.Millisecond * 500)
+			w.forceFreeze <- id
+		}()
+	}
+	go runHook(w.conf.Hooks.WallReset)
 }
 
 func wallSetAffinity(w *wallState, inst Instance, affinity unix.CPUSet) {
