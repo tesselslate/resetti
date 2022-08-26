@@ -178,12 +178,14 @@ func ResetWall(conf cfg.Profile) error {
 		case <-uiStopped:
 			return nil
 		case id := <-wall.forceFreeze:
-			wallFreeze(instances[id])
-			uiAffinityUpdates <- affinityUpdate{
-				Id:   id,
-				Cpus: unix.CPUSet{},
+			if wall.states[id].State == StGenerating || wall.states[id].State == StPreview {
+				wallFreeze(instances[id])
+				uiAffinityUpdates <- affinityUpdate{
+					Id:   id,
+					Cpus: unix.CPUSet{},
+				}
+				wall.toUnfreeze <- id
 			}
-			wall.toUnfreeze <- id
 		case id := <-wall.toFreeze:
 			if wall.states[id].State == StIdle {
 				wallFreeze(instances[id])

@@ -58,7 +58,8 @@ func readLog(instance Instance, ctx context.Context) (<-chan InstanceState, erro
 			",",
 		)
 		if len(coords) < 3 {
-			return pos, fmt.Errorf("invalid readPos line: %s", line)
+			log.Printf("ReadLog %d: invalid readPos: %s", instance.Id, line)
+			return pos, nil
 		}
 		x, err := strconv.ParseFloat(coords[0], 64)
 		if err != nil {
@@ -109,12 +110,12 @@ func readLog(instance Instance, ctx context.Context) (<-chan InstanceState, erro
 				updated = true
 			} else if strings.Contains(line, "Preparing spawn area") {
 				splits := strings.Split(line, " ")
-				// TODO: This check should not be necessary, but I have experienced
-				// panics from the splits array being too short. I didn't notice
-				// anything from looking at the log, however. Will investigate
-				// more if this error occurs again.
+				// HACK: This shouldn't ever be triggered, but it is seemingly possible
+				// for a partial log line to get written (perhaps related to instance
+				// freezing?).
 				if len(splits) != 7 {
 					log.Printf("ReadLog %d: invalid spawn area line: %s\n", instance.Id, line)
+					continue
 				}
 				progress, err := strconv.Atoi(strings.TrimSuffix(splits[6], "%"))
 				if err != nil {
