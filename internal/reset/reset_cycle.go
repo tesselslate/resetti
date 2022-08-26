@@ -157,6 +157,7 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 					if err != nil {
 						log.Printf("ResetCycle err: failed to set scene: %s", err)
 					}
+					go runHook(conf.Hooks.Reset)
 				}
 			}
 		}

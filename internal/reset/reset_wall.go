@@ -515,6 +515,7 @@ func wallHandleResetKey(w *wallState, evt x11.KeyEvent) {
 				log.Printf("ResetWall err: failed to unstretch window: %s", err)
 			}
 		}
+		go runHook(w.conf.Hooks.Reset)
 		time.Sleep(time.Duration(w.conf.Reset.Delay) * time.Millisecond)
 		if !w.conf.Wall.GoToLocked {
 			wallGotoWall(w)
