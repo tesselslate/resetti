@@ -46,6 +46,9 @@ sure that your framerates are not set to excessively low values (e.g. 1.) If
 none of these solve the problem, please open an issue with your configuration
 profile and more details on what problem you are experiencing.
 
+Additionally, you will need to click on each instance at least once before Atum
+handles the global reset hotkey. This is a bug with Atum.
+
 ### No instance with ID 0
 
 resetti was not able to find an instance whose `instance_num` file contained an
@@ -80,7 +83,8 @@ allow-moves = true
 
 > *Note:* If you have Pipewire but are using `pipewire-pulse`, switching your
 > OpenAL driver to `pipewire` also works just fine (and is necessary if you
-> want to use instance freezing.)
+> want to use instance freezing.) **However, this requires that you tell MultiMC
+> to use your system installation of OpenAL, which must be at least version 1.22.)**
 
 ### Excessive memory usage
 

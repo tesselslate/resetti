@@ -6,9 +6,7 @@ where you can choose what seeds to play or reset.
 
 ## Starting Up
 
-resetti will place you on an OBS projector showing all of your Minecraft
-instances. You can either open the projector yourself before starting
-resetti or let it do it for you.
+Open up an OBS projector for your wall scene before starting `resetti`.
 
 > *Tip:* If you use multiple virtual desktops and some of your instances
 > appear blank, switch to the desktop containing your instances and back.

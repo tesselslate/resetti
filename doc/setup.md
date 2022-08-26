@@ -120,6 +120,8 @@ resetti with that configuration profile.
 Refer to the documentation for your reset style for more detailed information
 on how to use resetti from this point onward.
 
-> *Note:* Make sure that you have Caps Lock, Numlock, e.t.c. off while using
-> resetti. When on, these will prevent resetti from identifying that you have
-> pressed your keybinds.
+> *Note:* Caps Lock and Num Lock are considered as modifiers. If enabled, they
+> will prevent your keybinds from being registered. If you would like to keep
+> them on, use `xmodmap` to figure out what modifiers they correspond to and
+> add them to your keybinds (e.g. if Num_Lock is present under `mod2`, add
+> `mod2` as a modifier to your keybind.)
