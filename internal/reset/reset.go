@@ -2,10 +2,15 @@ package reset
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 
 	go_obs "github.com/woofdoggo/go-obs"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // connectObs attempts to connect to OBS.
@@ -59,4 +64,42 @@ func startLogReaders(instances []Instance) (<-chan LogUpdate, context.CancelFunc
 		}(i)
 	}
 	return updates, cancelFunc, nil
+}
+
+// printDebugInfo prints some debug information to the log.
+func printDebugInfo(x *x11.Client, conf cfg.Profile, instances []Instance) {
+	// Print debug information.
+	serializedConf, err := json.Marshal(conf)
+	if err != nil {
+		log.Println("Failed to print configuration")
+	}
+	log.Printf("Config:\n%s\n", string(serializedConf))
+	log.Printf("Running %d instances\n", len(instances))
+	log.Printf("Root: %d\n", x.RootWindow())
+	log.Println("WM properties:")
+	log.Printf("_NET_WM_NAME: %s", x.GetWmName())
+	log.Printf("_NET_SUPPORTED: %s", x.GetWmSupported())
+	for id, inst := range instances {
+		log.Printf(
+			"Instance %d, wid %d, pid %d version %d\n",
+			id,
+			inst.Wid,
+			inst.Pid,
+			inst.Version,
+		)
+		dir, err := os.ReadDir(inst.Dir + "/mods")
+		if err != nil {
+			log.Printf("Failed to get mods: %s\n", err)
+			continue
+		}
+		for _, entry := range dir {
+			name := entry.Name()
+			atum := strings.Contains(name, "atum")
+			fastreset := strings.Contains(name, "fast-reset")
+			worldpreview := strings.Contains(name, "worldpreview")
+			if atum || fastreset || worldpreview {
+				log.Println(name)
+			}
+		}
+	}
 }

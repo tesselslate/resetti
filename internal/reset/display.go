@@ -77,11 +77,11 @@ func (d *resetDisplay) Init() (chan<- LogUpdate, chan<- affinityUpdate, chan<- i
 	d.keys = keys
 
 	// Setup log display.
-	logPath, err := os.UserCacheDir()
-	if err != nil {
-		return nil, nil, nil, nil, err
+	logPath, exists := os.LookupEnv("RESETTI_LOG_PATH")
+	if !exists {
+		logPath = "/tmp/resetti.log"
 	}
-	logFile, err := os.OpenFile(logPath+"/resetti.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -195,11 +195,14 @@ func (d *resetDisplay) run(ctx context.Context, affinity bool) {
 			continue
 		}
 		msgCount := height - (len(d.instances) + 8)
-		for i := 0; i < msgCount; i++ {
-			if i > len(logMsgs)-1 {
-				break
-			}
-			plain.RenderAt(logMsgs[i], 3, len(d.instances)+7+i)
+		var recentLog []string
+		if msgCount > len(logMsgs) {
+			recentLog = logMsgs
+		} else {
+			recentLog = logMsgs[len(logMsgs)-msgCount:]
+		}
+		for i, v := range recentLog {
+			plain.RenderAt(v, 3, len(d.instances)+7+i)
 		}
 	}
 }

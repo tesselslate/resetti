@@ -96,6 +96,7 @@ func ResetCycle(conf cfg.Profile) error {
 	display.Run(ctx, false)
 	defer display.Fini()
 	defer cancelUi()
+	printDebugInfo(x, conf, instances)
 
 	// Start main loop.
 	current := 0

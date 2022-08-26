@@ -185,6 +185,7 @@ func ResetWall(conf cfg.Profile) error {
 	uiResetUpdates <- resetCount
 	defer display.Fini()
 	defer cancelUi()
+	printDebugInfo(x, conf, instances)
 
 	// Start 50ms unfreeze timer.
 	timer := make(chan struct{})

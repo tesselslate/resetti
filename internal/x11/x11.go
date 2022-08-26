@@ -125,7 +125,7 @@ func (c *Client) getProperty(win xproto.Window, name string, typ xproto.Atom) ([
 		atom,
 		typ,
 		0,
-		(1<<32)-1,
+		1024,
 	).Reply()
 	if err != nil {
 		return nil, err
@@ -222,6 +222,56 @@ func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
 		return "", err
 	}
 	return title, nil
+}
+
+// GetWmName returns the name of the window manager, if available.
+func (c *Client) GetWmName() string {
+	supporting, err := c.getPropertyInt(c.root, "_NET_SUPPORTING_WM_CHECK", xproto.AtomWindow)
+	if err != nil {
+		supporting, err = c.getPropertyInt(c.root, "_NET_SUPPORTING_WM_CHECK", xproto.AtomCardinal)
+		if err != nil {
+			return "failed _NET_SUPPORTING_WM_CHECK"
+		}
+	}
+	var nameUtf8 string
+	utf8, err := c.atoms.Get(c, "UTF8_STRING")
+	if err == nil {
+		rawName, err := c.getProperty(
+			xproto.Window(supporting),
+			"_NET_WM_NAME",
+			utf8,
+		)
+		if err == nil {
+			nameUtf8 = string(rawName)
+		}
+	}
+	rawName, _ := c.getProperty(
+		xproto.Window(supporting),
+		"_NET_WM_NAME",
+		xproto.AtomString,
+	)
+	return string(rawName) + " | " + nameUtf8
+}
+
+// GetWmSupported returns a prettified list of the window manager's
+// _NET_SUPPORTED variable.
+func (c *Client) GetWmSupported() string {
+	raw, err := c.getProperty(c.root, "_NET_SUPPORTED", xproto.AtomAtom)
+	if err != nil {
+		return "failed _NET_SUPPORTED"
+	}
+	supported := make([]string, 0)
+	for i := 0; i < len(raw); i += 4 {
+		reply, err := xproto.GetAtomName(
+			c.conn,
+			xproto.Atom(binary.LittleEndian.Uint32(raw[i:i+4])),
+		).Reply()
+		if err != nil {
+			continue
+		}
+		supported = append(supported, reply.Name)
+	}
+	return strings.Join(supported, ", ")
 }
 
 // GrabKey grabs a keyboard key from a window, diverting keypress events
