@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -371,6 +372,15 @@ func (k *Key) UnmarshalTOML(value interface{}) error {
 			k.Code = val
 		} else if val, ok := mods[strings.ToLower(s)]; ok {
 			k.Mod |= val
+		} else if strings.HasPrefix(strings.ToLower(s), "code") {
+			num, err := strconv.Atoi(s[4:])
+			if err != nil {
+				return fmt.Errorf("invalid key component: %s", s)
+			}
+			if num > 255 || num < 0 {
+				return fmt.Errorf("invalid key code: %d", num)
+			}
+			k.Code = xproto.Keycode(num)
 		} else {
 			return fmt.Errorf("invalid key component: %s", s)
 		}

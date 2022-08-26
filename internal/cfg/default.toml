@@ -64,6 +64,8 @@ click_on_focus = true
 
 # - You can ignore any keybindings here which do not apply to your reset style.
 # - Alphanumerical and Fn keys (1-12) are supported.
+# - If you'd like to use another key, use the syntax "code100" where 100 is the
+#   keycode of the given key.
 # - You can supply modifiers (Shift, Control, Alt) as well.
 # - The values written are not case sensitive (e.g. `a` and `A` are equivalent,
 #   specify the `Shift` modifier.)
@@ -79,6 +81,7 @@ click_on_focus = true
 #               `a` => The A key.
 #         `Shift-A` => The A key, only when Shift is held.
 #  `Ctrl-Shift-F12` => The F12 key with Control and Shift held.
+#         `code135` => The Menu key on my keyboard layout. Use xmodmap to find your desired key.
 #
 [keybinds]
 # Pressing this will focus the current instance.
