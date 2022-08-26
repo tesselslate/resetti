@@ -50,8 +50,8 @@ func (i *InstanceState) String() string {
 	}
 }
 
-// FindInstances returns a list of all running Minecraft instances.
-func FindInstances(x *x11.Client) ([]Instance, error) {
+// findInstances returns a list of all running Minecraft instances.
+func findInstances(x *x11.Client) ([]Instance, error) {
 	instances := make([]Instance, 0)
 	windows, err := x.GetAllWindows()
 	if err != nil {
@@ -129,6 +129,11 @@ func FindInstances(x *x11.Client) ([]Instance, error) {
 			Version: version,
 		}
 		instances = append(instances, instance)
+	}
+
+	// Sort instances.
+	if len(instances) == 0 {
+		return nil, errors.New("no instances found")
 	}
 	sort.Slice(instances, func(i, j int) bool {
 		return instances[i].Id < instances[j].Id

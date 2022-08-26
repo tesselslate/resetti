@@ -40,7 +40,7 @@ type wallState struct {
 	activeAffinity  unix.CPUSet
 }
 
-func ResetWall(conf cfg.Profile, instances []Instance) error {
+func ResetWall(conf cfg.Profile) error {
 	// Start X connection.
 	var x *x11.Client
 	x, err := x11.NewClient()
@@ -56,6 +56,12 @@ func ResetWall(conf cfg.Profile, instances []Instance) error {
 			log.Printf("X err: %s", err)
 		}
 	}()
+
+	// Get instances.
+	instances, err := findInstances(x)
+	if err != nil {
+		return err
+	}
 
 	// Start OBS connection.
 	obs, obsErr, err := connectObs(conf, len(instances))

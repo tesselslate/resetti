@@ -12,7 +12,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
-func ResetCycle(conf cfg.Profile, instances []Instance) error {
+func ResetCycle(conf cfg.Profile) error {
 	// Start X connection.
 	var x *x11.Client
 	x, err := x11.NewClient()
@@ -28,6 +28,12 @@ func ResetCycle(conf cfg.Profile, instances []Instance) error {
 			log.Printf("X err: %s", err)
 		}
 	}()
+
+	// Get instances.
+	instances, err := findInstances(x)
+	if err != nil {
+		return err
+	}
 
 	// Start OBS connection.
 	var obs *go_obs.Client
