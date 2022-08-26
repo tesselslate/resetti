@@ -184,7 +184,6 @@ func ResetWall(conf cfg.Profile) error {
 				Cpus: unix.CPUSet{},
 			}
 			wall.toUnfreeze <- id
-			wall.frozen[id] = true
 		case id := <-wall.toFreeze:
 			if wall.states[id].State == StIdle {
 				wallFreeze(instances[id])
@@ -504,9 +503,10 @@ func wallHandleResetKey(w *wallState, evt x11.KeyEvent) {
 		w.states[w.current].State = StGenerating
 		if w.conf.AdvancedWall.ConcResets != 0 &&
 			wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
+			w.frozen[w.current] = true
 			go func() {
 				log.Printf("Max resets, freeze %d\n", w.current)
-				time.Sleep(time.Millisecond * 500)
+				time.Sleep(time.Second)
 				w.forceFreeze <- w.current
 			}()
 		}
@@ -542,8 +542,8 @@ func wallHandleResetKey(w *wallState, evt x11.KeyEvent) {
 
 func wallGetResettingCount(w *wallState) int {
 	resetting := 0
-	for _, v := range w.states {
-		if v.State == StGenerating || v.State == StPreview {
+	for i, v := range w.states {
+		if (v.State == StGenerating || v.State == StPreview) && !w.frozen[i] {
 			resetting += 1
 		}
 	}
@@ -560,6 +560,7 @@ func wallResetInstance(w *wallState, id int, timestamp xproto.Timestamp) {
 	w.states[id].State = StGenerating
 	if w.conf.AdvancedWall.ConcResets != 0 &&
 		wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
+		w.frozen[id] = true
 		go func() {
 			log.Printf("Max resets, freeze %d\n", id)
 			time.Sleep(time.Millisecond * 500)
