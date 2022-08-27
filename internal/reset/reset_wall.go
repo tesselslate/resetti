@@ -46,6 +46,7 @@ type wallState struct {
 
 	affIdle   unix.CPUSet
 	affLow    unix.CPUSet
+	affMid    unix.CPUSet
 	affHigh   unix.CPUSet
 	affActive unix.CPUSet
 
@@ -131,14 +132,6 @@ func ResetWall(conf cfg.Profile) error {
 	}
 	setScene(obs, "Wall")
 
-	// Set instance affinities if using simple affinity.
-	if !conf.AdvancedWall.Affinity && conf.General.Affinity != "" {
-		err := setSimpleAffinity(conf, instances)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Start log readers.
 	logUpdates, stopLogReaders, err := startLogReaders(instances)
 	if err != nil {
@@ -172,6 +165,7 @@ func ResetWall(conf cfg.Profile) error {
 	if conf.AdvancedWall.Affinity {
 		wall.affIdle = makeCpuSet(conf.AdvancedWall.CpusIdle)
 		wall.affLow = makeCpuSet(conf.AdvancedWall.CpusLow)
+		wall.affMid = makeCpuSet(conf.AdvancedWall.CpusMid)
 		wall.affActive = makeCpuSet(conf.AdvancedWall.CpusActive)
 		wall.affHigh = wall.affActive
 	}
@@ -704,7 +698,7 @@ func wallSetAffinities(w *wallState, onWall bool) {
 	if onWall {
 		w.affHigh = w.affActive
 	} else {
-		w.affHigh = w.affLow
+		w.affHigh = w.affMid
 	}
 	for i, v := range w.affinity {
 		wallSetAffinity(w, w.instances[i], v)

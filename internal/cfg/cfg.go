@@ -19,7 +19,6 @@ type Profile struct {
 		ResetType   string `toml:"type"`
 		CountResets bool   `toml:"count_resets"`
 		CountPath   string `toml:"resets_file"`
-		Affinity    string `toml:"affinity"`
 	} `toml:"general"`
 	Hooks struct {
 		WallReset string `toml:"wall_reset"`
@@ -60,6 +59,7 @@ type Profile struct {
 		Affinity     bool `toml:"affinity"`
 		CpusIdle     int  `toml:"affinity_idle"`
 		CpusLow      int  `toml:"affinity_low"`
+		CpusMid      int  `toml:"affinity_mid"`
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
 		Freeze       bool `toml:"freeze_idle"`
@@ -110,8 +110,9 @@ func GetProfile(name string) (*Profile, error) {
 		if conf.AdvancedWall.Affinity {
 			idle := cpus < conf.AdvancedWall.CpusIdle
 			low := cpus < conf.AdvancedWall.CpusLow
+			mid := cpus < conf.AdvancedWall.CpusMid
 			active := cpus < conf.AdvancedWall.CpusActive
-			if idle || low || active {
+			if idle || low || mid || active {
 				return nil, errors.New("too many CPUs set in advanced affinity")
 			}
 		}
@@ -131,10 +132,6 @@ func GetProfile(name string) (*Profile, error) {
 		mode := conf.General.ResetType
 		if mode != "standard" && mode != "wall" && mode != "setseed" {
 			return nil, errors.New("invalid reset type")
-		}
-		affinity := conf.General.Affinity
-		if affinity != "" && affinity != "sequence" && affinity != "alternate" && affinity != "double" {
-			return nil, errors.New("invalid affinity setting")
 		}
 		if mode != "standard" && !conf.Obs.Enabled {
 			return nil, errors.New("obs must be enabled for this reset mode")
