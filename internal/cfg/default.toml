@@ -130,6 +130,15 @@ use_mouse = false
 # instance (if any) instead of going back to the wall.
 goto_locked = false
 
+# Whether or not to create the "sleepbg.lock" file when an instance is being
+# played. Requires SleepBackground >=3.6 to have any effect. 
+sleepbg_lock = true
+
+# You can supply a custom path to "sleepbg.lock" here in case you set the
+# Java USER.HOME property to somewhere else. Leave blank to use the default,
+# which is your home directory.
+sleepbg_lock_path = "/home/my_user"
+
 # More advanced wall settings, mainly aimed towards increasing performance.
 [advanced_wall]
 # Whether or not to use advanced affinity. All other affinity settings below
@@ -142,9 +151,6 @@ affinity_idle = 1
 
 # Number of CPUs to run low priority instances on.
 affinity_low = 4
-
-# Number of CPUs to run high priority instances on.
-affinity_high = 10
 
 # Number of CPUs to run the actively played instance on.
 affinity_active = 12

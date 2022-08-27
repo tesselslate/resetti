@@ -15,6 +15,13 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+	affIdle int = iota
+	affLow
+	affHigh
+	affActive
+)
+
 type wallState struct {
 	conf        cfg.Profile
 	x           *x11.Client
@@ -24,6 +31,8 @@ type wallState struct {
 	lastTime    []xproto.Timestamp
 	locks       []bool
 	frozen      []bool
+	affinity    []int
+	threads     []map[int]struct{}
 	current     int
 	onWall      bool
 	lastMouseId int
@@ -34,10 +43,11 @@ type wallState struct {
 	toUnfreeze      chan int
 	stateUpdates    chan<- LogUpdate
 	affinityUpdates chan<- affinityUpdate
-	idleAffinity    unix.CPUSet
-	lowAffinity     unix.CPUSet
-	highAffinity    unix.CPUSet
-	activeAffinity  unix.CPUSet
+
+	affIdle   unix.CPUSet
+	affLow    unix.CPUSet
+	affHigh   unix.CPUSet
+	affActive unix.CPUSet
 
 	resetFile  *os.File
 	resetCount int
@@ -146,6 +156,8 @@ func ResetWall(conf cfg.Profile) error {
 		lastTime:    make([]xproto.Timestamp, len(instances)),
 		locks:       make([]bool, len(instances)),
 		frozen:      make([]bool, len(instances)),
+		affinity:    make([]int, len(instances)),
+		threads:     make([]map[int]struct{}, len(instances)),
 		current:     0,
 		onWall:      true,
 		lastMouseId: -1,
@@ -158,10 +170,10 @@ func ResetWall(conf cfg.Profile) error {
 		resetCh:     make(chan struct{}, 128),
 	}
 	if conf.AdvancedWall.Affinity {
-		wall.idleAffinity = makeCpuSet(conf.AdvancedWall.CpusIdle)
-		wall.lowAffinity = makeCpuSet(conf.AdvancedWall.CpusLow)
-		wall.highAffinity = makeCpuSet(conf.AdvancedWall.CpusHigh)
-		wall.activeAffinity = makeCpuSet(conf.AdvancedWall.CpusActive)
+		wall.affIdle = makeCpuSet(conf.AdvancedWall.CpusIdle)
+		wall.affLow = makeCpuSet(conf.AdvancedWall.CpusLow)
+		wall.affActive = makeCpuSet(conf.AdvancedWall.CpusActive)
+		wall.affHigh = wall.affActive
 	}
 
 	// Unfreeze all instances before starting.
@@ -171,20 +183,32 @@ func ResetWall(conf cfg.Profile) error {
 		}
 	}
 
+	// Start thread watchers for advanced affinity.
+	threadUpdates := make(chan threadUpdate, 128)
+	threadCtx, threadCancel := context.WithCancel(context.Background())
+	defer threadCancel()
+	for i, v := range instances {
+		threads, err := watchProcThreads(threadCtx, v, threadUpdates)
+		if err != nil {
+			return err
+		}
+		wall.threads[i] = threads
+	}
+
 	// Start UI.
 	display := newResetDisplay(instances)
 	uiStateUpdates, uiAffinityUpdates, uiResetUpdates, uiStopped, err := display.Init()
 	if err != nil {
 		return err
 	}
-	ctx, cancelUi := context.WithCancel(context.Background())
-	display.Run(ctx, conf.AdvancedWall.Affinity)
+	uiCtx, uiCancel := context.WithCancel(context.Background())
+	display.Run(uiCtx, conf.AdvancedWall.Affinity)
 	wall.stateUpdates = uiStateUpdates
 	wall.affinityUpdates = uiAffinityUpdates
 	wall.uiResetCh = uiResetUpdates
 	uiResetUpdates <- resetCount
 	defer display.Fini()
-	defer cancelUi()
+	defer uiCancel()
 	printDebugInfo(x, conf, instances)
 
 	// Start 50ms unfreeze timer.
@@ -238,13 +262,14 @@ func ResetWall(conf cfg.Profile) error {
 			incrementResets(resetFile, resetCount, uiResetUpdates)
 		case id := <-wall.forceFreeze:
 			if wall.states[id].State == StGenerating || wall.states[id].State == StPreview {
+				wall.frozen[id] = true
 				wallFreeze(instances[id])
 				uiStateUpdates <- LogUpdate{
 					Id:    id,
 					State: InstanceState{State: StFrozenGen},
 				}
+				wall.toUnfreeze <- id
 			}
-			wall.toUnfreeze <- id
 		case id := <-wall.toFreeze:
 			if wall.states[id].State == StIdle && !wall.frozen[id] {
 				wallFreeze(instances[id])
@@ -252,6 +277,26 @@ func ResetWall(conf cfg.Profile) error {
 					Id:    id,
 					State: InstanceState{State: StFrozenIdle},
 				}
+			}
+		case update := <-threadUpdates:
+			if update.Added {
+				wall.threads[update.Id][update.Tid] = struct{}{}
+				var set unix.CPUSet
+				switch wall.affinity[update.Id] {
+				case affIdle:
+					set = wall.affIdle
+				case affLow:
+					set = wall.affLow
+				case affHigh:
+					set = wall.affHigh
+				case affActive:
+					set = wall.affActive
+				}
+				if err := unix.SchedSetaffinity(update.Tid, &set); err != nil {
+					log.Printf("Failed to set affinity of new thread: %s\n", err)
+				}
+			} else {
+				delete(wall.threads[update.Id], update.Tid)
 			}
 		case update := <-logUpdates:
 			// If a log reader channel was closed, something went wrong.
@@ -288,18 +333,18 @@ func ResetWall(conf cfg.Profile) error {
 				continue
 			}
 			if wall.locks[update.Id] && update.State.State != StIdle {
-				wallSetAffinity(&wall, instances[update.Id], wall.highAffinity)
+				wallSetAffinity(&wall, instances[update.Id], affHigh)
 				continue
 			}
 			switch update.State.State {
 			case StGenerating:
-				wallSetAffinity(&wall, instances[update.Id], wall.highAffinity)
+				wallSetAffinity(&wall, instances[update.Id], affHigh)
 			case StPreview:
 				if update.State.Progress >= conf.AdvancedWall.LowThreshold {
-					wallSetAffinity(&wall, instances[update.Id], wall.lowAffinity)
+					wallSetAffinity(&wall, instances[update.Id], affLow)
 				}
 			case StIdle:
-				wallSetAffinity(&wall, instances[update.Id], wall.idleAffinity)
+				wallSetAffinity(&wall, instances[update.Id], affIdle)
 			}
 		case evt := <-xEvt:
 			switch evt := evt.(type) {
@@ -450,6 +495,8 @@ func wallGotoWall(w *wallState) {
 		log.Printf("ResetWall err: goToWall: %s", err)
 	}
 	wallGrabKeys(w)
+	wallSleepbgLock(w, false)
+	wallSetAffinities(w, true)
 }
 
 func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
@@ -458,7 +505,8 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 	}
 	wallUnfreeze(w.instances[id])
 	if w.conf.AdvancedWall.Affinity {
-		wallSetAffinity(w, w.instances[id], w.activeAffinity)
+		wallSetAffinities(w, false)
+		wallSetAffinity(w, w.instances[id], affActive)
 	}
 	w.states[id].State = StIngame
 	w.stateUpdates <- LogUpdate{
@@ -493,6 +541,7 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 	wallSetLock(w, id, false)
 	w.onWall = false
 	w.current = id
+	wallSleepbgLock(w, true)
 }
 
 func wallResetOthers(w *wallState, id int, timestamp xproto.Timestamp) {
@@ -512,7 +561,7 @@ func wallLock(w *wallState, id int) {
 	if w.locks[id] {
 		go runHook(w.conf.Hooks.Lock)
 		if w.states[id].State == StPreview {
-			wallSetAffinity(w, w.instances[id], w.highAffinity)
+			wallSetAffinity(w, w.instances[id], affHigh)
 		}
 	} else {
 		go runHook(w.conf.Hooks.Unlock)
@@ -544,7 +593,6 @@ func wallHandleResetKey(w *wallState, evt x11.KeyEvent) {
 		w.states[w.current].State = StGenerating
 		if w.conf.AdvancedWall.ConcResets != 0 &&
 			wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
-			w.frozen[w.current] = true
 			go func() {
 				time.Sleep(time.Second)
 				w.forceFreeze <- w.current
@@ -603,7 +651,6 @@ func wallResetInstance(w *wallState, id int, timestamp xproto.Timestamp) {
 	w.states[id].State = StGenerating
 	if w.conf.AdvancedWall.ConcResets != 0 &&
 		wallGetResettingCount(w) > w.conf.AdvancedWall.ConcResets {
-		w.frozen[id] = true
 		go func() {
 			time.Sleep(time.Second)
 			w.forceFreeze <- id
@@ -613,18 +660,65 @@ func wallResetInstance(w *wallState, id int, timestamp xproto.Timestamp) {
 	w.resetCh <- struct{}{}
 }
 
-func wallSetAffinity(w *wallState, inst Instance, affinity unix.CPUSet) {
+func wallSleepbgLock(w *wallState, state bool) {
+	if !w.conf.Wall.SleepBgLock {
+		return
+	}
+	if state {
+		file, err := os.Create(w.conf.Wall.SleepBgLockPath)
+		if err != nil {
+			log.Printf("Failed to create sleepbg.lock: %s\n", err)
+		}
+		file.Close()
+	} else {
+		err := os.Remove(w.conf.Wall.SleepBgLockPath)
+		if err != nil {
+			log.Printf("Failed to remove sleepbg.lock: %s\n", err)
+		}
+	}
+}
+
+func wallSetAffinity(w *wallState, inst Instance, affinity int) {
+	var set unix.CPUSet
+	switch affinity {
+	case affIdle:
+		set = w.affIdle
+	case affLow:
+		set = w.affLow
+	case affHigh:
+		set = w.affHigh
+	case affActive:
+		set = w.affActive
+	}
+	w.affinity[inst.Id] = affinity
 	w.affinityUpdates <- affinityUpdate{
 		Id:   inst.Id,
-		Cpus: affinity,
+		Cpus: set,
 	}
-	unix.SchedSetaffinity(int(inst.Pid), &affinity)
+	for tid := range w.threads[inst.Id] {
+		unix.SchedSetaffinity(tid, &set)
+	}
+}
+
+func wallSetAffinities(w *wallState, onWall bool) {
+	if onWall {
+		w.affHigh = w.affActive
+	} else {
+		w.affHigh = w.affLow
+	}
+	for i, v := range w.affinity {
+		wallSetAffinity(w, w.instances[i], v)
+	}
 }
 
 func wallFreeze(inst Instance) {
-	syscall.Kill(int(inst.Pid), syscall.SIGSTOP)
+	if err := syscall.Kill(int(inst.Pid), syscall.SIGSTOP); err != nil {
+		log.Printf("Freeze error: %s\n", err)
+	}
 }
 
 func wallUnfreeze(inst Instance) {
-	syscall.Kill(int(inst.Pid), syscall.SIGCONT)
+	if err := syscall.Kill(int(inst.Pid), syscall.SIGCONT); err != nil {
+		log.Printf("Unfreeze error: %s\n", err)
+	}
 }

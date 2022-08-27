@@ -81,7 +81,7 @@ func (d *resetDisplay) Init() (chan<- LogUpdate, chan<- affinityUpdate, chan<- i
 	if !exists {
 		logPath = "/tmp/resetti.log"
 	}
-	logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

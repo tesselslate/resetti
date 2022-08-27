@@ -53,12 +53,13 @@ type Profile struct {
 		UnstretchHeight uint32 `toml:"unstretch_height"`
 		UseMouse        bool   `toml:"use_mouse"`
 		GoToLocked      bool   `toml:"goto_locked"`
+		SleepBgLock     bool   `toml:"sleepbg_lock"`
+		SleepBgLockPath string `toml:"sleepbg_lock_path"`
 	} `toml:"wall"`
 	AdvancedWall struct {
 		Affinity     bool `toml:"affinity"`
 		CpusIdle     int  `toml:"affinity_idle"`
 		CpusLow      int  `toml:"affinity_low"`
-		CpusHigh     int  `toml:"affinity_high"`
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
 		Freeze       bool `toml:"freeze_idle"`
@@ -109,9 +110,8 @@ func GetProfile(name string) (*Profile, error) {
 		if conf.AdvancedWall.Affinity {
 			idle := cpus < conf.AdvancedWall.CpusIdle
 			low := cpus < conf.AdvancedWall.CpusLow
-			high := cpus < conf.AdvancedWall.CpusHigh
 			active := cpus < conf.AdvancedWall.CpusActive
-			if idle || low || high || active {
+			if idle || low || active {
 				return nil, errors.New("too many CPUs set in advanced affinity")
 			}
 		}
@@ -140,6 +140,17 @@ func GetProfile(name string) (*Profile, error) {
 			return nil, errors.New("obs must be enabled for this reset mode")
 		}
 	}
+
+	// Set SleepBackground lock path.
+	if conf.Wall.SleepBgLock && conf.Wall.SleepBgLockPath == "" {
+		userDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user dir for sleepbg lock: %s", err)
+		}
+		conf.Wall.SleepBgLockPath = userDir
+	}
+	conf.Wall.SleepBgLockPath += "/sleepbg.lock"
+
 	return conf, nil
 }
 
