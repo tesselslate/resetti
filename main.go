@@ -45,6 +45,7 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+		return
 	}
 	switch os.Args[1] {
 	case "--help", "-h", "help":
