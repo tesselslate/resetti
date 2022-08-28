@@ -13,6 +13,16 @@ import (
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
+// clickInstances clicks each instance once to avoid the Atum bug.
+func clickInstances(x *x11.Client, instances []Instance) error {
+	for _, v := range instances {
+		if err := x.Click(v.Wid); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // connectObs attempts to connect to OBS.
 func connectObs(conf cfg.Profile, instanceCount int) (*go_obs.Client, chan error, error) {
 	obs := &go_obs.Client{}

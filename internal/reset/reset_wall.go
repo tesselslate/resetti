@@ -78,6 +78,10 @@ func ResetWall(conf cfg.Profile) error {
 	if err != nil {
 		return err
 	}
+	err = clickInstances(x, instances)
+	if err != nil {
+		log.Printf("Failed to click each instance: %s", err)
+	}
 
 	// Start OBS connection.
 	obs, obsErr, err := connectObs(conf, len(instances))

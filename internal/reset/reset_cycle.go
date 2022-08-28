@@ -34,6 +34,10 @@ func ResetCycle(conf cfg.Profile) error {
 	if err != nil {
 		return err
 	}
+	err = clickInstances(x, instances)
+	if err != nil {
+		log.Printf("Failed to click each instance: %s", err)
+	}
 
 	// Start OBS connection.
 	var obs *go_obs.Client
