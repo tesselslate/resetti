@@ -82,7 +82,7 @@ func findInstances(x *x11.Client) ([]Instance, error) {
 		pid_str := strconv.Itoa(int(pid))
 		cmd := exec.Command("pwdx", pid_str)
 		stdout, err := cmd.Output()
-		if err != nil{
+		if err != nil {
 			continue
 		}
 
