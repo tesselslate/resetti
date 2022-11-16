@@ -90,6 +90,8 @@ func findInstances(x *x11.Client) ([]Instance, error) {
 		if gameDir == "" {
 			continue
 		}
+		gameDir = strings.Trim(gameDir, "\n")
+		gameDir = strings.Trim(gameDir, " ")
 
 		// Get instance ID.
 		file, err := os.ReadFile(fmt.Sprintf("%s/instance_num", gameDir))
