@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,31 +79,22 @@ func findInstances(x *x11.Client) ([]Instance, error) {
 			continue
 		}
 
-		// Find game directory
-		// NOTE: This method has only been tested with MultiMC and PolyMC.
-		// Not guaranteed to work on other launchers (e.g. stock)
-		file, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+		pid_str := strconv.Itoa(int(pid))
+		cmd := exec.Command("pwdx", pid_str)
+		stdout, err := cmd.Output()
 		if err != nil {
 			continue
 		}
-		args := strings.Split(string(file), "\x00")
-		gameDir := ""
-		for _, arg := range args {
-			if !strings.Contains(arg, "-Djava.library.path") {
-				continue
-			}
-			gameDir = strings.ReplaceAll(
-				strings.Split(arg, "=")[1],
-				"natives", ".minecraft",
-			)
-			break
-		}
+
+		gameDir := strings.Split(string(stdout), ":")[1]
 		if gameDir == "" {
 			continue
 		}
+		gameDir = strings.Trim(gameDir, "\n")
+		gameDir = strings.Trim(gameDir, " ")
 
 		// Get instance ID.
-		file, err = os.ReadFile(fmt.Sprintf("%s/instance_num", gameDir))
+		file, err := os.ReadFile(fmt.Sprintf("%s/instance_num", gameDir))
 		if err != nil {
 			continue
 		}
