@@ -8,12 +8,11 @@ import (
 )
 
 type Transform struct {
-	SourceWidth  float64 `json:"sourceWidth"`
-	SourceHeight float64 `json:"sourceHeight"`
-	Width        float64 `json:"width"`
-	Height       float64 `json:"height"`
-	X            float64 `json:"positionX"`
-	Y            float64 `json:"positionY"`
+	X      float64 `json:"positionX"`
+	Y      float64 `json:"positionY"`
+	Width  float64 `json:"boundsWidth"`
+	Height float64 `json:"boundsHeight"`
+	Bounds string  `json:"boundsType,omitempty"`
 }
 
 func (c *Client) AddSceneItem(scene string, source string) error {
@@ -25,7 +24,7 @@ func (c *Client) AddSceneItem(scene string, source string) error {
 		Scene:  scene,
 		Source: source,
 	}
-	_, err := c.request(req, "AddSceneItem")
+	_, err := c.request(req, "CreateSceneItem")
 	return err
 }
 

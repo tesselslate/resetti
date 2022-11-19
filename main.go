@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/woofdoggo/resetti/cmd"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/reset"
 	"github.com/woofdoggo/resetti/internal/ui"
@@ -58,7 +59,7 @@ func main() {
 			notice,
 		)
 	case "obs":
-		ui.ShowObsSetup()
+		cmd.ObsSetup()
 	case "new":
 		if len(os.Args) < 3 {
 			printHelp()
