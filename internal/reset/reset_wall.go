@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/jezek/xgb/xproto"
-	go_obs "github.com/woofdoggo/go-obs"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 	"golang.org/x/sys/unix"
 )
@@ -25,7 +25,7 @@ const (
 type wallState struct {
 	conf        cfg.Profile
 	x           *x11.Client
-	obs         *go_obs.Client
+	obs         *obs.Client
 	instances   []Instance
 	states      []InstanceState
 	lastTime    []xproto.Timestamp
@@ -84,7 +84,9 @@ func ResetWall(conf cfg.Profile) error {
 	}
 
 	// Start OBS connection.
-	obs, obsErr, err := connectObs(conf, len(instances))
+	obsCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	obs, obsErr, err := connectObs(obsCtx, conf, len(instances))
 	if err != nil {
 		return err
 	}
@@ -132,9 +134,9 @@ func ResetWall(conf cfg.Profile) error {
 	// Turn off any lock indicators from the last time resetti was run
 	// and switch to the wall scene.
 	for i := 0; i < len(instances); i++ {
-		setVisible(obs, "Wall", fmt.Sprintf("Lock %d", i+1), false)
+		obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", i+1), false)
 	}
-	setScene(obs, "Wall")
+	obs.SetScene("Wall")
 
 	// Start log readers.
 	logUpdates, stopLogReaders, err := startLogReaders(instances)
@@ -479,7 +481,7 @@ func wallSetLock(w *wallState, id int, state bool) {
 		return
 	}
 	w.locks[id] = state
-	err := setVisible(w.obs, "Wall", fmt.Sprintf("Lock %d", id+1), state)
+	err := w.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), state)
 	if err != nil {
 		log.Printf("ResetWall: setLock err: %s", err)
 	}
@@ -487,7 +489,7 @@ func wallSetLock(w *wallState, id int, state bool) {
 
 func wallGotoWall(w *wallState) {
 	w.onWall = true
-	go setScene(w.obs, "Wall")
+	go w.obs.SetScene("Wall")
 	err := w.x.FocusWindow(w.projector)
 	if err != nil {
 		log.Printf("ResetWall err: goToWall: %s", err)
@@ -511,7 +513,7 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 		Id:    id,
 		State: w.states[id],
 	}
-	go setScene(w.obs, fmt.Sprintf("Instance %d", id+1))
+	go w.obs.SetScene(fmt.Sprintf("Instance %d", id+1))
 	err := wallUngrabKeys(w)
 	if err != nil {
 		log.Printf("ResetWall err: failed ungrab wall keys: %s", err)

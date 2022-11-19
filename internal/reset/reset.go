@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	go_obs "github.com/woofdoggo/go-obs"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
@@ -24,23 +24,17 @@ func clickInstances(x *x11.Client, instances []Instance) error {
 }
 
 // connectObs attempts to connect to OBS.
-func connectObs(conf cfg.Profile, instanceCount int) (*go_obs.Client, chan error, error) {
-	obs := &go_obs.Client{}
-	needsAuth, obsErr, err := obs.Connect(fmt.Sprintf("localhost:%d", conf.Obs.Port))
+func connectObs(ctx context.Context, conf cfg.Profile, instanceCount int) (*obs.Client, <-chan error, error) {
+	obs := &obs.Client{}
+	errch, err := obs.Connect(ctx, fmt.Sprintf("localhost:%d", conf.Obs.Port), conf.Obs.Password)
 	if err != nil {
 		return nil, nil, err
 	}
-	if needsAuth {
-		err := obs.Login(conf.Obs.Password)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	err = setSceneCollection(obs, fmt.Sprintf("resetti - %d multi", instanceCount))
+	err = obs.SetSceneCollection(fmt.Sprintf("resetti - %d multi", instanceCount))
 	if err != nil {
 		return nil, nil, err
 	}
-	return obs, obsErr, nil
+	return obs, errch, nil
 }
 
 // startLogReaders creates log reader goroutines for each instance.

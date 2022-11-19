@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	obs "github.com/woofdoggo/go-obs"
+	"github.com/woofdoggo/resetti/internal/obs"
 )
 
 type obsMenu struct {
@@ -108,18 +108,17 @@ func ShowObsSetup() {
 		fmt.Println("   --lockImg=PATH      Path to lock image (optional.)")
 		os.Exit(1)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	o := obs.Client{}
-	needAuth, _, err := o.Connect(fmt.Sprintf("localhost:%d", port))
+	_, err := o.Connect(
+		ctx,
+		fmt.Sprintf("localhost:%d", port),
+		pass,
+	)
 	if err != nil {
 		fmt.Println("Failed to connect to OBS:", err)
 		os.Exit(1)
-	}
-	if needAuth {
-		_, err := o.Authenticate(pass)
-		if err != nil {
-			fmt.Println("Failed to authenticate with OBS:", err)
-			os.Exit(1)
-		}
 	}
 	// Start menu.
 	keys := Listen(context.Background())
@@ -192,273 +191,8 @@ func ShowObsSetup() {
 }
 
 func generateScenes(m obsMenu, o *obs.Client) {
-	videoSettings, err := o.GetVideoInfo()
-	if err != nil {
-		fmt.Println("Failed to get resolution:", err)
-		return
-	}
-	_, err = o.SetCurrentSceneCollection(fmt.Sprintf("resetti - %d multi", m.instances))
-	if err != nil {
-		fmt.Println("Failed to set scene collection:", err)
-		return
-	}
-	cw, ch := videoSettings.BaseWidth, videoSettings.BaseHeight
-	_, err = o.CreateScene("Wall")
-	if err != nil {
-		fmt.Println("Failed to create scene:", err)
-		return
-	}
-	for i := 0; i < m.instances; i++ {
-		scene := fmt.Sprintf("Instance %d", i+1)
-		source := fmt.Sprintf("MC %d", i+1)
-		_, err := o.CreateScene(scene)
-		if err != nil {
-			fmt.Println("Failed to create scene:", err)
-			return
-		}
-		_, err = o.CreateSource(
-			source,
-			"xcomposite_input",
-			"Scene",
-			nil,
-			ptr(true),
-		)
-		if err != nil {
-			fmt.Println("Failed to create source:", err)
-			return
-		}
-		_, err = o.AddFilterToSource(
-			source,
-			"Scaling/Aspect Ratio",
-			"scale_filter",
-			map[string]string{
-				"resolution": fmt.Sprintf("%dx%d", cw, ch),
-			},
-		)
-		if err != nil {
-			fmt.Println("Failed to add scale filter to instance:", err)
-			return
-		}
-		res, err := o.AddSceneItem(
-			scene,
-			source,
-			ptr(true),
-		)
-		if err != nil {
-			fmt.Println("Failed to create scene item:", err)
-			return
-		}
-		_, err = o.SetSceneItemProperties(
-			scene,
-			obs.SetSceneItemPropertiesItem{
-				Id: ptr(res.ItemId),
-			},
-			obs.SetSceneItemPropertiesPosition{
-				X: ptr(0.0),
-				Y: ptr(0.0),
-			},
-			nil,
-			obs.SetSceneItemPropertiesScale{},
-			obs.SetSceneItemPropertiesCrop{},
-			ptr(true),
-			ptr(true),
-			obs.SetSceneItemPropertiesBounds{
-				X: ptr(float64(cw)),
-				Y: ptr(float64(ch)),
-			},
-		)
-		if err != nil {
-			fmt.Println("Failed to set scene item properties:", err)
-			return
-		}
-	}
-	for i := 0; i < m.instances; i++ {
-		if m.verification == 0 {
-			continue
-		}
-		scene := fmt.Sprintf("Instance %d", i+1)
-		var x, y, count int
-		if m.verification == verifScene {
-			count = 1
-		} else {
-			count = m.instances - 1
-		}
-		ws, hs := 16.0/float64(m.verificationSize), 36.0/float64(m.verificationSize)
-		w, h := int(float64(cw)/ws), int(float64(ch)/hs)
-		switch m.verificationPos {
-		case topLeft:
-			x, y = 0, 0
-		case topRight:
-			x, y = cw-w, 0
-		case bottomLeft:
-			x, y = 0, ch-(count*h)
-		case bottomRight:
-			x, y = cw-w, ch-(count*h)
-		case left:
-			x, y = 0, (ch/2 - (count*h)/2)
-		case right:
-			x, y = cw-w, (ch/2 - (count*h)/2)
-		}
-		if m.verification == verifScene {
-			res, err := o.AddSceneItem(
-				scene,
-				"Wall",
-				ptr(true),
-			)
-			if err != nil {
-				fmt.Println("Failed to create scene item:", err)
-				return
-			}
-			_, err = o.SetSceneItemProperties(
-				scene,
-				obs.SetSceneItemPropertiesItem{
-					Id: ptr(res.ItemId),
-				},
-				obs.SetSceneItemPropertiesPosition{
-					X: ptr(float64(x)),
-					Y: ptr(float64(y)),
-				},
-				nil,
-				obs.SetSceneItemPropertiesScale{
-					X: ptr(1.0 / ws),
-					Y: ptr(1.0 / hs),
-				},
-				obs.SetSceneItemPropertiesCrop{},
-				ptr(true),
-				ptr(true),
-				obs.SetSceneItemPropertiesBounds{
-					X: ptr(float64(cw) / ws),
-					Y: ptr(float64(ch) / hs),
-				},
-			)
-			if err != nil {
-				fmt.Println("Failed to set scene item properties:", err)
-				return
-			}
-		} else {
-			for j := 0; j < m.instances; j++ {
-				if i == j {
-					continue
-				}
-				source := fmt.Sprintf("MC %d", j+1)
-				res, err := o.AddSceneItem(
-					scene,
-					source,
-					ptr(true),
-				)
-				if err != nil {
-					fmt.Println("Failed to create scene item:", err)
-					return
-				}
-				_, err = o.SetSceneItemProperties(
-					scene,
-					obs.SetSceneItemPropertiesItem{
-						Id: ptr(res.ItemId),
-					},
-					obs.SetSceneItemPropertiesPosition{
-						X: ptr(float64(x)),
-						Y: ptr(float64(y)),
-					},
-					nil,
-					obs.SetSceneItemPropertiesScale{
-						X: ptr(1.0 / ws),
-						Y: ptr(1.0 / hs),
-					},
-					obs.SetSceneItemPropertiesCrop{},
-					ptr(true),
-					ptr(true),
-					obs.SetSceneItemPropertiesBounds{
-						X: ptr(float64(w)),
-						Y: ptr(float64(h)),
-					},
-				)
-				if err != nil {
-					fmt.Println("Failed to set scene item properties:", err)
-					return
-				}
-				y += h
-			}
-		}
-	}
-	iw, ih := int(cw)/m.wallWidth, int(ch)/m.wallHeight
-	for x := 0; x < m.wallWidth; x++ {
-		for y := 0; y < m.wallHeight; y++ {
-			num := m.wallWidth*y + x + 1
-			if num > m.instances {
-				break
-			}
-			source := fmt.Sprintf("MC %d", num)
-			res, err := o.AddSceneItem(
-				"Wall",
-				source,
-				ptr(true),
-			)
-			if err != nil {
-				fmt.Println("Failed to add scene item:", err)
-				return
-			}
-			_, err = o.SetSceneItemProperties(
-				"Wall",
-				obs.SetSceneItemPropertiesItem{
-					Id: ptr(res.ItemId),
-				},
-				obs.SetSceneItemPropertiesPosition{
-					X: ptr(float64(x * iw)),
-					Y: ptr(float64(y * ih)),
-				},
-				nil,
-				obs.SetSceneItemPropertiesScale{
-					X: ptr(1.0 / float64(m.wallWidth)),
-					Y: ptr(1.0 / float64(m.wallHeight)),
-				},
-				obs.SetSceneItemPropertiesCrop{},
-				ptr(true),
-				ptr(true),
-				obs.SetSceneItemPropertiesBounds{
-					X: ptr(float64(iw)),
-					Y: ptr(float64(ih)),
-				},
-			)
-			if err != nil {
-				fmt.Println("Failed to set scene item properties:", err)
-				return
-			}
-			_, err = o.CreateSource(
-				fmt.Sprintf("Lock %d", num),
-				"image_source",
-				"Wall",
-				map[string]interface{}{
-					"file": m.lockImg,
-				},
-				ptr(true),
-			)
-			if err != nil {
-				fmt.Println("Failed to create lock image:", err)
-				return
-			}
-			_, err = o.SetSceneItemProperties(
-				"Wall",
-				obs.SetSceneItemPropertiesItem{
-					Name: fmt.Sprintf("Lock %d", num),
-				},
-				obs.SetSceneItemPropertiesPosition{
-					X: ptr(float64(x * iw)),
-					Y: ptr(float64(y * ih)),
-				},
-				nil,
-				obs.SetSceneItemPropertiesScale{},
-				obs.SetSceneItemPropertiesCrop{},
-				ptr(true),
-				ptr(true),
-				obs.SetSceneItemPropertiesBounds{},
-			)
-			if err != nil {
-				fmt.Println("Failed to set lock properties:", err)
-				return
-			}
-		}
-	}
-	fmt.Println("Done! You can delete the scene named 'Scene' if you would like.")
+	// TODO: Rewrite with OBS websocket 5.0
+	panic("TODO")
 }
 
 func (m *obsMenu) getSelectedValue() int {
