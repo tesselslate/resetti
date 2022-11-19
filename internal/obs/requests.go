@@ -1,8 +1,5 @@
 package obs
 
-// TODO: Add support for request batching?
-// TODO: Create a cache of scene item -> ID
-
 import (
 	"encoding/json"
 )
@@ -13,6 +10,33 @@ type Transform struct {
 	Width  float64 `json:"boundsWidth"`
 	Height float64 `json:"boundsHeight"`
 	Bounds string  `json:"boundsType,omitempty"`
+}
+
+func (c *Client) getSceneItemId(scene string, name string) (int, error) {
+	if id, ok := c.idCache.Get(scene, name); ok {
+		return id, nil
+	}
+	type request struct {
+		Scene string `json:"sceneName"`
+		Name  string `json:"sourceName"`
+	}
+	req := request{
+		Scene: scene,
+		Name:  name,
+	}
+	raw, err := c.request(req, "GetSceneItemId")
+	if err != nil {
+		return 0, err
+	}
+	res := struct {
+		Id int `json:"sceneItemId"`
+	}{}
+	err = json.Unmarshal(raw, &res)
+	if err != nil {
+		return 0, err
+	}
+	c.idCache.Set(scene, name, res.Id)
+	return res.Id, nil
 }
 
 func (c *Client) AddSceneItem(scene string, source string) error {
@@ -104,35 +128,12 @@ func (c *Client) GetSceneCollectionList() (names []string, active string, err er
 	return res.Collections, res.Current, err
 }
 
-func (c *Client) GetSceneItemId(scene string, name string) (int, error) {
-	type request struct {
-		Scene string `json:"sceneName"`
-		Name  string `json:"sourceName"`
-	}
-	req := request{
-		Scene: scene,
-		Name:  name,
-	}
-	raw, err := c.request(req, "GetSceneItemId")
-	if err != nil {
-		return 0, err
-	}
-	res := struct {
-		Id int `json:"sceneItemId"`
-	}{}
-	err = json.Unmarshal(raw, &res)
-	if err != nil {
-		return 0, err
-	}
-	return res.Id, nil
-}
-
 func (c *Client) GetSceneItemTransform(scene string, name string) (Transform, error) {
 	type request struct {
 		Scene string `json:"sceneName"`
 		Item  int    `json:"sceneItemId"`
 	}
-	id, err := c.GetSceneItemId(scene, name)
+	id, err := c.getSceneItemId(scene, name)
 	if err != nil {
 		return Transform{}, err
 	}
@@ -195,7 +196,7 @@ func (c *Client) SetSceneItemLocked(scene string, name string, locked bool) erro
 		Item   int    `json:"sceneItemId"`
 		Locked bool   `json:"sceneItemLocked"`
 	}
-	id, err := c.GetSceneItemId(scene, name)
+	id, err := c.getSceneItemId(scene, name)
 	if err != nil {
 		return err
 	}
@@ -214,7 +215,7 @@ func (c *Client) SetSceneItemTransform(scene string, name string, transform Tran
 		Item      int       `json:"sceneItemId"`
 		Transform Transform `json:"sceneItemTransform"`
 	}
-	id, err := c.GetSceneItemId(scene, name)
+	id, err := c.getSceneItemId(scene, name)
 	if err != nil {
 		return err
 	}
@@ -233,7 +234,7 @@ func (c *Client) SetSceneItemVisible(scene string, name string, visible bool) er
 		Item    int    `json:"sceneItemId"`
 		Enabled bool   `json:"sceneItemEnabled"`
 	}
-	id, err := c.GetSceneItemId(scene, name)
+	id, err := c.getSceneItemId(scene, name)
 	if err != nil {
 		return err
 	}

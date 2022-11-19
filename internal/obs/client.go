@@ -20,6 +20,7 @@ type Client struct {
 	ws        *websocket.Conn
 	mx        *sync.Mutex
 	connected atomic.Bool
+	idCache   idCache
 
 	err map[uuid.UUID]chan error
 	rcv map[uuid.UUID]chan json.RawMessage
@@ -47,6 +48,7 @@ func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan er
 	c.ctx = ctx
 	c.mx = &sync.Mutex{}
 	c.connected.Store(false)
+	c.idCache = newIdCache()
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
 	conn, _, err := websocket.Dial(ctx, "ws://"+addr, nil)
