@@ -80,7 +80,7 @@ func (c *Client) DeleteScene(scene string) error {
 }
 
 func (c *Client) GetCanvasSize() (width int, height int, err error) {
-	raw, err := c.request(make(StringMap), "GetVideoSettings")
+	raw, err := c.request(nil, "GetVideoSettings")
 	if err != nil {
 		return 0, 0, err
 	}
@@ -93,7 +93,7 @@ func (c *Client) GetCanvasSize() (width int, height int, err error) {
 }
 
 func (c *Client) GetSceneCollectionList() (names []string, active string, err error) {
-	raw, err := c.request(make(StringMap), "GetSceneCollectionList")
+	raw, err := c.request(nil, "GetSceneCollectionList")
 	if err != nil {
 		return nil, "", err
 	}
@@ -145,9 +145,11 @@ func (c *Client) GetSceneItemTransform(scene string, name string) (Transform, er
 	if err != nil {
 		return Transform{}, err
 	}
-	t := Transform{}
-	err = json.Unmarshal(raw, &t)
-	return t, err
+	res := struct {
+		Transform Transform `json:"sceneItemTransform"`
+	}{}
+	err = json.Unmarshal(raw, &res)
+	return res.Transform, err
 }
 
 func (c *Client) GetSourceSettings(name string) (StringMap, error) {
