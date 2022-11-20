@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/jezek/xgb/xproto"
-	go_obs "github.com/woofdoggo/go-obs"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
@@ -40,9 +40,11 @@ func ResetCycle(conf cfg.Profile) error {
 	}
 
 	// Start OBS connection.
-	var obs *go_obs.Client
+	var obs *obs.Client
+	obsCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	if conf.Obs.Enabled {
-		client, obsErr, err := connectObs(conf, len(instances))
+		client, obsErr, err := connectObs(obsCtx, conf, len(instances))
 		if err != nil {
 			return err
 		}
@@ -72,7 +74,9 @@ func ResetCycle(conf cfg.Profile) error {
 
 	// Focus first instance and set OBS scene.
 	x.FocusWindow(instances[0].Wid)
-	setScene(obs, "Instance 1")
+	if obs != nil {
+		obs.SetScene("MC 1")
+	}
 
 	// Start log readers.
 	logUpdates, stopLogReaders, err := startLogReaders(instances)
@@ -88,8 +92,8 @@ func ResetCycle(conf cfg.Profile) error {
 		return err
 	}
 	uiResetUpdates <- resetCount
-	ctx, cancelUi := context.WithCancel(context.Background())
-	display.Run(ctx, false)
+	uiCtx, cancelUi := context.WithCancel(context.Background())
+	display.Run(uiCtx, false)
 	defer display.Fini()
 	defer cancelUi()
 	printDebugInfo(x, conf, instances)
@@ -163,7 +167,9 @@ func ResetCycle(conf cfg.Profile) error {
 					}
 					v14_reset(x, instances[current], &lastTime[current])
 					current = next
-					err = setScene(obs, fmt.Sprintf("Instance %d", current+1))
+					if obs != nil {
+						obs.SetScene(fmt.Sprintf("MC %d", current+1))
+					}
 					if err != nil {
 						log.Printf("ResetCycle err: failed to set scene: %s", err)
 					}
