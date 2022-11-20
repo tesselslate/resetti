@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 )
 
+// Transform holds information about the size and position of scene items.
 type Transform struct {
 	X      float64 `json:"positionX"`
 	Y      float64 `json:"positionY"`
@@ -52,6 +53,8 @@ func (c *Client) AddSceneItem(scene string, source string) error {
 	return err
 }
 
+// CreateSceneCollection creates a new scene collection and switches to it. If
+// the given scene collection already exists, an error is returned.
 func (c *Client) CreateSceneCollection(name string) error {
 	type request struct {
 		SceneCollection string `json:"sceneCollectionName"`
@@ -102,6 +105,7 @@ func (c *Client) DeleteScene(scene string) error {
 	return err
 }
 
+// GetCanvasSize returns the current base/canvas resolution of OBS.
 func (c *Client) GetCanvasSize() (width int, height int, err error) {
 	raw, err := c.request(nil, "GetVideoSettings")
 	if err != nil {
@@ -128,6 +132,8 @@ func (c *Client) GetSceneCollectionList() (names []string, active string, err er
 	return res.Collections, res.Current, err
 }
 
+// GetSceneItemTransform returns information about the size and position of the
+// given scene item.
 func (c *Client) GetSceneItemTransform(scene string, name string) (Transform, error) {
 	type request struct {
 		Scene string `json:"sceneName"`
@@ -150,22 +156,6 @@ func (c *Client) GetSceneItemTransform(scene string, name string) (Transform, er
 	}{}
 	err = json.Unmarshal(raw, &res)
 	return res.Transform, err
-}
-
-func (c *Client) GetSourceSettings(name string) (StringMap, error) {
-	type request struct {
-		Name string `json:"inputName"`
-	}
-	req := request{name}
-	raw, err := c.request(req, "GetInputSettings")
-	if err != nil {
-		return nil, err
-	}
-	res := struct {
-		Settings StringMap `json:"inputSettings"`
-	}{}
-	err = json.Unmarshal(raw, &res)
-	return res.Settings, err
 }
 
 func (c *Client) SetScene(scene string) error {

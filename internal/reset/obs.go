@@ -57,17 +57,12 @@ func getWallSize(o *obs.Client, instances int) (uint16, uint16, error) {
 // setSources sets the correct window captures for each Minecraft source.
 func setSources(o *obs.Client, instances []Instance) error {
 	for i, v := range instances {
-		opts, err := o.GetSourceSettings(
+		err := o.SetSourceSettings(
 			fmt.Sprintf("MC %d", i+1),
-		)
-		if err != nil {
-			return err
-		}
-		opts["capture_window"] = strconv.Itoa(int(v.Wid))
-		err = o.SetSourceSettings(
-			fmt.Sprintf("MC %d", i+1),
-			opts,
-			false,
+			obs.StringMap{
+				"capture_window": strconv.Itoa(int(v.Wid)),
+			},
+			true,
 		)
 		if err != nil {
 			return err

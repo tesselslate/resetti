@@ -1,3 +1,5 @@
+// Package obs provides a basic obs-websocket 5.0 client. It supports all of
+// the API calls needed for resetti to function.
 package obs
 
 import (
@@ -8,19 +10,18 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/google/uuid"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
 
+// Client manages an OBS websocket connection.
 type Client struct {
-	ctx       context.Context
-	ws        *websocket.Conn
-	mx        *sync.Mutex
-	connected atomic.Bool
-	idCache   idCache
+	ctx     context.Context
+	ws      *websocket.Conn
+	mx      *sync.Mutex
+	idCache idCache
 
 	err map[uuid.UUID]chan error
 	rcv map[uuid.UUID]chan json.RawMessage
@@ -28,11 +29,14 @@ type Client struct {
 
 type StringMap map[string]any
 
+// websocketResponse contains the data for a single JSON message received from OBS.
+// It can represent any message received, such as an event or a request response.
 type websocketResponse struct {
 	Data json.RawMessage `json:"d"`
 	Op   int             `json:"op"`
 }
 
+// requestResponse contains data sent back from OBS as a result of a request.
 type requestResponse struct {
 	Id     uuid.UUID `json:"requestId"`
 	Status struct {
@@ -43,11 +47,12 @@ type requestResponse struct {
 	Data json.RawMessage `json:"responseData,omitempty"`
 }
 
+// Connect attempts to connect to an OBS instance at the given address. If
+// authentication is required, the given password will be used.
 func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan error, error) {
 	// Setup websocket connection.
 	c.ctx = ctx
 	c.mx = &sync.Mutex{}
-	c.connected.Store(false)
 	c.idCache = newIdCache()
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
@@ -138,10 +143,7 @@ func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan er
 	return errch, nil
 }
 
-func (c *Client) Connected() bool {
-	return c.connected.Load()
-}
-
+// request sends a request to the obs-websocket server with the given type and data.
 func (c *Client) request(data any, name string) (json.RawMessage, error) {
 	type rawRequest struct {
 		Op   int       `json:"op"`
@@ -178,11 +180,12 @@ func (c *Client) request(data any, name string) (json.RawMessage, error) {
 	}
 }
 
+// run starts the main client loop. It listens for messages from the
+// obs-websocket server until an error occurs with the websocket or the
+// provided context is cancelled.
 func (c *Client) run(ctx context.Context, errch chan<- error) {
-	c.connected.Store(true)
 	go func() {
 		defer c.ws.Close(websocket.StatusNormalClosure, "")
-		defer c.connected.Store(false)
 		for {
 			// Check if the context has been cancelled.
 			select {
