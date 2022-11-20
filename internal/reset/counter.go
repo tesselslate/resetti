@@ -9,8 +9,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/cfg"
 )
 
-func incrementResets(f *os.File, count int, countCh chan<- int) {
-	countCh <- count
+func incrementResets(f *os.File, count int) {
 	if f == nil {
 		return
 	}

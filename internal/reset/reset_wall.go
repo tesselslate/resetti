@@ -38,11 +38,9 @@ type wallState struct {
 	lastMouseId int
 	projector   xproto.Window
 
-	forceFreeze     chan int
-	toFreeze        chan int
-	toUnfreeze      chan int
-	stateUpdates    chan<- LogUpdate
-	affinityUpdates chan<- affinityUpdate
+	forceFreeze chan int
+	toFreeze    chan int
+	toUnfreeze  chan int
 
 	affIdle   unix.CPUSet
 	affLow    unix.CPUSet
@@ -53,7 +51,6 @@ type wallState struct {
 	resetFile  *os.File
 	resetCount int
 	resetCh    chan struct{}
-	uiResetCh  chan<- int
 }
 
 func ResetWall(conf cfg.Profile) error {
@@ -195,21 +192,7 @@ func ResetWall(conf cfg.Profile) error {
 		wall.threads[i] = threads
 	}
 
-	// Start UI.
-	display := newResetDisplay(instances)
-	uiStateUpdates, uiAffinityUpdates, uiResetUpdates, uiStopped, err := display.Init()
-	if err != nil {
-		return err
-	}
-	uiCtx, uiCancel := context.WithCancel(context.Background())
-	display.Run(uiCtx, conf.AdvancedWall.Affinity)
-	wall.stateUpdates = uiStateUpdates
-	wall.affinityUpdates = uiAffinityUpdates
-	wall.uiResetCh = uiResetUpdates
-	uiResetUpdates <- resetCount
-	defer display.Fini()
-	defer uiCancel()
-	printDebugInfo(x, conf, instances)
+	printDebugInfo(x, instances)
 
 	// Start 50ms unfreeze timer.
 	timer := make(chan struct{})
@@ -227,8 +210,6 @@ func ResetWall(conf cfg.Profile) error {
 	x.FocusWindow(projector)
 	for {
 		select {
-		case <-uiStopped:
-			return nil
 		case <-timer:
 			toReset := conf.AdvancedWall.ConcResets - wallGetResettingCount(&wall)
 			done := false
@@ -259,24 +240,16 @@ func ResetWall(conf cfg.Profile) error {
 				}
 			}
 			resetCount += inc
-			incrementResets(resetFile, resetCount, uiResetUpdates)
+			incrementResets(resetFile, resetCount)
 		case id := <-wall.forceFreeze:
 			if wall.states[id].State == StGenerating || wall.states[id].State == StPreview {
 				wall.frozen[id] = true
 				wallFreeze(instances[id])
-				uiStateUpdates <- LogUpdate{
-					Id:    id,
-					State: InstanceState{State: StFrozenGen},
-				}
 				wall.toUnfreeze <- id
 			}
 		case id := <-wall.toFreeze:
 			if wall.states[id].State == StIdle && !wall.frozen[id] {
 				wallFreeze(instances[id])
-				uiStateUpdates <- LogUpdate{
-					Id:    id,
-					State: InstanceState{State: StFrozenIdle},
-				}
 			}
 		case update := <-threadUpdates:
 			if update.Added {
@@ -326,7 +299,6 @@ func ResetWall(conf cfg.Profile) error {
 
 			// Update state.
 			wall.states[update.Id] = update.State
-			uiStateUpdates <- update
 
 			// Update the instance's affinity state if needed.
 			if !conf.AdvancedWall.Affinity {
@@ -509,10 +481,6 @@ func wallPlay(w *wallState, id int, timestamp xproto.Timestamp) {
 		wallSetAffinity(w, w.instances[id], affActive)
 	}
 	w.states[id].State = StIngame
-	w.stateUpdates <- LogUpdate{
-		Id:    id,
-		State: w.states[id],
-	}
 	go w.obs.SetScene(fmt.Sprintf("Instance %d", id+1))
 	err := wallUngrabKeys(w)
 	if err != nil {
@@ -691,10 +659,6 @@ func wallSetAffinity(w *wallState, inst Instance, affinity int) {
 		set = w.affActive
 	}
 	w.affinity[inst.Id] = affinity
-	w.affinityUpdates <- affinityUpdate{
-		Id:   inst.Id,
-		Cpus: set,
-	}
 	for tid := range w.threads[inst.Id] {
 		unix.SchedSetaffinity(tid, &set)
 	}
