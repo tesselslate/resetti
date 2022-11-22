@@ -85,18 +85,7 @@ func ResetCycle(conf cfg.Profile) error {
 	}
 	defer stopLogReaders()
 
-	// Start UI.
-	display := newResetDisplay(instances)
-	uiStateUpdates, _, uiResetUpdates, uiStopped, err := display.Init()
-	if err != nil {
-		return err
-	}
-	uiResetUpdates <- resetCount
-	uiCtx, cancelUi := context.WithCancel(context.Background())
-	display.Run(uiCtx, false)
-	defer display.Fini()
-	defer cancelUi()
-	printDebugInfo(x, conf, instances)
+	printDebugInfo(x, instances)
 
 	// Start main loop.
 	current := 0
@@ -104,15 +93,12 @@ func ResetCycle(conf cfg.Profile) error {
 	lastTime := make([]xproto.Timestamp, len(instances))
 	for {
 		select {
-		case <-uiStopped:
-			return nil
 		case update := <-logUpdates:
 			// If a log reader channel was closed, something went wrong.
 			if update.Done {
 				log.Println("ResetCycle err: log reader closed")
 				return nil
 			}
-			uiStateUpdates <- update
 			// Ignore updates which do not modify the main state.
 			if update.State.State == states[update.Id].State {
 				continue
@@ -174,7 +160,7 @@ func ResetCycle(conf cfg.Profile) error {
 						log.Printf("ResetCycle err: failed to set scene: %s", err)
 					}
 					go runHook(conf.Hooks.Reset)
-					incrementResets(resetFile, resetCount, uiResetUpdates)
+					incrementResets(resetFile, resetCount)
 				}
 			}
 		}

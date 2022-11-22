@@ -2,7 +2,6 @@ package reset
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -71,13 +70,8 @@ func startLogReaders(instances []Instance) (<-chan LogUpdate, context.CancelFunc
 }
 
 // printDebugInfo prints some debug information to the log.
-func printDebugInfo(x *x11.Client, conf cfg.Profile, instances []Instance) {
+func printDebugInfo(x *x11.Client, instances []Instance) {
 	// Print debug information.
-	serializedConf, err := json.Marshal(conf)
-	if err != nil {
-		log.Println("Failed to print configuration")
-	}
-	log.Printf("Config:\n%s\n", string(serializedConf))
 	log.Printf("Running %d instances\n", len(instances))
 	log.Printf("Root: %d\n", x.RootWindow())
 	log.Println("WM properties:")

@@ -8,7 +8,6 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/jezek/xgb v1.0.1
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
-	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 	nhooyr.io/websocket v1.8.7
 )
 
