@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/jezek/xgb/xproto"
@@ -123,17 +124,22 @@ func (i *Instance) SetAffinity(cpus *unix.CPUSet) error {
 		if err != nil {
 			continue
 		}
-		unix.SchedSetaffinity(tid, cpus)
+		// It's possible that a thread was killed since we read the directory.
+		// Return the error only if it is not an ERSCH (no such process.)
+		if err = unix.SchedSetaffinity(tid, cpus); err != syscall.Errno(3) {
+			return err
+		}
+
 	}
 	return nil
 }
 
 // Stretch stretches the instance's window.
-func (i *Instance) Stretch(conf cfg.Profile) {
+func (i *Instance) Stretch(conf cfg.Profile) error {
 	if !conf.Wall.StretchWindows {
-		return
+		return nil
 	}
-	i.x.MoveWindow(
+	return i.x.MoveWindow(
 		i.Wid,
 		0,
 		0,
@@ -155,11 +161,11 @@ func (i *Instance) Unpause(timestamp xproto.Timestamp) {
 }
 
 // Unstretch resizes the window back to its normal dimensions.
-func (i *Instance) Unstretch(conf cfg.Profile) {
+func (i *Instance) Unstretch(conf cfg.Profile) error {
 	if !conf.Wall.StretchWindows {
-		return
+		return nil
 	}
-	i.x.MoveWindow(
+	return i.x.MoveWindow(
 		i.Wid,
 		0,
 		0,

@@ -7,11 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -100,13 +100,16 @@ func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan er
 			output = append(output, []byte(challenge)...)
 			sha = sha256.Sum256(output)
 			base64.StdEncoding.Encode(output, sha[:])
-			wsjson.Write(ctx, c.ws, StringMap{
+			err = wsjson.Write(ctx, c.ws, StringMap{
 				"op": 1,
 				"d": StringMap{
 					"rpcVersion":     1,
 					"authentication": string(output),
 				},
 			})
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}

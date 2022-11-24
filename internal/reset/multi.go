@@ -93,14 +93,26 @@ func (m *Multi) Run() error {
 	}
 
 	// Perform miscellaneous tasks.
-	m.x.GrabKey(m.conf.Keys.Focus, m.x.RootWindow())
-	m.x.GrabKey(m.conf.Keys.Reset, m.x.RootWindow())
-	defer m.x.UngrabKey(m.conf.Keys.Focus, m.x.RootWindow())
-	defer m.x.UngrabKey(m.conf.Keys.Reset, m.x.RootWindow())
+	if err = m.x.GrabKey(m.conf.Keys.Focus, m.x.RootWindow()); err != nil {
+		return errors.Wrap(err, "failed to grab focus key")
+	}
+	if err = m.x.GrabKey(m.conf.Keys.Reset, m.x.RootWindow()); err != nil {
+		return errors.Wrap(err, "failed to grab reset key")
+	}
+	defer func() {
+		// It doesn't matter if these return an error because the program is
+		// exiting and the X server will remove any grabs then anyway.
+		_ = m.x.UngrabKey(m.conf.Keys.Focus, m.x.RootWindow())
+		_ = m.x.UngrabKey(m.conf.Keys.Reset, m.x.RootWindow())
+	}()
 	m.instances[0].Focus()
 	if m.obs != nil {
-		setSources(m.obs, m.instances)
-		m.obs.SetScene("Instance 1")
+		if err = setSources(m.obs, m.instances); err != nil {
+			return errors.Wrap(err, "failed to set OBS sources")
+		}
+		if err = m.obs.SetScene("Instance 1"); err != nil {
+			return errors.Wrap(err, "failed to set scene")
+		}
 	}
 	printDebugInfo(m.x, m.instances)
 	xEvt, xErr, err := m.x.Poll()

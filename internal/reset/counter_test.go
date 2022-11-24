@@ -13,8 +13,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/reset"
 )
 
-const tmpname = "/tmp/resetti-test"
-
 var enabledConf = cfg.Profile{
 	General: struct {
 		ResetType   string "toml:\"type\""
@@ -22,7 +20,6 @@ var enabledConf = cfg.Profile{
 		CountPath   string "toml:\"resets_file\""
 	}{
 		CountResets: true,
-		CountPath:   tmpname,
 	},
 }
 
@@ -44,9 +41,11 @@ func makeCounter(t *testing.T, conf cfg.Profile) {
 }
 
 func TestCounterCreate(t *testing.T) {
-	defer os.Remove(tmpname)
-	makeCounter(t, enabledConf)
-	content, err := os.ReadFile(tmpname)
+	path := t.TempDir() + "/count"
+	conf := enabledConf
+	conf.General.CountPath = path
+	makeCounter(t, conf)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,13 +63,15 @@ func TestCounterDisabled(t *testing.T) {
 }
 
 func TestCounterRead(t *testing.T) {
-	err := os.WriteFile(tmpname, []byte("1000"), 0644)
-	defer os.Remove(tmpname)
+	path := t.TempDir() + "/count"
+	conf := enabledConf
+	conf.General.CountPath = path
+	err := os.WriteFile(path, []byte("1000"), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeCounter(t, enabledConf)
-	content, err := os.ReadFile(tmpname)
+	makeCounter(t, conf)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -38,12 +38,12 @@ func NewLogReader(ctx context.Context, wg *sync.WaitGroup, info mc.InstanceInfo)
 	reader := bufio.NewReader(fh)
 	watch, err := fsnotify.NewWatcher()
 	if err != nil {
-		fh.Close()
+		_ = fh.Close()
 		return LogReader{}, errors.Wrap(err, "failed to open watcher")
 	}
 	if err = watch.Add(logFile); err != nil {
-		watch.Close()
-		fh.Close()
+		_ = watch.Close()
+		_ = fh.Close()
 		return LogReader{}, errors.Wrap(err, "failed to watch log")
 	}
 	errch := make(chan error, 1)
@@ -59,8 +59,8 @@ func NewLogReader(ctx context.Context, wg *sync.WaitGroup, info mc.InstanceInfo)
 	}
 	_, err = lr.readState()
 	if err != nil {
-		watch.Close()
-		fh.Close()
+		_ = watch.Close()
+		_ = fh.Close()
 		return LogReader{}, errors.Wrap(err, "failed to read log")
 	}
 	go lr.run(ctx, wg, errch, evtch)
@@ -70,8 +70,8 @@ func NewLogReader(ctx context.Context, wg *sync.WaitGroup, info mc.InstanceInfo)
 func (r *LogReader) run(ctx context.Context, wg *sync.WaitGroup, errch chan<- error, evtch chan<- mc.InstanceState) {
 	wg.Add(1)
 	defer func() {
-		r.watch.Close()
-		r.file.Close()
+		_ = r.watch.Close()
+		_ = r.file.Close()
 		close(evtch)
 		close(errch)
 		log.Printf("Service: Log reader %d stopped\n", r.id)

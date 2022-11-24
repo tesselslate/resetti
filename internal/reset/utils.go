@@ -1,7 +1,6 @@
 package reset
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -11,26 +10,11 @@ import (
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
-	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 	"golang.org/x/sys/unix"
 )
-
-// connectObs attempts to connect to OBS.
-func connectObs(ctx context.Context, conf cfg.Profile, instanceCount int) (*obs.Client, <-chan error, error) {
-	obs := &obs.Client{}
-	errch, err := obs.Connect(ctx, fmt.Sprintf("localhost:%d", conf.Obs.Port), conf.Obs.Password)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = obs.SetSceneCollection(fmt.Sprintf("resetti - %d multi", instanceCount))
-	if err != nil {
-		return nil, nil, err
-	}
-	return obs, errch, nil
-}
 
 // findProjector finds the OBS wall projector (if open.)
 func findProjector(c *x11.Client) (xproto.Window, error) {

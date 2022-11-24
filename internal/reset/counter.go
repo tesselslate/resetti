@@ -33,7 +33,7 @@ func NewCounter(ctx context.Context, wg *sync.WaitGroup, conf cfg.Profile) (Coun
 	content := make([]byte, 32)
 	read, err := file.Read(content)
 	if err != nil && err != io.EOF {
-		file.Close()
+		_ = file.Close()
 		return Counter{}, err
 	}
 	var count int
@@ -41,7 +41,7 @@ func NewCounter(ctx context.Context, wg *sync.WaitGroup, conf cfg.Profile) (Coun
 		content = content[:read]
 		count, err = strconv.Atoi(strings.TrimSpace(string(content)))
 		if err != nil {
-			file.Close()
+			_ = file.Close()
 			return Counter{}, err
 		}
 	}
@@ -66,7 +66,10 @@ func (c *Counter) Increment() {
 func (c *Counter) run(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer func() {
-		c.file.Close()
+		if err := c.file.Close(); err != nil {
+			log.Printf("Reset counter failed to close: %s\n", err)
+			log.Printf("Here's your reset count! Back it up: %d\n", c.count)
+		}
 		log.Println("Service: Reset counter stopped")
 		wg.Done()
 	}()

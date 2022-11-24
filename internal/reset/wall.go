@@ -29,8 +29,7 @@ const (
 	// affLow is used when the instance is past the user's `low_threshold`.
 	affLow
 
-	// affHigh is used when the instance has not yet reached the `low_threshold`
-	// and there is no active instance.
+	// affHigh is used when the instance has not yet reached the `low_threshold`.
 	affHigh
 
 	// affActive is used for the currently active instance.
@@ -145,9 +144,14 @@ func (m *Wall) Run() error {
 	// Disable all lock icons (some may be on from the last time resetti
 	// was used.)
 	for i := 1; i <= len(m.instances); i += 1 {
-		m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", i), false)
+		err = m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", i), false)
+		if err != nil {
+			return errors.Wrap(err, "failed to make lock invisible")
+		}
 	}
-	m.obs.SetScene("Wall")
+	if err = m.obs.SetScene("Wall"); err != nil {
+		return errors.Wrap(err, "failed to set scene")
+	}
 
 	// Setup reset counter.
 	counter, err := NewCounter(ctx, &wg, m.conf)
@@ -179,9 +183,15 @@ func (m *Wall) Run() error {
 	}
 
 	// Start the main loop.
-	m.x.GrabKey(m.conf.Keys.Focus, m.x.RootWindow())
-	m.x.GrabKey(m.conf.Keys.Reset, m.x.RootWindow())
-	m.GrabWallKeys()
+	if err = m.x.GrabKey(m.conf.Keys.Focus, m.x.RootWindow()); err != nil {
+		return errors.Wrap(err, "failed to grab focus key")
+	}
+	if err = m.x.GrabKey(m.conf.Keys.Reset, m.x.RootWindow()); err != nil {
+		return errors.Wrap(err, "failed to grab reset key")
+	}
+	if err = m.GrabWallKeys(); err != nil {
+		return errors.Wrap(err, "failed to grab wall keys")
+	}
 	m.FocusProjector()
 	for {
 		select {
@@ -278,7 +288,7 @@ func (m *Wall) CreateSleepbgLock() {
 	if err != nil {
 		log.Printf("Failed to create sleepbg.lock: %s\n", err)
 	}
-	file.Close()
+	_ = file.Close()
 }
 
 // DeleteSleepbgLock deletes the sleepbg.lock file if the user has disabled it
@@ -314,9 +324,13 @@ func (m *Wall) FocusProjector() {
 // GotoWall returns to the wall scene.
 func (m *Wall) GotoWall() {
 	m.current = -1
-	go m.obs.SetScene("Wall")
+	if err := m.obs.SetScene("Wall"); err != nil {
+		log.Printf("Failed to go to wall scene: %s\n", err)
+	}
 	m.FocusProjector()
-	m.GrabWallKeys()
+	if err := m.GrabWallKeys(); err != nil {
+		log.Printf("Failed to grab wall keys: %s\n", err)
+	}
 	m.DeleteSleepbgLock()
 	m.SetAffinities()
 }
@@ -376,7 +390,9 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 	m.states[m.current].State = mc.StDirt
 	m.SetAffinity(m.current, affHigh)
 	if m.conf.Wall.StretchWindows {
-		m.instances[m.current].Stretch(m.conf)
+		if err := m.instances[m.current].Stretch(m.conf); err != nil {
+			log.Printf("Failed to stretch instance: %s\n", err)
+		}
 	}
 	go runHook(m.conf.Hooks.Reset)
 	time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
@@ -492,11 +508,17 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
 	}
 	m.SetAffinity(id, affActive)
 	m.states[id].State = mc.StIngame
-	go m.obs.SetScene(fmt.Sprintf("Instance %d", id+1))
-	m.UngrabWallKeys()
+	if err := m.obs.SetScene(fmt.Sprintf("Instance %d", id+1)); err != nil {
+		log.Printf("Failed to set scene: %s\n", err)
+	}
+	if err := m.UngrabWallKeys(); err != nil {
+		log.Printf("Failed to ungrab wall keys: %s\n", err)
+	}
 	m.instances[id].FocusAndUnpause(timestamp, true)
 	if m.conf.Wall.StretchWindows {
-		m.instances[id].Unstretch(m.conf)
+		if err := m.instances[id].Unstretch(m.conf); err != nil {
+			log.Printf("Failed to unstretch instance: %s\n", err)
+		}
 	}
 	m.SetLocked(id, false)
 	m.current = id
