@@ -6,8 +6,11 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
+var ErrDied = errors.New("connection closed")
+
 // Poll starts a separate goroutine which will listen for and forward
 // various input events (keypresses, mouse movements, button presses).
+// TODO: use context/wg instead of stoppoll
 func (c *Client) Poll() (<-chan XEvent, <-chan error, error) {
 	if c.polling {
 		return nil, nil, errors.New("already polling")
@@ -39,7 +42,7 @@ func (c *Client) poll(ch chan<- XEvent, errCh chan<- error) {
 		// Wait for the next X event/error and process it.
 		evt, err := c.conn.WaitForEvent()
 		if evt == nil && err == nil {
-			errCh <- errors.New("connection died")
+			errCh <- ErrDied
 			return
 		}
 		if err != nil {

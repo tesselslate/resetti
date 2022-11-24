@@ -60,7 +60,7 @@ Contributions are welcome.
 - Please use proper English for documentation and code comments.
 - Ensure that code changes are properly formatted with `go fmt ./...`.
 - Perform at least some testing before submitting code changes within a PR.
-- Try to keep lines wrapped at roughly 80 lines where possible.
+- Try to keep lines wrapped at roughly 80 columns where possible.
 
 ## License
 

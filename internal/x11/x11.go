@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,6 +64,24 @@ func (c *Client) Click(win xproto.Window) error {
 			evt,
 		).Check()
 	}
+	move := xproto.MotionNotifyEvent{
+		Sequence:   0,
+		Detail:     0,
+		Time:       xproto.TimeCurrentTime,
+		Root:       win,
+		Event:      win,
+		Child:      win,
+		RootX:      0,
+		RootY:      0,
+		EventX:     0,
+		EventY:     0,
+		State:      0,
+		SameScreen: true,
+	}
+	raw := move.Bytes()
+	if err := send(string(raw)); err != nil {
+		return err
+	}
 	evt := xproto.ButtonPressEvent{
 		Sequence:   0,
 		Detail:     1,
@@ -76,7 +95,7 @@ func (c *Client) Click(win xproto.Window) error {
 		EventY:     0,
 		SameScreen: true,
 	}
-	raw := evt.Bytes()
+	raw = evt.Bytes()
 	if err := send(string(raw)); err != nil {
 		return err
 	}
@@ -351,7 +370,7 @@ func (c *Client) RootWindow() xproto.Window {
 }
 
 // sendKey sends a key event with the given parameters.
-func (c *Client) sendKey(state bool, code xproto.Keycode, win xproto.Window, timestamp xproto.Timestamp) error {
+func (c *Client) sendKey(state bool, code xproto.Keycode, win xproto.Window, timestamp xproto.Timestamp) {
 	evt := xproto.KeyPressEvent{
 		Sequence:   0,
 		Detail:     code,
@@ -372,13 +391,16 @@ func (c *Client) sendKey(state bool, code xproto.Keycode, win xproto.Window, tim
 	if !state {
 		raw[0] = 3
 	}
-	return xproto.SendEventChecked(
+	err := xproto.SendEventChecked(
 		c.conn,
 		true,
 		win,
 		xproto.EventMaskKeyPress|xproto.EventMaskKeyRelease,
 		string(raw),
 	).Check()
+	if err != nil {
+		log.Printf("X11 sendKey error: %s\n", err)
+	}
 }
 
 // SendKeyDown sends a key-down event with the given parameters. It increments
@@ -387,10 +409,9 @@ func (c *Client) sendKey(state bool, code xproto.Keycode, win xproto.Window, tim
 //
 // See:
 // https://github.com/glfw/glfw/blob/c18851f52ec9704eb06464058a600845ec1eada1/src/x11_window.c#L1250
-func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) error {
-	err := c.sendKey(true, code, win, *timestamp)
+func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) {
+	c.sendKey(true, code, win, *timestamp)
 	*timestamp += 1
-	return err
 }
 
 // SendKeyUp sends a key-up event with the given parameters.
@@ -398,9 +419,8 @@ func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *
 // Unlike SendKeyDown, it does *not* increment the timestamp parameter as
 // GLFW's input handling does not require the timestamp to increase on key
 // release events.
-func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) error {
-	err := c.sendKey(false, code, win, *timestamp)
-	return err
+func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) {
+	c.sendKey(false, code, win, *timestamp)
 }
 
 // SendKeyPress sends a key-down and key-up event with the given parameters.
@@ -415,13 +435,10 @@ func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xp
 //
 // See:
 // https://github.com/glfw/glfw/blob/c18851f52ec9704eb06464058a600845ec1eada1/src/x11_window.c#L1321
-func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) error {
-	err := c.sendKey(true, code, win, *timestamp)
+func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) {
+	c.sendKey(true, code, win, *timestamp)
 	*timestamp += 1
-	if err != nil {
-		return err
-	}
-	return c.sendKey(false, code, win, *timestamp)
+	c.sendKey(false, code, win, *timestamp)
 }
 
 // UngrabKey releases a grabbed key and returns it back to the X server.

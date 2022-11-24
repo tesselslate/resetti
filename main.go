@@ -8,7 +8,6 @@ import (
 
 	"github.com/woofdoggo/resetti/cmd"
 	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/reset"
 )
 
 //go:embed .notice
@@ -46,24 +45,7 @@ func main() {
 			fmt.Println("Created profile!")
 		}
 	default:
-		conf, err := cfg.GetProfile(os.Args[1])
-		if err != nil {
-			fmt.Println("Failed to load profile:", err)
-			os.Exit(1)
-		}
-		switch conf.General.ResetType {
-		case "standard":
-			err = reset.ResetCycle(*conf)
-		case "wall":
-			err = reset.ResetWall(*conf)
-		case "setseed":
-			err = reset.ResetSetseed(*conf)
-		}
-		if err != nil {
-			fmt.Println("resetti failed:")
-			fmt.Println(err)
-			os.Exit(1)
-		}
+		cmd.Run()
 	}
 }
 

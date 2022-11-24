@@ -60,6 +60,7 @@ type Profile struct {
 		CpusIdle     int  `toml:"affinity_idle"`
 		CpusLow      int  `toml:"affinity_low"`
 		CpusMid      int  `toml:"affinity_mid"`
+		CpusHigh     int  `toml:"affinity_high"`
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
 		Freeze       bool `toml:"freeze_idle"`
@@ -89,19 +90,19 @@ func GetFolder() (string, error) {
 }
 
 // GetProfile returns a specific configuration profile.
-func GetProfile(name string) (*Profile, error) {
+func GetProfile(name string) (Profile, error) {
 	dir, err := GetFolder()
 	if err != nil {
-		return nil, err
+		return Profile{}, err
 	}
 	file, err := os.ReadFile(dir + name + ".toml")
 	if err != nil {
-		return nil, err
+		return Profile{}, err
 	}
-	conf := &Profile{}
+	conf := Profile{}
 	err = toml.Unmarshal(file, &conf)
 	if err != nil {
-		return nil, err
+		return Profile{}, err
 	}
 
 	// Validate configuration.
@@ -113,28 +114,28 @@ func GetProfile(name string) (*Profile, error) {
 			mid := cpus < conf.AdvancedWall.CpusMid
 			active := cpus < conf.AdvancedWall.CpusActive
 			if idle || low || mid || active {
-				return nil, errors.New("too many CPUs set in advanced affinity")
+				return Profile{}, errors.New("too many CPUs set in advanced affinity")
 			}
 		}
 		if conf.AdvancedWall.ConcResets > 0 && !conf.AdvancedWall.Freeze {
-			return nil, errors.New("instance freezing must be enabled for maximum concurrent resets")
+			return Profile{}, errors.New("instance freezing must be enabled for maximum concurrent resets")
 		}
 		if conf.Keys.Focus == conf.Keys.Reset {
-			return nil, errors.New("keybinds cannot be the same")
+			return Profile{}, errors.New("keybinds cannot be the same")
 		}
 		a := conf.Keys.WallReset
 		b := conf.Keys.WallResetOthers
 		c := conf.Keys.WallPlay
 		d := conf.Keys.WallLock
 		if a == b || a == c || a == d || b == c || b == d || c == d {
-			return nil, errors.New("keybinds cannot be the same")
+			return Profile{}, errors.New("keybinds cannot be the same")
 		}
 		mode := conf.General.ResetType
 		if mode != "standard" && mode != "wall" && mode != "setseed" {
-			return nil, errors.New("invalid reset type")
+			return Profile{}, errors.New("invalid reset type")
 		}
 		if mode != "standard" && !conf.Obs.Enabled {
-			return nil, errors.New("obs must be enabled for this reset mode")
+			return Profile{}, errors.New("obs must be enabled for this reset mode")
 		}
 	}
 
@@ -142,7 +143,7 @@ func GetProfile(name string) (*Profile, error) {
 	if conf.Wall.SleepBgLock && conf.Wall.SleepBgLockPath == "" {
 		userDir, err := os.UserHomeDir()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get user dir for sleepbg lock: %s", err)
+			return Profile{}, fmt.Errorf("failed to get user dir for sleepbg lock: %s", err)
 		}
 		conf.Wall.SleepBgLockPath = userDir
 	}
