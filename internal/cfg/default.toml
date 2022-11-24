@@ -31,7 +31,7 @@ lock = ""
 unlock = ""
 
 [obs]
-# Whether or not to enable OBS websocket support. This is *required* for wall and setseed.
+# Whether or not to enable OBS websocket support. This is *required* for wall.
 enabled = false
 
 # The port to connect to OBS websocket on.

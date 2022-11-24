@@ -67,12 +67,6 @@ type Profile struct {
 		FreezeDelay  int  `toml:"freeze_delay"`
 		ConcResets   int  `toml:"max_concurrent_resets"`
 	} `toml:"advanced_wall"`
-	SS struct {
-		Seed   string  `toml:"seed"`
-		SpawnX float64 `toml:"spawn_x"`
-		SpawnZ float64 `toml:"spawn_z"`
-		Radius float64 `toml:"radius"`
-	} `toml:"setseed"`
 }
 
 // GetFolder returns the path to the user's configuration folder.
@@ -131,7 +125,7 @@ func GetProfile(name string) (Profile, error) {
 			return Profile{}, errors.New("keybinds cannot be the same")
 		}
 		mode := conf.General.ResetType
-		if mode != "standard" && mode != "wall" && mode != "setseed" {
+		if mode != "standard" && mode != "wall" {
 			return Profile{}, errors.New("invalid reset type")
 		}
 		if mode != "standard" && !conf.Obs.Enabled {

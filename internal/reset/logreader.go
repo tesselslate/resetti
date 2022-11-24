@@ -157,7 +157,6 @@ func (r *LogReader) readState() (updated bool, err error) {
 			// Skip chat messages.
 			continue
 		} else if strings.Contains(line, "Resetting a random seed") ||
-			strings.Contains(line, "Resetting the set seed") ||
 			strings.Contains(line, "Leaving world generation") {
 			// We got to the dirt screen.
 			r.state.State = mc.StDirt

@@ -29,7 +29,6 @@ You can refer to the documentation for detailed usage instructions:
 - [Troubleshooting](https://github.com/woofdoggo/resetti/blob/main/doc/troubleshooting.md)
 - [Traditional](https://github.com/woofdoggo/resetti/blob/main/doc/traditional.md)
 - [Wall](https://github.com/woofdoggo/resetti/blob/main/doc/wall.md)
-- [Set Seed](https://github.com/woofdoggo/resetti/blob/main/doc/setseed.md)
 
 Please report any bugs which you encounter. resetti is still beta software and
 is not guaranteed to work.
@@ -72,5 +71,3 @@ version. You can view the full license [here](https://raw.githubusercontent.com/
 - Wall
   - jojoe, for creating the wall
   - [MultiResetWall](https://github.com/specnr/multiresetwall) by Specnr and contributors
-- Set Seed
-  - [spawn-juicer](https://github.com/pjagada/spawn-juicer) by pjagada and contributors

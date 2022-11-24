@@ -107,7 +107,7 @@ To begin, you can create a new profile with `resetti new PROFILE_NAME`. This
 will place the default configuration at `~/.config/resetti/PROFILE_NAME.toml`.
 
 You can edit the values as needed. You can delete sections irrelevant to your
-configuration (e.g., you don't need the `setseed` section when using wall).
+configuration.
 
 ## Usage
 
