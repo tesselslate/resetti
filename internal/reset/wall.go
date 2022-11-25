@@ -256,6 +256,11 @@ func (m *Wall) Run() error {
 					m.HandleInput(id, evt.Key.Mod, evt.Time)
 				}
 			case x11.MoveEvent:
+				// Ignored any buffered keypresses/mouse clicks if we are not
+				// on the wall anymore.
+				if m.current != -1 {
+					continue
+				}
 				if evt.State&xproto.ButtonMask1 == 0 {
 					continue
 				}
@@ -268,6 +273,11 @@ func (m *Wall) Run() error {
 				m.lastMouseId = id
 				m.HandleInput(id, x11.Keymod(evt.State^xproto.ButtonMask1), evt.Time)
 			case x11.ButtonEvent:
+				// Ignored any buffered keypresses/mouse clicks if we are not
+				// on the wall anymore.
+				if m.current != -1 {
+					continue
+				}
 				x := uint16(evt.X) / instanceWidth
 				y := uint16(evt.Y) / instanceHeight
 				id := int((y * wallWidth) + x)
@@ -554,7 +564,7 @@ func (m *Wall) WallResetOthers(id int, timestamp xproto.Timestamp) {
 	m.WallPlay(id, timestamp)
 	for i := 0; i < len(m.instances); i++ {
 		if i != id {
-			m.WallReset(id, timestamp)
+			m.WallReset(i, timestamp)
 		}
 	}
 }
