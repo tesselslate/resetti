@@ -180,7 +180,7 @@ func (m *Wall) Run() error {
 	}
 
 	// Start polling for X events.
-	xEvt, xErr, err := m.x.Poll()
+	xEvt, xErr, err := m.x.Poll(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to start polling for X events")
 	}
@@ -398,10 +398,7 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 		return
 	}
 	log.Printf("Resetting %d from ingame\n", m.current)
-	m.instances[m.current].Reset(timestamp)
-	m.counter.Increment()
-	m.states[m.current].State = mc.StDirt
-	m.SetAffinity(m.current, affHigh)
+	m.reset(m.current, timestamp)
 	if m.conf.Wall.StretchWindows {
 		if err := m.instances[m.current].Stretch(m.conf); err != nil {
 			log.Printf("Failed to stretch instance: %s\n", err)
@@ -418,6 +415,17 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 		}
 	}
 	m.GotoWall()
+}
+
+// reset performs all of the common tasks for resetting an instance (those
+// which would be done both for resetting from ingame and on the wall.)
+func (m *Wall) reset(id int, timestamp xproto.Timestamp) {
+	m.instances[id].Reset(timestamp)
+	m.counter.Increment()
+	m.states[id].State = mc.StDirt
+	if m.conf.AdvancedWall.Affinity {
+		m.SetAffinity(id, affHigh)
+	}
 }
 
 // SetAffinities sets the CPU affinity of each instance to the correct value.
@@ -548,10 +556,7 @@ func (m *Wall) WallReset(id int, timestamp xproto.Timestamp) {
 	if state.Locked || state.Frozen || state.State == mc.StDirt {
 		return
 	}
-	m.SetAffinity(id, affHigh)
-	m.instances[id].Reset(timestamp)
-	m.counter.Increment()
-	m.states[id].State = mc.StDirt
+	m.reset(id, timestamp)
 	go runHook(m.conf.Hooks.WallReset)
 }
 

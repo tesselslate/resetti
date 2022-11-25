@@ -25,9 +25,7 @@ func NewClient() (*Client, error) {
 			atoms: make(map[string]xproto.Atom),
 			mu:    &sync.RWMutex{},
 		},
-		root:        xproto.Setup(xc).DefaultScreen(xc).Root,
-		polling:     false,
-		stopPolling: make(chan struct{}),
+		root: xproto.Setup(xc).DefaultScreen(xc).Root,
 	}, nil
 }
 

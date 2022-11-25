@@ -1,7 +1,9 @@
 package x11
 
 import (
+	"context"
 	"errors"
+	"log"
 
 	"github.com/jezek/xgb/xproto"
 )
@@ -10,31 +12,23 @@ var ErrDied = errors.New("connection closed")
 
 // Poll starts a separate goroutine which will listen for and forward
 // various input events (keypresses, mouse movements, button presses).
-// TODO: use context/wg instead of stoppoll
-func (c *Client) Poll() (<-chan XEvent, <-chan error, error) {
-	if c.polling {
-		return nil, nil, errors.New("already polling")
-	}
-	c.polling = true
+func (c *Client) Poll(ctx context.Context) (<-chan XEvent, <-chan error, error) {
 	ch := make(chan XEvent, CHANNEL_SIZE)
 	errCh := make(chan error, ERROR_CHANNEL_SIZE)
-	go c.poll(ch, errCh)
+	go c.poll(ctx, ch, errCh)
 	return ch, errCh, nil
 }
 
-// StopPoll stops polling for events.
-func (c *Client) StopPoll() {
-	c.stopPolling <- struct{}{}
-}
-
-func (c *Client) poll(ch chan<- XEvent, errCh chan<- error) {
+func (c *Client) poll(ctx context.Context, ch chan<- XEvent, errCh chan<- error) {
+	defer log.Println("Service: X11 poller stopped")
 	defer close(ch)
 	defer close(errCh)
+
+	log.Println("Service: X11 poller started")
 	for {
 		// Check if event polling should stop.
 		select {
-		case <-c.stopPolling:
-			c.polling = false
+		case <-ctx.Done():
 			return
 		default:
 		}
