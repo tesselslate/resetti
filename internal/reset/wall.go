@@ -163,13 +163,6 @@ func (m *Wall) Run() error {
 	}
 	m.counter = counter
 
-	// Unfreeze instances.
-	for i, v := range m.instances {
-		if err := v.Unfreeze(); err != nil {
-			log.Printf("Failed to unfreeze instance %d: %s\n", i, err)
-		}
-	}
-
 	// Setup affinity CPU masks.
 	if m.conf.AdvancedWall.Affinity {
 		m.cpusIdle = makeCpuSet(m.conf.AdvancedWall.CpusIdle)

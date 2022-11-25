@@ -97,11 +97,6 @@ func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
 	}
 }
 
-// Freeze suspends the instance process.
-func (i *Instance) Freeze() error {
-	return unix.Kill(int(i.Pid), unix.SIGSTOP)
-}
-
 // Pause presses F3+Escape to pause the instance. It is the responsibility of
 // the caller to ensure the instance is unfrozen. If an error occurs, it will
 // be logged.
@@ -152,11 +147,6 @@ func (i *Instance) Stretch(conf cfg.Profile) error {
 		conf.Wall.StretchWidth,
 		conf.Wall.StretchHeight,
 	)
-}
-
-// Unfreeze resumes the instance process.
-func (i *Instance) Unfreeze() error {
-	return unix.Kill(int(i.Pid), unix.SIGCONT)
 }
 
 // Unpause presses escape to unpause the instance. It is the responsibility

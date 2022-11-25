@@ -167,17 +167,3 @@ affinity_active = 12
 # The world generation percentage to reach before moving an instance
 # from high priority to low priority.
 low_threshold = 20
-
-# Whether or not to freeze instances after they have been idle for some time.
-# NOTE: DO NOT enable this with the OpenAL PulseAudio backend. You will likely
-# experience increased CPU utilization on all of your instances. Switch to
-# the `pipewire` driver if possible or do not use this setting.
-freeze_idle = false
-
-# The delay in milliseconds before freezing an instance after it has finished
-# generating.
-freeze_delay = 1000
-
-# The maximum number of "high-priority" instances which can reset at the same
-# time. Set to 0 to disable. Requires instance freezing to be enabled.
-max_concurrent_resets = 0

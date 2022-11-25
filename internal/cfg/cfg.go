@@ -64,9 +64,6 @@ type Profile struct {
 		CpusHigh     int  `toml:"affinity_high"`
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
-		Freeze       bool `toml:"freeze_idle"`
-		FreezeDelay  int  `toml:"freeze_delay"`
-		ConcResets   int  `toml:"max_concurrent_resets"`
 	} `toml:"advanced_wall"`
 }
 
@@ -111,9 +108,6 @@ func GetProfile(name string) (Profile, error) {
 			if idle || low || mid || active {
 				return Profile{}, errors.New("too many CPUs set in advanced affinity")
 			}
-		}
-		if conf.AdvancedWall.ConcResets > 0 && !conf.AdvancedWall.Freeze {
-			return Profile{}, errors.New("instance freezing must be enabled for maximum concurrent resets")
 		}
 		if conf.Keys.Focus == conf.Keys.Reset {
 			return Profile{}, errors.New("keybinds cannot be the same")
