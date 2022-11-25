@@ -140,6 +140,9 @@ func (m *Wall) Run() error {
 		return errors.Wrap(err, "failed to find projector")
 	}
 	m.projector = projector
+	if err = setSources(m.obs, m.instances); err != nil {
+		return errors.Wrap(err, "failed to set sources")
+	}
 
 	// Disable all lock icons (some may be on from the last time resetti
 	// was used.)
