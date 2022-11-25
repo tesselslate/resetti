@@ -132,7 +132,7 @@ func (i *Instance) SetAffinity(cpus *unix.CPUSet) error {
 		}
 		// It's possible that a thread was killed since we read the directory.
 		// Return the error only if it is not an ERSCH (no such process.)
-		if err = unix.SchedSetaffinity(tid, cpus); err != syscall.Errno(3) {
+		if err = unix.SchedSetaffinity(tid, cpus); err != syscall.Errno(3) && err != nil {
 			return err
 		}
 
