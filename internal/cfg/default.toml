@@ -97,6 +97,10 @@ wall_play = "Shift"
 wall_lock = "Ctrl"
 
 [wall]
+# Whether or not to press F1 when focusing instances. If you use this, turn on
+# f1 in your standard settings file.
+hide_gui = false
+
 # Whether or not to stretch windows while on the wall for better visibility.
 # Works with or without fullscreen.
 stretch_windows = false

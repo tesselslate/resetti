@@ -82,7 +82,13 @@ func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
 			i.lastTime(timestamp),
 		)
 	}
-
+	if i.conf.Wall.HideGui && i.conf.General.ResetType == "wall" {
+		i.x.SendKeyPress(
+			x11.KeyF1,
+			i.Wid,
+			i.lastTime(timestamp),
+		)
+	}
 	if i.conf.Reset.ClickFocus {
 		time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.Delay))
 		if err := i.x.Click(i.Wid); err != nil {

@@ -45,6 +45,7 @@ type Profile struct {
 		WallLock        x11.Keymod `toml:"wall_lock"`
 	} `toml:"keybinds"`
 	Wall struct {
+		HideGui         bool   `toml:"hide_gui"`
 		StretchWindows  bool   `toml:"stretch_windows"`
 		StretchWidth    uint32 `toml:"stretch_width"`
 		StretchHeight   uint32 `toml:"stretch_height"`
