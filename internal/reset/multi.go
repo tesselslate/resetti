@@ -119,7 +119,7 @@ func (m *Multi) Run() error {
 		}
 	}
 	printDebugInfo(m.x, m.instances)
-	xEvt, xErr, err := m.x.Poll(ctx)
+	xEvt, xErr, err := m.x.Poll(ctx, false)
 	if err != nil {
 		return err
 	}

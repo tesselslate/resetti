@@ -34,6 +34,11 @@ type ButtonEvent struct {
 	Time  xproto.Timestamp
 }
 
+type FocusEvent struct {
+	Win  xproto.Window
+	Time xproto.Timestamp
+}
+
 type KeyEvent struct {
 	Key   Key
 	State KeyState

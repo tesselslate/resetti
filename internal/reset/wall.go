@@ -50,6 +50,7 @@ type Wall struct {
 	states     []wallState
 	current    int
 
+	wallGrab    bool
 	lastMouseId int
 
 	cpusIdle   unix.CPUSet
@@ -171,7 +172,7 @@ func (m *Wall) Run() error {
 	}
 
 	// Start polling for X events.
-	xEvt, xErr, err := m.x.Poll(ctx)
+	xEvt, xErr, err := m.x.Poll(ctx, true)
 	if err != nil {
 		return errors.Wrap(err, "failed to start polling for X events")
 	}
@@ -277,6 +278,24 @@ func (m *Wall) Run() error {
 				}
 				m.lastMouseId = id
 				m.HandleInput(id, x11.Keymod(evt.State), evt.Time)
+			case x11.FocusEvent:
+				if m.current != -1 {
+					continue
+				}
+				win, err := findProjector(m.x)
+				if err != nil {
+					log.Printf("Failed to find projector (focus event): %s\n", err)
+					continue
+				}
+				if evt.Win == win && !m.wallGrab {
+					if err = m.GrabWallKeys(); err != nil {
+						log.Printf("Failed to grab wall keys (focus event): %s\n", err)
+					}
+				} else if evt.Win != win && m.wallGrab {
+					if err = m.UngrabWallKeys(); err != nil {
+						log.Printf("Failed to ungrab wall keys (focus event): %s\n", err)
+					}
+				}
 			}
 		}
 	}
@@ -332,8 +351,9 @@ func (m *Wall) GotoWall() {
 	m.SetAffinities()
 }
 
-// GrabWallKeys attempts to grab wall-only keys from the X server. TODO obs window only
+// GrabWallKeys attempts to grab wall-only keys from the X server.
 func (m *Wall) GrabWallKeys() error {
+	log.Println("Grabbing wall keys")
 	win := m.x.RootWindow()
 	for i := 0; i < len(m.instances); i++ {
 		wallMods := []x11.Keymod{
@@ -352,6 +372,7 @@ func (m *Wall) GrabWallKeys() error {
 			}
 		}
 	}
+	m.wallGrab = true
 	if m.conf.Wall.UseMouse {
 		return m.x.GrabPointer(win)
 	}
@@ -459,8 +480,9 @@ func (m *Wall) SetLocked(id int, locked bool) {
 	}
 }
 
-// UngrabWallKeys releases wall-only key grabs. TODO obs only
+// UngrabWallKeys releases wall-only key grabs.
 func (m *Wall) UngrabWallKeys() error {
+	log.Println("Ungrabbing wall keys")
 	win := m.x.RootWindow()
 	for i := 0; i < len(m.instances); i++ {
 		wallMods := []x11.Keymod{
@@ -479,6 +501,7 @@ func (m *Wall) UngrabWallKeys() error {
 			}
 		}
 	}
+	m.wallGrab = false
 	if m.conf.Wall.UseMouse {
 		return m.x.UngrabPointer()
 	}

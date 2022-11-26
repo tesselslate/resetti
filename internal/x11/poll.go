@@ -12,14 +12,25 @@ var ErrDied = errors.New("connection closed")
 
 // Poll starts a separate goroutine which will listen for and forward
 // various input events (keypresses, mouse movements, button presses).
-func (c *Client) Poll(ctx context.Context) (<-chan XEvent, <-chan error, error) {
+func (c *Client) Poll(ctx context.Context, substructures bool) (<-chan XEvent, <-chan error, error) {
 	ch := make(chan XEvent, CHANNEL_SIZE)
 	errCh := make(chan error, ERROR_CHANNEL_SIZE)
-	go c.poll(ctx, ch, errCh)
+	if substructures {
+		err := xproto.ChangeWindowAttributesChecked(
+			c.conn,
+			c.root,
+			xproto.CwEventMask,
+			[]uint32{xproto.EventMaskPropertyChange | xproto.EventMaskSubstructureNotify},
+		).Check()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	go c.poll(ctx, substructures, ch, errCh)
 	return ch, errCh, nil
 }
 
-func (c *Client) poll(ctx context.Context, ch chan<- XEvent, errCh chan<- error) {
+func (c *Client) poll(ctx context.Context, substructures bool, ch chan<- XEvent, errCh chan<- error) {
 	defer log.Println("Service: X11 poller stopped")
 	defer close(ch)
 	defer close(errCh)
@@ -78,6 +89,21 @@ func (c *Client) poll(ctx context.Context, ch chan<- XEvent, errCh chan<- error)
 				State: evt.State,
 				Time:  evt.Time,
 			}
+		case xproto.PropertyNotifyEvent:
+			atom, err := c.atoms.Get(c, "_NET_ACTIVE_WINDOW")
+			if err != nil {
+				errCh <- err
+				continue
+			}
+			if atom != evt.Atom {
+				continue
+			}
+			win, err := c.GetActiveWindow()
+			if err != nil {
+				errCh <- err
+				continue
+			}
+			ch <- FocusEvent{win, evt.Time}
 		}
 	}
 }

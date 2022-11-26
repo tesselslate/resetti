@@ -504,6 +504,10 @@ func (e ButtonEvent) Timestamp() xproto.Timestamp {
 	return e.Time
 }
 
+func (e FocusEvent) Timestamp() xproto.Timestamp {
+	return e.Time
+}
+
 func (e KeyEvent) Timestamp() xproto.Timestamp {
 	return e.Time
 }
