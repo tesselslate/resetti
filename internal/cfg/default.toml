@@ -43,16 +43,11 @@ password = ""
 
 [reset]
 # The amount of milliseconds to wait before certain actions (e.g. stretching
-# instance windows and clicking the mouse with `click_on_focus`.)
+# instance windows and unpausing)
 delay = 50
 
 # Whether or not to automatically unpause the game when an instance is focused.
 unpause_on_focus = true
-
-# Whether or not to automatically click the mouse when focusing an instance.
-# When disabled, you will have to click the mouse yourself. This is toggleable
-# as the old behavior was to not click at all.
-click_on_focus = true
 
 # - You can ignore any keybindings here which do not apply to your reset style.
 # - Alphanumerical and Fn keys (1-12) are supported.

@@ -70,11 +70,13 @@ func (i *Instance) Focus() {
 	}
 }
 
-// FocusAndUnpause focuses the instance's window and then unpauses and/or clicks
-// according to the user's configuration. If an error occurs, it will be logged.
+// FocusAndUnpause focuses the instance's window and then unpauses if the user
+// has set `unpause_on_focus` in their config. If an error occurs, it will be
+// logged.
 func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
 	i.Focus()
 
+	time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.Delay))
 	if i.conf.Reset.UnpauseFocus && idle {
 		i.x.SendKeyPress(
 			x11.KeyEscape,
@@ -88,12 +90,6 @@ func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
 			i.Wid,
 			i.lastTime(timestamp),
 		)
-	}
-	if i.conf.Reset.ClickFocus {
-		time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.Delay))
-		if err := i.x.Click(i.Wid); err != nil {
-			log.Printf("Instance %d failed to click: %s\n", i.Id, err)
-		}
 	}
 }
 
