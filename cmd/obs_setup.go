@@ -225,6 +225,7 @@ func ObsSetup() {
 					Y:      float64(y * h),
 					Width:  float64(settings.lockWidth),
 					Height: float64(settings.lockHeight),
+					Bounds: "OBS_BOUNDS_STRETCH",
 				},
 			))
 			assert(client.SetSceneItemLocked("Wall", source, true))
