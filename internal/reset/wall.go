@@ -279,15 +279,12 @@ func (m *Wall) Run() error {
 				m.lastMouseId = id
 				m.HandleInput(id, x11.Keymod(evt.State), evt.Time)
 			case x11.FocusEvent:
-				if m.current != -1 {
-					continue
-				}
 				win, err := findProjector(m.x)
 				if err != nil {
 					log.Printf("Failed to find projector (focus event): %s\n", err)
 					continue
 				}
-				if evt.Win == win && !m.wallGrab {
+				if evt.Win == win && !m.wallGrab && m.current == -1 {
 					if err = m.GrabWallKeys(); err != nil {
 						log.Printf("Failed to grab wall keys (focus event): %s\n", err)
 					}
@@ -344,9 +341,6 @@ func (m *Wall) GotoWall() {
 		log.Printf("Failed to go to wall scene: %s\n", err)
 	}
 	m.FocusProjector()
-	if err := m.GrabWallKeys(); err != nil {
-		log.Printf("Failed to grab wall keys: %s\n", err)
-	}
 	m.DeleteSleepbgLock()
 	m.SetAffinities()
 }
