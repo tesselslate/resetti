@@ -50,7 +50,6 @@ type Wall struct {
 	states     []wallState
 	current    int
 
-	projector   xproto.Window
 	lastMouseId int
 
 	cpusIdle   unix.CPUSet
@@ -139,11 +138,6 @@ func (m *Wall) Run() error {
 		return errors.Wrap(err, "failed to get wall size")
 	}
 	instanceWidth, instanceHeight := screenWidth/wallWidth, screenHeight/wallHeight
-	projector, err := findProjector(m.x)
-	if err != nil {
-		return errors.Wrap(err, "failed to find projector")
-	}
-	m.projector = projector
 	if err = setSources(m.obs, m.instances); err != nil {
 		return errors.Wrap(err, "failed to set sources")
 	}
@@ -314,20 +308,13 @@ func (m *Wall) DeleteSleepbgLock() {
 
 // FocusProjector focuses the OBS projector.
 func (m *Wall) FocusProjector() {
-	if err := m.x.FocusWindow(m.projector); err != nil {
-		projector, err := findProjector(m.x)
-		if err != nil {
-			log.Printf("Failed to find projector: %s\n", err)
-			return
-		}
-		if projector != m.projector {
-			m.projector = projector
-			if err = m.x.FocusWindow(m.projector); err != nil {
-				log.Printf("Failed to focus projector: %s\n", err)
-			}
-		} else {
-			log.Printf("Failed to focus projector. Could not find new projector\n")
-		}
+	projector, err := findProjector(m.x)
+	if err != nil {
+		log.Printf("Failed to find projector: %s\n", err)
+		return
+	}
+	if err = m.x.FocusWindow(projector); err != nil {
+		log.Printf("Failed to focus projector: %s\n", err)
 	}
 }
 
