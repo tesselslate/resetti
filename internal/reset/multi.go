@@ -86,6 +86,10 @@ func (m *Multi) Run() error {
 		if err != nil {
 			return err
 		}
+		err = m.obs.SetSceneCollection(fmt.Sprintf("resetti - %d multi", len(m.instances)))
+		if err != nil {
+			return errors.Wrap(err, "failed to set scene collection")
+		}
 	}
 	counter, err := NewCounter(ctx, &wg, m.conf)
 	if err != nil {

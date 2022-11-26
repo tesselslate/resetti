@@ -126,6 +126,10 @@ func (m *Wall) Run() error {
 	if err != nil {
 		return err
 	}
+	err = m.obs.SetSceneCollection(fmt.Sprintf("resetti - %d multi", len(m.instances)))
+	if err != nil {
+		return errors.Wrap(err, "failed to set scene collection")
+	}
 	screenWidth, screenHeight, err := m.x.GetScreenSize()
 	if err != nil {
 		return errors.Wrap(err, "failed to get screen size")
