@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/woofdoggo/resetti/internal/obs"
 )
@@ -116,11 +117,48 @@ func ObsSetup() {
 		fmt.Println("OBS connection error:", err)
 		os.Exit(1)
 	}
-
-	// TODO: Allow for modifying pre-existing scene collections?
 	width, height, err := client.GetCanvasSize()
 	assert(err)
-	assert(client.CreateSceneCollection(fmt.Sprintf("resetti - %d multi", settings.instanceCount)))
+	list, _, err := client.GetSceneCollectionList()
+	if err != nil {
+		fmt.Println("Failed to get list of scene collections:", err)
+		os.Exit(1)
+	}
+	collectionName := fmt.Sprintf("resetti - %d multi", settings.instanceCount)
+	exists := false
+	for _, v := range list {
+		if v == collectionName {
+			exists = true
+			break
+		}
+	}
+	if exists {
+		fmt.Print(`
+        A scene collection for this instance count already exists.
+        Would you like to replace it? (y/n): `)
+		result := ""
+		_, err := fmt.Scanln(&result)
+		if err != nil {
+			fmt.Println("Failed to get input:", err)
+			os.Exit(1)
+		}
+		if result[0] == 'y' || result[0] == 'Y' {
+			assert(client.SetSceneCollection(collectionName))
+			assert(client.DeleteScene("Wall"))
+			for i := 1; i <= settings.instanceCount; i += 1 {
+				assert(client.DeleteScene(fmt.Sprintf("Instance %d", i)))
+			}
+			// Wait a bit to let the scenes get deleted first.
+			time.Sleep(100 * time.Millisecond)
+		} else {
+			fmt.Println("Please rename or delete the scene collection named:")
+			fmt.Println(collectionName)
+			fmt.Println("Then run the setup wizard again.")
+			os.Exit(0)
+		}
+	} else {
+		assert(client.CreateSceneCollection(collectionName))
+	}
 	assert(client.CreateScene("Wall"))
 
 	// Create the instance sources and scenes.
@@ -233,6 +271,21 @@ func ObsSetup() {
 	}
 
 	// Remove the scene called "Scene" that gets created for every new scene collection.
-	assert(client.DeleteScene("Scene"))
+	// However, it will have already been deleted if we are modifying an existing scene
+	// collection.
+	scenes, _, err := client.GetSceneList()
+	if err != nil {
+		fmt.Println("Failed to get scene list:", err)
+		fmt.Println("However, the setup did complete successfully otherwise.")
+		fmt.Println("You can delete the scene called 'Scene' manually.")
+		return
+	}
+	exists = false
+	for _, v := range scenes {
+		if v == "Scene" {
+			assert(client.DeleteScene("Scene"))
+			break
+		}
+	}
 	fmt.Println("Finished!")
 }

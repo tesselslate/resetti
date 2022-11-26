@@ -158,6 +158,23 @@ func (c *Client) GetSceneItemTransform(scene string, name string) (Transform, er
 	return res.Transform, err
 }
 
+func (c *Client) GetSceneList() (names []string, active string, err error) {
+	raw, err := c.request(nil, "GetSceneList")
+	if err != nil {
+		return nil, "", err
+	}
+	res := struct {
+		Scenes  []StringMap `json:"scenes"`
+		Current string      `json:"currentProgramSceneName"`
+	}{}
+	list := make([]string, 0, len(res.Scenes))
+	err = json.Unmarshal(raw, &res)
+	for _, v := range res.Scenes {
+		list = append(list, v["sceneName"].(string))
+	}
+	return list, res.Current, err
+}
+
 func (c *Client) SetScene(scene string) error {
 	type request struct {
 		Name string `json:"sceneName"`
