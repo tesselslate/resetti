@@ -1,37 +1,45 @@
 package x11
 
 import (
+	"context"
 	"errors"
+	"log"
 
 	"github.com/jezek/xgb/xproto"
 )
 
+var ErrDied = errors.New("connection closed")
+
 // Poll starts a separate goroutine which will listen for and forward
 // various input events (keypresses, mouse movements, button presses).
-func (c *Client) Poll() (<-chan XEvent, <-chan error, error) {
-	if c.polling {
-		return nil, nil, errors.New("already polling")
-	}
-	c.polling = true
+func (c *Client) Poll(ctx context.Context, substructures bool) (<-chan XEvent, <-chan error, error) {
 	ch := make(chan XEvent, CHANNEL_SIZE)
 	errCh := make(chan error, ERROR_CHANNEL_SIZE)
-	go c.poll(ch, errCh)
+	if substructures {
+		err := xproto.ChangeWindowAttributesChecked(
+			c.conn,
+			c.root,
+			xproto.CwEventMask,
+			[]uint32{xproto.EventMaskPropertyChange | xproto.EventMaskSubstructureNotify},
+		).Check()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	go c.poll(ctx, substructures, ch, errCh)
 	return ch, errCh, nil
 }
 
-// StopPoll stops polling for events.
-func (c *Client) StopPoll() {
-	c.stopPolling <- struct{}{}
-}
-
-func (c *Client) poll(ch chan<- XEvent, errCh chan<- error) {
+func (c *Client) poll(ctx context.Context, substructures bool, ch chan<- XEvent, errCh chan<- error) {
+	defer log.Println("Service: X11 poller stopped")
 	defer close(ch)
 	defer close(errCh)
+
+	log.Println("Service: X11 poller started")
 	for {
 		// Check if event polling should stop.
 		select {
-		case <-c.stopPolling:
-			c.polling = false
+		case <-ctx.Done():
 			return
 		default:
 		}
@@ -39,7 +47,7 @@ func (c *Client) poll(ch chan<- XEvent, errCh chan<- error) {
 		// Wait for the next X event/error and process it.
 		evt, err := c.conn.WaitForEvent()
 		if evt == nil && err == nil {
-			errCh <- errors.New("connection died")
+			errCh <- ErrDied
 			return
 		}
 		if err != nil {
@@ -81,6 +89,21 @@ func (c *Client) poll(ch chan<- XEvent, errCh chan<- error) {
 				State: evt.State,
 				Time:  evt.Time,
 			}
+		case xproto.PropertyNotifyEvent:
+			atom, err := c.atoms.Get(c, "_NET_ACTIVE_WINDOW")
+			if err != nil {
+				errCh <- err
+				continue
+			}
+			if atom != evt.Atom {
+				continue
+			}
+			win, err := c.GetActiveWindow()
+			if err != nil {
+				errCh <- err
+				continue
+			}
+			ch <- FocusEvent{win, evt.Time}
 		}
 	}
 }

@@ -82,9 +82,9 @@ allow-moves = true
 ```
 
 > *Note:* If you have Pipewire but are using `pipewire-pulse`, switching your
-> OpenAL driver to `pipewire` also works just fine (and is necessary if you
-> want to use instance freezing.) **However, this requires that you tell MultiMC
-> to use your system installation of OpenAL, which must be at least version 1.22.)**
+> OpenAL driver to `pipewire` also works just fine. **However, this requires
+> that you tell MultiMC to use your system installation of OpenAL, which must
+> be at least version 1.22.)**
 
 ### Excessive memory usage
 

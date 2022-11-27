@@ -1,4 +1,6 @@
-package reset
+// Package mc implements facilities for detecting and working with
+// Minecraft instances.
+package mc
 
 import (
 	"errors"
@@ -9,56 +11,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
-const (
-	StMenu       int = iota // Main menu
-	StGenerating            // World generating (dirt screen)
-	StPreview               // World preview
-	StIdle                  // Instance finished generating
-	StIngame                // Instance being played
-	StFrozenGen             // Frozen world generation
-	StFrozenIdle            // Frozen idle
-)
-
-type Instance struct {
-	Id       int           // Instance number
-	Pid      uint32        // Process ID
-	Wid      xproto.Window // Window ID
-	Dir      string        // .minecraft directory
-	Version  int           // Minecraft version
-	ResetKey x11.Key       // The Atum reset key.
-}
-
-type InstanceState struct {
-	State    int        // General state (generating, preview, e.t.c.)
-	Progress int        // World generation progress
-	Spawn    [2]float64 // Spawn location (only relevant for setseed)
-}
-
-func (i *InstanceState) String() string {
-	states := []string{
-		"Menu",
-		"Generating",
-		"Preview",
-		"Idle",
-		"Ingame",
-		"Frozen (Gen)",
-		"Frozen (Idle)",
-	}
-	switch i.State {
-	default:
-		return states[i.State]
-	case StGenerating, StPreview:
-		return fmt.Sprintf("%s (%d%%)", states[i.State], i.Progress)
-	}
-}
-
-// findInstances returns a list of all running Minecraft instances.
-func findInstances(x *x11.Client) ([]Instance, error) {
-	instances := make([]Instance, 0)
+// FindInstances returns a list of all running Minecraft instances.
+func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
+	instances := make([]InstanceInfo, 0)
 	windows, err := x.GetAllWindows()
 	if err != nil {
 		return nil, err
@@ -146,7 +104,7 @@ func findInstances(x *x11.Client) ([]Instance, error) {
 				Code: x11.KeyF6,
 			}
 		}
-		instance := Instance{
+		instance := InstanceInfo{
 			Id:       id,
 			Pid:      pid,
 			Wid:      win,

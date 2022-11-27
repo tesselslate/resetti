@@ -16,10 +16,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: "1.18.2"
+          go-version: "1.19.3"
 
       - name: Build resetti
-        run: env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w"
+        run: make build
 
       - name: Get release info
         id: tag

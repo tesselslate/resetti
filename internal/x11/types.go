@@ -13,11 +13,9 @@ type atomMap struct {
 }
 
 type Client struct {
-	conn        *xgb.Conn     // Connection to the X server
-	atoms       atomMap       // Cache of X atoms
-	root        xproto.Window // The root window ID (needed for various common tasks, so store it)
-	polling     bool          // Whether or not *Client.poll is currently running
-	stopPolling chan struct{} // Channel for stopping *Client.poll
+	conn  *xgb.Conn     // Connection to the X server
+	atoms atomMap       // Cache of X atoms
+	root  xproto.Window // The root window ID (needed for various common tasks, so store it)
 }
 
 type Key struct {
@@ -34,6 +32,11 @@ type ButtonEvent struct {
 	Y     int16
 	State uint16
 	Time  xproto.Timestamp
+}
+
+type FocusEvent struct {
+	Win  xproto.Window
+	Time xproto.Timestamp
 }
 
 type KeyEvent struct {

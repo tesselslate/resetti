@@ -6,7 +6,6 @@
 # Available options:
 # - standard    Traditional single/multi-instance resetting for random seeds.
 # - wall        Wall-style resetting for random seeds.
-# - setseed     Set-seed resetter for good spawns, like spawn-juicer.
 type = "standard"
 
 # Whether or not to count the amount of resets performed.
@@ -32,7 +31,7 @@ lock = ""
 unlock = ""
 
 [obs]
-# Whether or not to enable OBS websocket support. This is *required* for wall and setseed.
+# Whether or not to enable OBS websocket support. This is *required* for wall.
 enabled = false
 
 # The port to connect to OBS websocket on.
@@ -44,16 +43,11 @@ password = ""
 
 [reset]
 # The amount of milliseconds to wait before certain actions (e.g. stretching
-# instance windows and clicking the mouse with `click_on_focus`.)
+# instance windows and unpausing)
 delay = 50
 
 # Whether or not to automatically unpause the game when an instance is focused.
 unpause_on_focus = true
-
-# Whether or not to automatically click the mouse when focusing an instance.
-# When disabled, you will have to click the mouse yourself. This is toggleable
-# as the old behavior was to not click at all.
-click_on_focus = true
 
 # - You can ignore any keybindings here which do not apply to your reset style.
 # - Alphanumerical and Fn keys (1-12) are supported.
@@ -98,6 +92,10 @@ wall_play = "Shift"
 wall_lock = "Ctrl"
 
 [wall]
+# Whether or not to press F1 when focusing instances. If you use this, turn on
+# f1 in your standard settings file.
+hide_gui = false
+
 # Whether or not to stretch windows while on the wall for better visibility.
 # Works with or without fullscreen.
 stretch_windows = false
@@ -144,9 +142,6 @@ sleepbg_lock_path = "/home/my_user"
 # - Mid:    A high priority instance in the background while another instance is being played
 # - High:   On the dirt screen or below low_threshold
 # - Active: The instance currently being played
-# You cannot assign a CPU count to high priority instances. They are given the
-# amount of threads listed as "active" when on the wall and the amount of threads
-# listed as "mid" while ingame.
 affinity = false
 
 # Number of CPUs to run idle instances on.
@@ -158,36 +153,12 @@ affinity_low = 4
 # Number of CPUs to run mid priority instances on.
 affinity_mid = 8
 
+# Number of CPUs to run high priority instances on.
+affinity_high = 12
+
 # Number of CPUs to run the actively played instance on.
 affinity_active = 12
 
 # The world generation percentage to reach before moving an instance
 # from high priority to low priority.
 low_threshold = 20
-
-# Whether or not to freeze instances after they have been idle for some time.
-# NOTE: DO NOT enable this with the OpenAL PulseAudio backend. You will likely
-# experience increased CPU utilization on all of your instances. Switch to
-# the `pipewire` driver if possible or do not use this setting.
-freeze_idle = false
-
-# The delay in milliseconds before freezing an instance after it has finished
-# generating.
-freeze_delay = 1000
-
-# The maximum number of "high-priority" instances which can reset at the same
-# time. Set to 0 to disable. Requires instance freezing to be enabled.
-max_concurrent_resets = 0
-
-# You can delete this section or leave it as is if you are not using the
-# set-seed resetter.
-[setseed]
-# The seed to use.
-seed = "my_seed"
-
-# The desired spawn X and Z coordinates.
-spawn_x = 123.0
-spawn_z = 456.0
-
-# The radius around the given X/Z coordinates which is considered "good."
-radius = 5.0
