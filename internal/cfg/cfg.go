@@ -50,6 +50,8 @@ type Profile struct {
 		StretchHeight   uint32 `toml:"stretch_height"`
 		UnstretchWidth  uint32 `toml:"unstretch_width"`
 		UnstretchHeight uint32 `toml:"unstretch_height"`
+		ResizeX         uint32 `toml:"resize_x"`
+		ResizeY         uint32 `toml:"resize_y"`
 		UseMouse        bool   `toml:"use_mouse"`
 		GoToLocked      bool   `toml:"goto_locked"`
 		SleepBgLock     bool   `toml:"sleepbg_lock"`

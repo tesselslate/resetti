@@ -138,8 +138,8 @@ func (i *Instance) Stretch(conf cfg.Profile) error {
 	}
 	return i.x.MoveWindow(
 		i.Wid,
-		0,
-		0,
+		conf.Wall.ResizeX,
+		conf.Wall.ResizeY,
 		conf.Wall.StretchWidth,
 		conf.Wall.StretchHeight,
 	)
@@ -159,8 +159,8 @@ func (i *Instance) Unstretch(conf cfg.Profile) error {
 	}
 	return i.x.MoveWindow(
 		i.Wid,
-		0,
-		0,
+		conf.Wall.ResizeX,
+		conf.Wall.ResizeY,
 		conf.Wall.UnstretchWidth,
 		conf.Wall.UnstretchHeight,
 	)
