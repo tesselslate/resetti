@@ -112,6 +112,14 @@ unstretch_width = 1920
 # The height to unstretch windows to when being played.
 unstretch_height = 1080
 
+# The X coordinate to move Minecraft windows to when resizing them. Only
+# takes effect if stretch_windows is enabled.
+resize_x = 0
+
+# The Y coordinate to move Minecraft windows to when resizing them. Only
+# takes effect if stretch_windows is enabled.
+resize_y = 0
+
 # Whether or not to enable mouse support on the wall. Enabling this will allow
 # you to click on instances to perform various actions instead of having to use
 # the number keys. Note that enabling this does not disable the number keys.
