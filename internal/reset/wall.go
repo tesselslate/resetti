@@ -89,6 +89,23 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 // Run attempts to run the wall resetter. If an error occurs during
 // setup, it will be returned.
 func (m *Wall) Run() error {
+	// Ensure that the user's window manager supports the necessary EWMH
+	// properties.
+	wm_supported, err := m.x.GetWmSupported()
+	if err != nil {
+		return errors.Wrap(err, "wm supported")
+	}
+	found := false
+	for _, v := range wm_supported {
+		if v == "_NET_ACTIVE_WINDOW" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		log.Println("WARNING: Window manager does not support _NET_ACTIVE_WINDOW: wall key grabs might not work")
+	}
+
 	// Setup synchronization primitives.
 	sigs := make(chan os.Signal, 16)
 	signal.Notify(sigs, syscall.SIGINT)
@@ -188,6 +205,7 @@ func (m *Wall) Run() error {
 		return errors.Wrap(err, "failed to grab wall keys")
 	}
 	m.FocusProjector()
+	printDebugInfo(m.x, m.instances)
 	for {
 		select {
 		case <-sigs:
