@@ -297,10 +297,27 @@ func (m *Wall) Run() error {
 				if m.current != -1 {
 					continue
 				}
-				// Ignore presses not on the wall projector.
-				if evt.Win != m.projector {
+
+				// If the user clicked off of the projector, release the grab.
+				// NOTE: OBS seems to create a child window inside the projector?
+				// So we have to check to see if the window of the button event is
+				// a child of the projector.
+				children, _ := m.x.GetChildWindows(m.projector)
+				found := false
+				for _, child := range children {
+					if child == evt.Win {
+						found = true
+						break
+					}
+				}
+				if !found {
+					if err = m.UngrabWallKeys(); err != nil {
+						log.Printf("Failed to ungrab wall keys: %s\n", err)
+					}
 					continue
 				}
+
+				// Handle the mouse click as normal.
 				w, h, err := m.x.GetWindowSize(m.projector)
 				if err != nil {
 					log.Printf("Failed to get projector size: %s\n", err)

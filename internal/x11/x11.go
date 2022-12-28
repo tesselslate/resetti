@@ -216,8 +216,14 @@ func (c *Client) GetActiveWindow() (xproto.Window, error) {
 
 // GetAllWindows returns a list of all windows.
 func (c *Client) GetAllWindows() ([]xproto.Window, error) {
+	return c.GetChildWindows(c.root)
+}
+
+// GetChildWindows returns a list of all children of the given window (and their
+// children, and so on.)
+func (c *Client) GetChildWindows(win xproto.Window) ([]xproto.Window, error) {
 	// Traverse the window tree starting from the root window in an iterative fashion.
-	queue := []xproto.Window{c.root}
+	queue := []xproto.Window{win}
 	windows := make([]xproto.Window, 0)
 	for len(queue) > 0 {
 		win := queue[0]
@@ -302,7 +308,7 @@ func (c *Client) GetWmName() string {
 }
 
 // GetWmSupported returns a list of the window manager's supported properties
-// as defined by _NET_SUPPORTED>
+// as defined by _NET_SUPPORTED.
 func (c *Client) GetWmSupported() ([]string, error) {
 	raw, err := c.getProperty(c.root, "_NET_SUPPORTED", xproto.AtomAtom)
 	if err != nil {
