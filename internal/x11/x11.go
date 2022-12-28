@@ -234,17 +234,6 @@ func (c *Client) GetAllWindows() ([]xproto.Window, error) {
 	return windows, nil
 }
 
-// GetScreenSize returns the size of the monitor.
-// TODO: Implement multi-monitor logic (xinerama?). For the time being,
-// resetti does not work particularly well with more than one monitor.
-func (c *Client) GetScreenSize() (uint16, uint16, error) {
-	reply, err := xproto.GetGeometry(c.conn, xproto.Drawable(c.root)).Reply()
-	if err != nil {
-		return 0, 0, err
-	}
-	return reply.Width, reply.Height, nil
-}
-
 // GetWindowClass returns the WM_CLASS property of the given window.
 func (c *Client) GetWindowClass(win xproto.Window) (string, error) {
 	class, err := c.getPropertyString(win, "WM_CLASS")
@@ -263,6 +252,15 @@ func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
 		return 0, err
 	}
 	return pid, nil
+}
+
+// GetWindowSize returns the size of the given window.
+func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
+	geom, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
+	if err != nil {
+		return 0, 0, err
+	}
+	return geom.Width, geom.Height, nil
 }
 
 // GetWindowTitle returns the title of the given window.

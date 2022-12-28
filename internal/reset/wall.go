@@ -52,6 +52,7 @@ type Wall struct {
 
 	wallGrab    bool
 	lastMouseId int
+	projector   xproto.Window
 
 	cpusIdle   unix.CPUSet
 	cpusLow    unix.CPUSet
@@ -147,15 +148,10 @@ func (m *Wall) Run() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to set scene collection")
 	}
-	screenWidth, screenHeight, err := m.x.GetScreenSize()
-	if err != nil {
-		return errors.Wrap(err, "failed to get screen size")
-	}
 	wallWidth, wallHeight, err := getWallSize(m.obs, len(m.instances))
 	if err != nil {
 		return errors.Wrap(err, "failed to get wall size")
 	}
-	instanceWidth, instanceHeight := screenWidth/wallWidth, screenHeight/wallHeight
 	if err = setSources(m.obs, m.instances); err != nil {
 		return errors.Wrap(err, "failed to set sources")
 	}
@@ -195,17 +191,17 @@ func (m *Wall) Run() error {
 	}
 
 	// Start the main loop.
+	if m.projector, err = m.FocusProjector(); err != nil {
+		return errors.Wrap(err, "failed to switch to projector")
+	}
 	if err = m.x.GrabKey(m.conf.Keys.Focus, m.x.RootWindow()); err != nil {
 		return errors.Wrap(err, "failed to grab focus key")
 	}
 	if err = m.x.GrabKey(m.conf.Keys.Reset, m.x.RootWindow()); err != nil {
 		return errors.Wrap(err, "failed to grab reset key")
 	}
-	if err = m.GrabWallKeys(); err != nil {
+	if err = m.GrabWallKeys(m.projector); err != nil {
 		return errors.Wrap(err, "failed to grab wall keys")
-	}
-	if err = m.FocusProjector(); err != nil {
-		return errors.Wrap(err, "failed to switch to projector")
 	}
 	printDebugInfo(m.x, m.instances)
 	for {
@@ -251,7 +247,7 @@ func (m *Wall) Run() error {
 				switch evt.Key {
 				case m.conf.Keys.Focus:
 					if m.current == -1 {
-						if err = m.FocusProjector(); err != nil {
+						if m.projector, err = m.FocusProjector(); err != nil {
 							log.Printf("Failed to focus projector: %s\n", err)
 						}
 					} else {
@@ -275,11 +271,20 @@ func (m *Wall) Run() error {
 				if m.current != -1 {
 					continue
 				}
+				// Ignore presses not on the wall projector.
+				if evt.Win != m.projector {
+					continue
+				}
 				if evt.State&xproto.ButtonMask1 == 0 {
 					continue
 				}
-				x := uint16(evt.X) / instanceWidth
-				y := uint16(evt.Y) / instanceHeight
+				w, h, err := m.x.GetWindowSize(m.projector)
+				if err != nil {
+					log.Printf("Failed to get projector size: %s\n", err)
+					continue
+				}
+				x := uint16(evt.X) / (w / wallWidth)
+				y := uint16(evt.Y) / (h / wallHeight)
 				id := int((y * wallWidth) + x)
 				if id >= len(m.instances) || m.lastMouseId == id {
 					continue
@@ -292,8 +297,17 @@ func (m *Wall) Run() error {
 				if m.current != -1 {
 					continue
 				}
-				x := uint16(evt.X) / instanceWidth
-				y := uint16(evt.Y) / instanceHeight
+				// Ignore presses not on the wall projector.
+				if evt.Win != m.projector {
+					continue
+				}
+				w, h, err := m.x.GetWindowSize(m.projector)
+				if err != nil {
+					log.Printf("Failed to get projector size: %s\n", err)
+					continue
+				}
+				x := uint16(evt.X) / (w / wallWidth)
+				y := uint16(evt.Y) / (h / wallHeight)
 				id := int((y * wallWidth) + x)
 				if id >= len(m.instances) {
 					continue
@@ -306,8 +320,9 @@ func (m *Wall) Run() error {
 					log.Printf("Failed to find projector (focus event): %s\n", err)
 					continue
 				}
+				m.projector = win
 				if evt.Win == win && !m.wallGrab && m.current == -1 {
-					if err = m.GrabWallKeys(); err != nil {
+					if err = m.GrabWallKeys(m.projector); err != nil {
 						log.Printf("Failed to grab wall keys (focus event): %s\n", err)
 					}
 				} else if evt.Win != win && m.wallGrab {
@@ -345,15 +360,15 @@ func (m *Wall) DeleteSleepbgLock() {
 }
 
 // FocusProjector focuses the OBS projector.
-func (m *Wall) FocusProjector() error {
+func (m *Wall) FocusProjector() (xproto.Window, error) {
 	projector, err := findProjector(m.x)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if err = m.x.FocusWindow(projector); err != nil {
-		return errors.Wrap(err, "focus")
+		return 0, errors.Wrap(err, "focus")
 	}
-	return nil
+	return projector, nil
 }
 
 // GotoWall returns to the wall scene.
@@ -362,15 +377,17 @@ func (m *Wall) GotoWall() {
 	if err := m.obs.SetScene("Wall"); err != nil {
 		log.Printf("Failed to go to wall scene: %s\n", err)
 	}
-	if err := m.FocusProjector(); err != nil {
+	proj, err := m.FocusProjector()
+	if err != nil {
 		log.Printf("Failed to focus projector: %s\n", err)
 	}
+	m.projector = proj
 	m.DeleteSleepbgLock()
 	m.SetAffinities()
 }
 
 // GrabWallKeys attempts to grab wall-only keys from the X server.
-func (m *Wall) GrabWallKeys() error {
+func (m *Wall) GrabWallKeys(projector xproto.Window) error {
 	log.Println("Grabbing wall keys")
 	win := m.x.RootWindow()
 	for i := 0; i < len(m.instances); i++ {
@@ -392,7 +409,7 @@ func (m *Wall) GrabWallKeys() error {
 	}
 	m.wallGrab = true
 	if m.conf.Wall.UseMouse {
-		return m.x.GrabPointer(win)
+		return m.x.GrabPointer(projector)
 	}
 	return nil
 }

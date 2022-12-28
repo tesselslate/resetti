@@ -30,6 +30,7 @@ type KeyState int
 type ButtonEvent struct {
 	X     int16
 	Y     int16
+	Win   xproto.Window
 	State uint16
 	Time  xproto.Timestamp
 }
@@ -48,6 +49,7 @@ type KeyEvent struct {
 type MoveEvent struct {
 	X     int16
 	Y     int16
+	Win   xproto.Window
 	State uint16
 	Time  xproto.Timestamp
 }

@@ -77,15 +77,17 @@ func (c *Client) poll(ctx context.Context, substructures bool, ch chan<- XEvent,
 			}
 		case xproto.ButtonPressEvent:
 			ch <- ButtonEvent{
-				X:     evt.RootX,
-				Y:     evt.RootY,
+				X:     evt.EventX,
+				Y:     evt.EventY,
+				Win:   evt.Child,
 				State: evt.State,
 				Time:  evt.Time,
 			}
 		case xproto.MotionNotifyEvent:
 			ch <- MoveEvent{
-				X:     evt.RootX,
-				Y:     evt.RootY,
+				X:     evt.EventX,
+				Y:     evt.EventY,
+				Win:   evt.Child,
 				State: evt.State,
 				Time:  evt.Time,
 			}
