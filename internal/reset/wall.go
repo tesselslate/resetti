@@ -204,7 +204,9 @@ func (m *Wall) Run() error {
 	if err = m.GrabWallKeys(); err != nil {
 		return errors.Wrap(err, "failed to grab wall keys")
 	}
-	m.FocusProjector()
+	if err = m.FocusProjector(); err != nil {
+		return errors.Wrap(err, "failed to switch to projector")
+	}
 	printDebugInfo(m.x, m.instances)
 	for {
 		select {
@@ -249,7 +251,9 @@ func (m *Wall) Run() error {
 				switch evt.Key {
 				case m.conf.Keys.Focus:
 					if m.current == -1 {
-						m.FocusProjector()
+						if err = m.FocusProjector(); err != nil {
+							log.Printf("Failed to focus projector: %s\n", err)
+						}
 					} else {
 						m.instances[m.current].Focus()
 					}
@@ -341,15 +345,15 @@ func (m *Wall) DeleteSleepbgLock() {
 }
 
 // FocusProjector focuses the OBS projector.
-func (m *Wall) FocusProjector() {
+func (m *Wall) FocusProjector() error {
 	projector, err := findProjector(m.x)
 	if err != nil {
-		log.Printf("Failed to find projector: %s\n", err)
-		return
+		return err
 	}
 	if err = m.x.FocusWindow(projector); err != nil {
-		log.Printf("Failed to focus projector: %s\n", err)
+		return errors.Wrap(err, "focus")
 	}
+	return nil
 }
 
 // GotoWall returns to the wall scene.
@@ -358,7 +362,9 @@ func (m *Wall) GotoWall() {
 	if err := m.obs.SetScene("Wall"); err != nil {
 		log.Printf("Failed to go to wall scene: %s\n", err)
 	}
-	m.FocusProjector()
+	if err := m.FocusProjector(); err != nil {
+		log.Printf("Failed to focus projector: %s\n", err)
+	}
 	m.DeleteSleepbgLock()
 	m.SetAffinities()
 }
