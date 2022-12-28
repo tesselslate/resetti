@@ -426,7 +426,18 @@ func (m *Wall) GrabWallKeys(projector xproto.Window) error {
 	}
 	m.wallGrab = true
 	if m.conf.Wall.UseMouse {
-		return m.x.GrabPointer(projector)
+		wait := 1
+		for tries := 0; tries < 5; tries += 1 {
+			err := m.x.GrabPointer(projector)
+			if err == nil {
+				return nil
+			}
+			log.Printf("GrabWallKeys: pointer grab failed (try %d): %s\n", tries, err)
+			time.Sleep(time.Millisecond * time.Duration(wait))
+			wait *= 4
+		}
+		log.Println("Pointer grab failed (5 tries)")
+		return errors.New("failed to grab pointer")
 	}
 	return nil
 }

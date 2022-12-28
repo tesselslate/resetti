@@ -2,7 +2,6 @@ package x11
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
+	"github.com/pkg/errors"
 )
 
 // NewClient attempts to create a new X client.
@@ -344,7 +344,7 @@ func (c *Client) GrabKey(key Key, win xproto.Window) error {
 
 // GrabPointer grabs the mouse pointer from the given window.
 func (c *Client) GrabPointer(win xproto.Window) error {
-	_, err := xproto.GrabPointer(
+	reply, err := xproto.GrabPointer(
 		c.conn,
 		true,
 		win,
@@ -355,7 +355,20 @@ func (c *Client) GrabPointer(win xproto.Window) error {
 		xproto.CursorNone,
 		xproto.TimeCurrentTime,
 	).Reply()
-	return err
+	if err != nil {
+		return err
+	}
+	if reply.Status != xproto.GrabStatusSuccess {
+		var msg = []string{
+			"success",
+			"already grabbed",
+			"invalid time",
+			"not viewable",
+			"frozen",
+		}
+		return errors.Errorf("status: %s", msg[reply.Status])
+	}
+	return nil
 }
 
 // MoveWindow moves and resizes the given window.
