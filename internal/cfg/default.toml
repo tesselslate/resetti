@@ -42,9 +42,14 @@ port = 4440
 password = ""
 
 [reset]
-# The amount of milliseconds to wait before certain actions (e.g. stretching
-# instance windows and unpausing)
+# The time in milliseconds to wait between switching windows and performing
+# actions on those windows. Increase if certain features (e.g. unpausing,
+# instance stretching) are inconsistent.
 delay = 50
+
+# The time in milliseconds to wait after entering preview/finishing world
+# generation before pausing. Increase if pausing is inconsistent.
+pause_delay = 50
 
 # Whether or not to automatically unpause the game when an instance is focused.
 unpause_on_focus = true

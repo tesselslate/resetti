@@ -33,6 +33,7 @@ type Profile struct {
 	} `toml:"obs"`
 	Reset struct {
 		Delay        int  `toml:"delay"`
+		PauseDelay   int  `toml:"pause_delay"`
 		UnpauseFocus bool `toml:"unpause_on_focus"`
 	} `toml:"reset"`
 	Keys struct {

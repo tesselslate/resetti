@@ -49,6 +49,7 @@ type Wall struct {
 	instances  []mc.Instance
 	states     []wallState
 	current    int
+	pause      chan int
 
 	wallGrab          bool
 	lastMouseId       int
@@ -78,6 +79,7 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 		x:           x,
 		logReaders:  make([]LogReader, 0, len(infos)),
 		current:     -1,
+		pause:       make(chan int, len(infos)*2),
 		lastMouseId: -1,
 	}
 	wall.instances = make([]mc.Instance, 0, len(infos))
@@ -222,19 +224,22 @@ func (m *Wall) Run() error {
 		case err := <-readerErrors:
 			log.Printf("Fatal reader error: %s\n", err)
 			return nil
+		case id := <-m.pause:
+			if m.states[id].State == mc.StIdle || m.states[id].State == mc.StPreview {
+				m.instances[id].Pause(0)
+			}
 		case update := <-updates:
 			state := update.State
 			id := update.Id
 
 			// Pause the instance if it is now idle and not focused.
 			nowIdle := m.states[id].State != mc.StIdle && state.State == mc.StIdle
-			if nowIdle && m.current != id {
-				time.Sleep(10 * time.Millisecond)
-				m.instances[id].Pause(0)
-			}
-			if state.State == mc.StPreview && state.Progress > 5 && !m.states[id].WpPause {
-				m.instances[id].Pause(0)
-				m.states[id].WpPause = true
+			nowPreview := m.states[id].State != mc.StPreview && state.State == mc.StPreview
+			if (nowIdle || nowPreview) && m.current != id {
+				go func(i int) {
+					<-time.After(time.Millisecond * time.Duration(m.conf.Reset.PauseDelay))
+					m.pause <- i
+				}(id)
 			}
 			m.states[id].InstanceState = state
 
@@ -419,7 +424,9 @@ func (m *Wall) GotoWall() {
 		log.Printf("Failed to get projector children: %s\n", err)
 	}
 	m.DeleteSleepbgLock()
-	m.SetAffinities()
+	if m.conf.AdvancedWall.Affinity {
+		m.SetAffinities()
+	}
 }
 
 // GrabWallKeys attempts to grab wall-only keys from the X server.
@@ -617,7 +624,9 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
 	if m.states[id].State != mc.StIdle {
 		return
 	}
-	m.SetAffinity(id, affActive)
+	if m.conf.AdvancedWall.Affinity {
+		m.SetAffinity(id, affActive)
+	}
 	m.states[id].State = mc.StIngame
 	if err := m.obs.SetScene(fmt.Sprintf("Instance %d", id+1)); err != nil {
 		log.Printf("Failed to set scene: %s\n", err)
@@ -670,7 +679,9 @@ func (m *Wall) WallLock(id int, timestamp xproto.Timestamp) {
 	if m.states[id].Locked {
 		go runHook(m.conf.Hooks.Lock)
 		if m.states[id].State == mc.StPreview {
-			m.SetAffinity(id, affHigh)
+			if m.conf.AdvancedWall.Affinity {
+				m.SetAffinity(id, affHigh)
+			}
 		}
 	} else {
 		go runHook(m.conf.Hooks.Unlock)
