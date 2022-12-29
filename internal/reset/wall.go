@@ -66,6 +66,7 @@ type Wall struct {
 // wall-specific details about it.
 type wallState struct {
 	mc.InstanceState
+	WpPause  bool
 	Locked   bool
 	Affinity int
 }
@@ -227,10 +228,13 @@ func (m *Wall) Run() error {
 
 			// Pause the instance if it is now idle and not focused.
 			nowIdle := m.states[id].State != mc.StIdle && state.State == mc.StIdle
-			nowPreview := m.states[id].State != mc.StPreview && state.State == mc.StPreview
-			if (nowIdle || nowPreview) && m.current != id {
+			if nowIdle && m.current != id {
 				time.Sleep(10 * time.Millisecond)
 				m.instances[id].Pause(0)
+			}
+			if state.State == mc.StPreview && state.Progress > 5 && !m.states[id].WpPause {
+				m.instances[id].Pause(0)
+				m.states[id].WpPause = true
 			}
 			m.states[id].InstanceState = state
 
@@ -506,6 +510,7 @@ func (m *Wall) reset(id int, timestamp xproto.Timestamp) {
 	m.instances[id].Reset(timestamp)
 	m.counter.Increment()
 	m.states[id].State = mc.StDirt
+	m.states[id].WpPause = false
 	if m.conf.AdvancedWall.Affinity {
 		m.SetAffinity(id, affHigh)
 	}
