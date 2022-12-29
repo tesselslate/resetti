@@ -93,8 +93,7 @@ func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
 	}
 }
 
-// Pause presses F3+Escape to pause the instance. It is the responsibility of
-// the caller to ensure the instance is unfrozen. If an error occurs, it will
+// Pause presses F3+Escape to pause the instance. If an error occurs, it will
 // be logged.
 func (i *Instance) Pause(timestamp xproto.Timestamp) {
 	i.x.SendKeyDown(x11.KeyF3, i.Wid, i.lastTime(timestamp))
@@ -102,8 +101,7 @@ func (i *Instance) Pause(timestamp xproto.Timestamp) {
 	i.x.SendKeyUp(x11.KeyF3, i.Wid, i.lastTime(timestamp))
 }
 
-// Reset presses the instance's reset key. It is the responsibility of the
-// caller to ensure the instance is unfrozen. If an error occurs, it will be
+// Reset presses the instance's reset key. If an error occurs, it will be
 // logged.
 func (i *Instance) Reset(timestamp xproto.Timestamp) {
 	i.x.SendKeyPress(i.ResetKey.Code, i.Wid, i.lastTime(timestamp))
@@ -145,9 +143,8 @@ func (i *Instance) Stretch(conf cfg.Profile) error {
 	)
 }
 
-// Unpause presses escape to unpause the instance. It is the responsibility
-// of the caller to ensure the instance is unfrozen. If an error occurs, it
-// will be logged.
+// Unpause presses escape to unpause the instance. If an error occurs, it will
+// be logged.
 func (i *Instance) Unpause(timestamp xproto.Timestamp) {
 	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
 }

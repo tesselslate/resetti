@@ -2,7 +2,6 @@ package x11
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
+	"github.com/pkg/errors"
 )
 
 // NewClient attempts to create a new X client.
@@ -185,7 +185,7 @@ func (c *Client) getPropertyInt(win xproto.Window, name string, typ xproto.Atom)
 		return 0, err
 	}
 	if len(reply) != 4 {
-		return 0, fmt.Errorf("invalid response length %d", len(reply))
+		return 0, fmt.Errorf("invalid response length %d (%d, %s)", len(reply), win, name)
 	}
 	return binary.LittleEndian.Uint32(reply), nil
 }
@@ -204,15 +204,26 @@ func (c *Client) getPropertyString(win xproto.Window, name string) (string, erro
 func (c *Client) GetActiveWindow() (xproto.Window, error) {
 	win, err := c.getPropertyInt(c.root, "_NET_ACTIVE_WINDOW", xproto.AtomWindow)
 	if err != nil {
-		return 0, err
+		// The _NET_ACTIVE_WINDOW property might not exist depending on the
+		// window manager.
+		if !strings.HasPrefix(err.Error(), "invalid response length") {
+			return 0, err
+		}
+		return 0, nil
 	}
 	return xproto.Window(win), nil
 }
 
 // GetAllWindows returns a list of all windows.
 func (c *Client) GetAllWindows() ([]xproto.Window, error) {
+	return c.GetChildWindows(c.root)
+}
+
+// GetChildWindows returns a list of all children of the given window (and their
+// children, and so on.)
+func (c *Client) GetChildWindows(win xproto.Window) ([]xproto.Window, error) {
 	// Traverse the window tree starting from the root window in an iterative fashion.
-	queue := []xproto.Window{c.root}
+	queue := []xproto.Window{win}
 	windows := make([]xproto.Window, 0)
 	for len(queue) > 0 {
 		win := queue[0]
@@ -227,17 +238,6 @@ func (c *Client) GetAllWindows() ([]xproto.Window, error) {
 		queue = append(queue, reply.Children...)
 	}
 	return windows, nil
-}
-
-// GetScreenSize returns the size of the monitor.
-// TODO: Implement multi-monitor logic (xinerama?). For the time being,
-// resetti does not work particularly well with more than one monitor.
-func (c *Client) GetScreenSize() (uint16, uint16, error) {
-	reply, err := xproto.GetGeometry(c.conn, xproto.Drawable(c.root)).Reply()
-	if err != nil {
-		return 0, 0, err
-	}
-	return reply.Width, reply.Height, nil
 }
 
 // GetWindowClass returns the WM_CLASS property of the given window.
@@ -258,6 +258,15 @@ func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
 		return 0, err
 	}
 	return pid, nil
+}
+
+// GetWindowSize returns the size of the given window.
+func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
+	geom, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
+	if err != nil {
+		return 0, 0, err
+	}
+	return geom.Width, geom.Height, nil
 }
 
 // GetWindowTitle returns the title of the given window.
@@ -298,12 +307,12 @@ func (c *Client) GetWmName() string {
 	return string(rawName) + " | " + nameUtf8
 }
 
-// GetWmSupported returns a prettified list of the window manager's
-// _NET_SUPPORTED variable.
-func (c *Client) GetWmSupported() string {
+// GetWmSupported returns a list of the window manager's supported properties
+// as defined by _NET_SUPPORTED.
+func (c *Client) GetWmSupported() ([]string, error) {
 	raw, err := c.getProperty(c.root, "_NET_SUPPORTED", xproto.AtomAtom)
 	if err != nil {
-		return "failed _NET_SUPPORTED"
+		return nil, err
 	}
 	supported := make([]string, 0)
 	for i := 0; i < len(raw); i += 4 {
@@ -316,7 +325,7 @@ func (c *Client) GetWmSupported() string {
 		}
 		supported = append(supported, reply.Name)
 	}
-	return strings.Join(supported, ", ")
+	return supported, nil
 }
 
 // GrabKey grabs a keyboard key from a window, diverting keypress events
@@ -335,7 +344,7 @@ func (c *Client) GrabKey(key Key, win xproto.Window) error {
 
 // GrabPointer grabs the mouse pointer from the given window.
 func (c *Client) GrabPointer(win xproto.Window) error {
-	_, err := xproto.GrabPointer(
+	reply, err := xproto.GrabPointer(
 		c.conn,
 		true,
 		win,
@@ -346,7 +355,20 @@ func (c *Client) GrabPointer(win xproto.Window) error {
 		xproto.CursorNone,
 		xproto.TimeCurrentTime,
 	).Reply()
-	return err
+	if err != nil {
+		return err
+	}
+	if reply.Status != xproto.GrabStatusSuccess {
+		var msg = []string{
+			"success",
+			"already grabbed",
+			"invalid time",
+			"not viewable",
+			"frozen",
+		}
+		return errors.Errorf("status: %s", msg[reply.Status])
+	}
+	return nil
 }
 
 // MoveWindow moves and resizes the given window.

@@ -74,7 +74,12 @@ func printDebugInfo(x *x11.Client, instances []mc.Instance) {
 	log.Printf("Root: %d\n", x.RootWindow())
 	log.Println("WM properties:")
 	log.Printf("_NET_WM_NAME: %s", x.GetWmName())
-	log.Printf("_NET_SUPPORTED: %s", x.GetWmSupported())
+	supported, err := x.GetWmSupported()
+	if err != nil {
+		log.Printf("Failed to get _NET_SUPPORTED: %s\n", err)
+	} else {
+		log.Printf("_NET_SUPPORTED: %s", strings.Join(supported, ", "))
+	}
 	for id, inst := range instances {
 		log.Printf(
 			"Instance %d, wid %d, pid %d version %d\n",
