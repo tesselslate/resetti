@@ -66,7 +66,6 @@ type Wall struct {
 // wall-specific details about it.
 type wallState struct {
 	mc.InstanceState
-	Frozen   bool
 	Locked   bool
 	Affinity int
 }
@@ -637,9 +636,9 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
 
 // WallReset resets the given instance.
 func (m *Wall) WallReset(id int, timestamp xproto.Timestamp) {
-	// Don't reset if the instance is locked, frozen, or on the dirt screen.
+	// Don't reset if the instance is locked or on the dirt screen.
 	state := m.states[id]
-	if state.Locked || state.Frozen || state.State == mc.StDirt {
+	if state.Locked || state.State == mc.StDirt {
 		return
 	}
 	m.reset(id, timestamp)
