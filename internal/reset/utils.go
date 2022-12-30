@@ -13,7 +13,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
-	"golang.org/x/sys/unix"
 )
 
 // findProjector finds the OBS wall projector (if open.)
@@ -57,15 +56,6 @@ func getWallSize(o *obs.Client, instances int) (uint16, uint16, error) {
 		ys = appendUnique(ys, transform.Y)
 	}
 	return uint16(len(xs)), uint16(len(ys)), nil
-}
-
-// makeCpuSet returns a unix.CPUSet instance where the first N CPUs are active.
-func makeCpuSet(n int) unix.CPUSet {
-	set := unix.CPUSet{}
-	for i := 0; i < n; i++ {
-		set.Set(i)
-	}
-	return set
 }
 
 // printDebugInfo prints some debug information to the log.

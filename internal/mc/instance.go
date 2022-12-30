@@ -1,18 +1,12 @@
 package mc
 
 import (
-	"fmt"
 	"log"
-	"os"
-	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/jezek/xgb/xproto"
-	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
-	"golang.org/x/sys/unix"
 )
 
 // The set of possible states an instance can be in.
@@ -106,28 +100,6 @@ func (i *Instance) Pause(timestamp xproto.Timestamp) {
 // logged.
 func (i *Instance) Reset(timestamp xproto.Timestamp) {
 	i.x.SendKeyPress(i.ResetKey.Code, i.Wid, i.lastTime(timestamp))
-}
-
-// SetAffinity sets the CPU affinity for all of the instance's threads to the
-// given CPU mask.
-func (i *Instance) SetAffinity(cpus *unix.CPUSet) error {
-	entries, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", i.Pid))
-	if err != nil {
-		return errors.Wrap(err, "read dir")
-	}
-	for _, entry := range entries {
-		tid, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue
-		}
-		// It's possible that a thread was killed since we read the directory.
-		// Return the error only if it is not an ERSCH (no such process.)
-		if err = unix.SchedSetaffinity(tid, cpus); err != syscall.Errno(3) && err != nil {
-			return errors.Wrap(err, "sched_setaffinity")
-		}
-
-	}
-	return nil
 }
 
 // Stretch stretches the instance's window.

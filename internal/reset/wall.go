@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
-	"golang.org/x/sys/unix"
 )
 
 // Affinity states
@@ -28,6 +28,10 @@ const (
 
 	// affLow is used when the instance is past the user's `low_threshold`.
 	affLow
+
+	// affMid is used when the instance would be high priority but the user is
+	// playing an instance.
+	affMid
 
 	// affHigh is used when the instance has not yet reached the `low_threshold`.
 	affHigh
@@ -55,12 +59,6 @@ type Wall struct {
 	lastMouseId       int
 	projector         xproto.Window
 	projectorChildren []xproto.Window
-
-	cpusIdle   unix.CPUSet
-	cpusLow    unix.CPUSet
-	cpusMid    unix.CPUSet
-	cpusHigh   unix.CPUSet
-	cpusActive unix.CPUSet
 }
 
 // wallState contains the state of an instance, as well as some auxiliary
@@ -178,13 +176,30 @@ func (m *Wall) Run() error {
 	}
 	m.counter = counter
 
-	// Setup affinity CPU masks.
+	// Setup cgroups for affinity.
 	if m.conf.AdvancedWall.Affinity {
-		m.cpusIdle = makeCpuSet(m.conf.AdvancedWall.CpusIdle)
-		m.cpusLow = makeCpuSet(m.conf.AdvancedWall.CpusLow)
-		m.cpusMid = makeCpuSet(m.conf.AdvancedWall.CpusMid)
-		m.cpusHigh = makeCpuSet(m.conf.AdvancedWall.CpusHigh)
-		m.cpusActive = makeCpuSet(m.conf.AdvancedWall.CpusActive)
+		cgroups := []string{
+			"idle",
+			"low",
+			"mid",
+			"high",
+			"active",
+		}
+		aff := []int{
+			m.conf.AdvancedWall.CpusIdle,
+			m.conf.AdvancedWall.CpusLow,
+			m.conf.AdvancedWall.CpusMid,
+			m.conf.AdvancedWall.CpusHigh,
+			m.conf.AdvancedWall.CpusActive,
+		}
+		for i, cgroup := range cgroups {
+			path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cpuset.cpus", cgroup)
+			d := fmt.Sprintf("0-%d", aff[i]-1)
+			err := os.WriteFile(path, []byte(d), 0644)
+			if err != nil {
+				return errors.Wrapf(err, "write cgroup %d", i)
+			}
+		}
 	}
 
 	// Start polling for X events.
@@ -535,25 +550,30 @@ func (m *Wall) SetAffinities() {
 // SetAffinity sets the CPU affinity of a specific instance.
 func (m *Wall) SetAffinity(id int, affinity int) {
 	m.states[id].Affinity = affinity
-	var set unix.CPUSet
-	switch affinity {
-	case affIdle:
-		set = m.cpusIdle
-	case affLow:
-		set = m.cpusLow
-	case affHigh:
-		if m.current == -1 {
-			// on wall
-			set = m.cpusHigh
-		} else {
-			// on instance
-			set = m.cpusMid
-		}
-	case affActive:
-		set = m.cpusActive
+	if affinity == affHigh && m.current != -1 {
+		affinity = affMid
 	}
-	if err := m.instances[id].SetAffinity(&set); err != nil {
-		log.Printf("SetAffinity failed: %s\n", err)
+	cgroup := []string{
+		"idle",
+		"low",
+		"mid",
+		"high",
+		"active",
+	}[affinity]
+	path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", cgroup)
+	fh, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("SetAffinity OpenFile failed: %s\n", err)
+		return
+	}
+	defer func() {
+		if err := fh.Close(); err != nil {
+			log.Printf("SetAffinity CloseFile failed: %s\n", err)
+		}
+	}()
+	_, err = fh.WriteString(strconv.Itoa(int(m.instances[id].Pid)))
+	if err != nil {
+		log.Printf("SetAffinity WriteString failed: %s\n", err)
 	}
 }
 
