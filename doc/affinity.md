@@ -26,6 +26,7 @@ chown [USER] /sys/fs/cgroup/resetti
 chown [USER] /sys/fs/cgroup/resetti/cgroup.procs
 chown [USER] /sys/fs/cgroup/resetti/cpuset.cpus
 mount -t cgroup2 none /sys/fs/cgroup/resetti
+echo "+cpuset" > /sys/fs/cgroup/resetti/cgroup.subtree_control
 for subgroup in idle low mid high active; do
     mkdir /sys/fs/cgroup/resetti/${subgroup}
     chown [USER] /sys/fs/cgroup/resetti/${subgroup}/cgroup.procs
