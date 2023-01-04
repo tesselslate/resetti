@@ -67,6 +67,9 @@ type Profile struct {
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
 	} `toml:"advanced_wall"`
+	MovingWall struct {
+		UseMovingWall bool `toml:"use_moving_wall"`
+	} `toml:"moving_wall"`
 }
 
 // GetFolder returns the path to the user's configuration folder.

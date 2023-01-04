@@ -30,8 +30,14 @@ lock = ""
 # The command/script to run when an instance is unlocked on the wall.
 unlock = ""
 
+# Moving wall is the modern wall arrangement where instances move between
+# sections of the screen based on their state.
+[moving_wall]
+# Whether to use moving wall or not.
+use_moving_wall = false
+
 [obs]
-# Whether or not to enable OBS websocket support. This is *required* for wall.
+# Whether or not to enable OBS websocket support. This is *required* for wall and moving_wall.
 enabled = false
 
 # The port to connect to OBS websocket on.
@@ -128,10 +134,12 @@ resize_y = 0
 # Whether or not to enable mouse support on the wall. Enabling this will allow
 # you to click on instances to perform various actions instead of having to use
 # the number keys. Note that enabling this does not disable the number keys.
+# NOTE: Mouse support currently doesn't work with moving wall. Please make sure to keep this as false while using moving wall.
 use_mouse = false
 
 # If enabled, resetting from within an instance will switch to the first locked
 # instance (if any) instead of going back to the wall.
+# NOTE: This feature doesn't work with moving wall at the moment. Please make sure to keep this as false while using moving wall.
 goto_locked = false
 
 # Whether or not to create the "sleepbg.lock" file when an instance is being

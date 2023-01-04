@@ -55,6 +55,8 @@ type Wall struct {
 	current    int
 	pause      chan int
 
+	movingWall MovingWall
+
 	wallGrab          bool
 	lastMouseId       int
 	projector         xproto.Window
@@ -72,6 +74,7 @@ type wallState struct {
 
 // NewWall creates a new Wall for wall resetting.
 func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
+	// Create a different instance of `wall` for the moving wall setting.
 	wall := Wall{
 		conf:        conf,
 		x:           x,
@@ -93,6 +96,14 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 func (m *Wall) Run() error {
 	// Ensure that the user's window manager supports the necessary EWMH
 	// properties.
+	if m.conf.Wall.UseMouse && m.conf.MovingWall.UseMovingWall {
+		log.Printf("WARNING: Using mouse with moving wall is not supported. Set it to false to stop this log message from appearing. Setting it to false and continuing now....")
+		m.conf.Wall.UseMouse = false
+	}
+	if m.conf.Wall.GoToLocked && m.conf.MovingWall.UseMovingWall {
+		log.Printf("WARNING: Using goto_locked with moving wall is not supported. Set it to false to stop this log message from appearing. Setting it to false and continuing now....")
+		m.conf.Wall.GoToLocked = false
+	}
 	wm_supported, err := m.x.GetWmSupported()
 	if err != nil {
 		return errors.Wrap(err, "wm supported")
@@ -145,28 +156,44 @@ func (m *Wall) Run() error {
 	if err != nil {
 		return err
 	}
-	err = m.obs.SetSceneCollection(fmt.Sprintf("resetti - %d multi", len(m.instances)))
-	if err != nil {
-		return errors.Wrap(err, "failed to set scene collection")
+	if !m.conf.MovingWall.UseMovingWall {
+		err = m.obs.SetSceneCollection(fmt.Sprintf("resetti - %d multi", len(m.instances)))
+		if err != nil {
+			return errors.Wrap(err, "failed to set scene collection")
+		}
+	} else {
+		err = m.obs.SetSceneCollection(fmt.Sprintf("resetti - %d moving_multi", len(m.instances)))
+		if err != nil {
+			return errors.Wrap(err, "failed to set scene collection")
+		}
 	}
 	wallWidth, wallHeight, err := getWallSize(m.obs, len(m.instances))
 	if err != nil {
 		return errors.Wrap(err, "failed to get wall size")
 	}
-	if err = setSources(m.obs, m.instances); err != nil {
+	if err = setSources(m.obs, m.instances, m.conf.MovingWall.UseMovingWall); err != nil {
 		return errors.Wrap(err, "failed to set sources")
 	}
 
 	// Disable all lock icons (some may be on from the last time resetti
 	// was used.)
-	for i := 1; i <= len(m.instances); i += 1 {
-		err = m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", i), false)
-		if err != nil {
-			return errors.Wrap(err, "failed to make lock invisible")
+	if !m.conf.MovingWall.UseMovingWall {
+		for i := 1; i <= len(m.instances); i += 1 {
+			err = m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", i), false)
+			if err != nil {
+				return errors.Wrap(err, "failed to make lock invisible")
+			}
 		}
 	}
 	if err = m.obs.SetScene("Wall"); err != nil {
 		return errors.Wrap(err, "failed to set scene")
+	}
+
+	// Setup moving wall with defaults.
+	m.movingWall = DefaultMovingWall(m.obs, m.conf)
+	err = m.movingWall.SetupWallScene(m.conf, m.instances)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup wall scene for moving wall.")
 	}
 
 	// Setup reset counter.
@@ -484,27 +511,36 @@ func (m *Wall) GrabWallKeys() error {
 }
 
 // HandleInput handles an instance-specific input on the wall.
-func (m *Wall) HandleInput(id int, mod x11.Keymod, timestamp xproto.Timestamp) {
+func (m *Wall) HandleInput(id int, mod x11.Keymod, timestamp xproto.Timestamp) error {
 	switch mod {
 	case m.conf.Keys.WallPlay:
-		m.WallPlay(id, timestamp)
+		err := m.WallPlay(id, timestamp)
+		if err != nil {
+			return err
+		}
 	case m.conf.Keys.WallReset:
-		m.WallReset(id, timestamp)
+		err := m.WallReset(id, timestamp)
+		if err != nil {
+			return err
+		}
 	case m.conf.Keys.WallResetOthers:
 		m.WallResetOthers(id, timestamp)
 	case m.conf.Keys.WallLock:
-		m.WallLock(id, timestamp)
+		err := m.WallLock(id, timestamp)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // HandleResetInput handles the user pressing the Reset keybind.
 func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
-	if m.current == -1 {
+	if m.current == -1 && !m.conf.MovingWall.UseMovingWall {
 		log.Println("Resetting all")
 		for idx := range m.instances {
 			m.WallReset(idx, timestamp)
 		}
-		return
 	}
 	log.Printf("Resetting %d from ingame\n", m.current)
 	m.reset(m.current, timestamp)
@@ -519,7 +555,6 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 		for idx, state := range m.states {
 			if state.Locked && state.State == mc.StIdle {
 				m.WallPlay(idx, timestamp)
-				return
 			}
 		}
 	}
@@ -578,16 +613,36 @@ func (m *Wall) SetAffinity(id int, affinity int) {
 }
 
 // SetLocked sets the lock state of the given instance.
-func (m *Wall) SetLocked(id int, locked bool) {
+func (m *Wall) SetLocked(id int, locked bool) error {
 	// Do nothing if the state is unchanged.
 	if m.states[id].Locked == locked {
-		return
+		return nil
+	}
+	if locked {
+		err := m.movingWall.lockedView.renderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+		err = m.movingWall.loadingView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+	} else {
+		err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+		err = m.movingWall.loadingView.renderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
 	}
 	m.states[id].Locked = locked
 	err := m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), locked)
-	if err != nil {
+	if !m.conf.MovingWall.UseMovingWall && err != nil {
 		log.Printf("SetLocked error: %s\n", err)
 	}
+	return nil
 }
 
 // UngrabWallKeys releases wall-only key grabs.
@@ -619,30 +674,56 @@ func (m *Wall) UngrabWallKeys() error {
 }
 
 // UpdateAffinity updates the affinity of an instance based on its state.
-func (m *Wall) UpdateAffinity(id int) {
+func (m *Wall) UpdateAffinity(id int) error {
 	wallState := m.states[id]
 	state := wallState.InstanceState
 
 	switch state.State {
 	case mc.StDirt:
 		m.SetAffinity(id, affHigh)
+		if m.conf.MovingWall.UseMovingWall {
+			err := m.movingWall.loadingView.unrenderInstance(m.instances[id])
+			if err != nil {
+				return err
+			}
+		}
 	case mc.StPreview:
 		if state.Progress >= m.conf.AdvancedWall.LowThreshold && !wallState.Locked {
 			m.SetAffinity(id, affLow)
 		} else {
 			m.SetAffinity(id, affHigh)
 		}
+		if m.conf.MovingWall.UseMovingWall {
+			err := m.movingWall.loadingView.renderInstance(m.instances[id])
+			if err != nil {
+				return err
+			}
+		}
 	case mc.StIdle:
 		m.SetAffinity(id, affIdle)
 	case mc.StIngame:
 		m.SetAffinity(id, affActive)
+		if m.conf.MovingWall.UseMovingWall {
+			if m.states[id].Locked {
+				err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
+				if err != nil {
+					return err
+				}
+			} else {
+				err := m.movingWall.loadingView.unrenderInstance(m.instances[id])
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
+	return nil
 }
 
 // WallPlay plays the given instance.
-func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
+func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) error {
 	if m.states[id].State != mc.StIdle {
-		return
+		return nil
 	}
 	if m.conf.AdvancedWall.Affinity {
 		m.SetAffinity(id, affActive)
@@ -660,23 +741,28 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
 			log.Printf("Failed to unstretch instance: %s\n", err)
 		}
 	}
-	m.SetLocked(id, false)
+	err := m.SetLocked(id, false)
+	if err != nil {
+		return err
+	}
 	m.current = id
 	m.CreateSleepbgLock()
 	if m.conf.AdvancedWall.Affinity {
 		m.SetAffinities()
 	}
+	return nil
 }
 
 // WallReset resets the given instance.
-func (m *Wall) WallReset(id int, timestamp xproto.Timestamp) {
+func (m *Wall) WallReset(id int, timestamp xproto.Timestamp) error {
 	// Don't reset if the instance is locked or on the dirt screen.
 	state := m.states[id]
 	if state.Locked || state.State == mc.StDirt {
-		return
+		return nil
 	}
 	m.reset(id, timestamp)
 	go runHook(m.conf.Hooks.WallReset)
+	return nil
 }
 
 // WallResetOthers plays the given instance and resets all other unlocked
@@ -694,8 +780,11 @@ func (m *Wall) WallResetOthers(id int, timestamp xproto.Timestamp) {
 }
 
 // WallLock locks the given instance.
-func (m *Wall) WallLock(id int, timestamp xproto.Timestamp) {
-	m.SetLocked(id, !m.states[id].Locked)
+func (m *Wall) WallLock(id int, timestamp xproto.Timestamp) error {
+	err := m.SetLocked(id, !m.states[id].Locked)
+	if err != nil {
+		return err
+	}
 	if m.states[id].Locked {
 		go runHook(m.conf.Hooks.Lock)
 		if m.states[id].State == mc.StPreview {
@@ -706,4 +795,5 @@ func (m *Wall) WallLock(id int, timestamp xproto.Timestamp) {
 	} else {
 		go runHook(m.conf.Hooks.Unlock)
 	}
+	return nil
 }

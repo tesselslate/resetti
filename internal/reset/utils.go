@@ -115,7 +115,7 @@ func runHook(str string) {
 }
 
 // setSources sets the correct window captures for each Minecraft source.
-func setSources(o *obs.Client, instances []mc.Instance) error {
+func setSources(o *obs.Client, instances []mc.Instance, usingMovingWall bool) error {
 	for i, v := range instances {
 		err := o.SetSourceSettings(
 			fmt.Sprintf("MC %d", i+1),
@@ -126,6 +126,38 @@ func setSources(o *obs.Client, instances []mc.Instance) error {
 		)
 		if err != nil {
 			return err
+		}
+		if usingMovingWall {
+			err = o.SetSourceSettings(
+				fmt.Sprintf("MC %d LockedView", i+1),
+				obs.StringMap{
+					"capture_window": strconv.Itoa(int(v.Wid)),
+				},
+				true,
+			)
+			if err != nil {
+				return err
+			}
+			err = o.SetSourceSettings(
+				fmt.Sprintf("MC %d FullView", i+1),
+				obs.StringMap{
+					"capture_window": strconv.Itoa(int(v.Wid)),
+				},
+				true,
+			)
+			if err != nil {
+				return err
+			}
+			err = o.SetSourceSettings(
+				fmt.Sprintf("MC %d LoadingView", i+1),
+				obs.StringMap{
+					"capture_window": strconv.Itoa(int(v.Wid)),
+				},
+				true,
+			)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -114,7 +114,7 @@ func (m *Multi) Run() error {
 	}()
 	m.instances[0].Focus()
 	if m.obs != nil {
-		if err = setSources(m.obs, m.instances); err != nil {
+		if err = setSources(m.obs, m.instances, m.conf.MovingWall.UseMovingWall); err != nil {
 			return errors.Wrap(err, "failed to set OBS sources")
 		}
 		if err = m.obs.SetScene("Instance 1"); err != nil {
