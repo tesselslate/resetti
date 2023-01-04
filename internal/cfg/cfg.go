@@ -33,6 +33,7 @@ type Profile struct {
 	} `toml:"obs"`
 	Reset struct {
 		Delay        int  `toml:"delay"`
+		PauseDelay   int  `toml:"pause_delay"`
 		UnpauseFocus bool `toml:"unpause_on_focus"`
 	} `toml:"reset"`
 	Keys struct {
@@ -102,12 +103,16 @@ func GetProfile(name string) (Profile, error) {
 	{
 		cpus := runtime.NumCPU()
 		if conf.AdvancedWall.Affinity {
-			idle := cpus < conf.AdvancedWall.CpusIdle
-			low := cpus < conf.AdvancedWall.CpusLow
-			mid := cpus < conf.AdvancedWall.CpusMid
-			active := cpus < conf.AdvancedWall.CpusActive
-			if idle || low || mid || active {
+			idle := conf.AdvancedWall.CpusIdle
+			low := conf.AdvancedWall.CpusLow
+			mid := conf.AdvancedWall.CpusMid
+			high := conf.AdvancedWall.CpusHigh
+			active := conf.AdvancedWall.CpusActive
+			if idle > cpus || low > cpus || mid > cpus || high > cpus || active > cpus {
 				return Profile{}, errors.New("too many CPUs set in advanced affinity")
+			}
+			if idle <= 0 || low <= 0 || mid <= 0 || high <= 0 || active <= 0 {
+				return Profile{}, errors.New("all CPU counts must be above zero in affinity")
 			}
 		}
 		if conf.Keys.Focus == conf.Keys.Reset {

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
-	"golang.org/x/sys/unix"
 )
 
 // Affinity states
@@ -28,6 +28,10 @@ const (
 
 	// affLow is used when the instance is past the user's `low_threshold`.
 	affLow
+
+	// affMid is used when the instance would be high priority but the user is
+	// playing an instance.
+	affMid
 
 	// affHigh is used when the instance has not yet reached the `low_threshold`.
 	affHigh
@@ -49,17 +53,12 @@ type Wall struct {
 	instances  []mc.Instance
 	states     []wallState
 	current    int
+	pause      chan int
 
 	wallGrab          bool
 	lastMouseId       int
 	projector         xproto.Window
 	projectorChildren []xproto.Window
-
-	cpusIdle   unix.CPUSet
-	cpusLow    unix.CPUSet
-	cpusMid    unix.CPUSet
-	cpusHigh   unix.CPUSet
-	cpusActive unix.CPUSet
 }
 
 // wallState contains the state of an instance, as well as some auxiliary
@@ -78,6 +77,7 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 		x:           x,
 		logReaders:  make([]LogReader, 0, len(infos)),
 		current:     -1,
+		pause:       make(chan int, len(infos)*2),
 		lastMouseId: -1,
 	}
 	wall.instances = make([]mc.Instance, 0, len(infos))
@@ -176,13 +176,30 @@ func (m *Wall) Run() error {
 	}
 	m.counter = counter
 
-	// Setup affinity CPU masks.
+	// Setup cgroups for affinity.
 	if m.conf.AdvancedWall.Affinity {
-		m.cpusIdle = makeCpuSet(m.conf.AdvancedWall.CpusIdle)
-		m.cpusLow = makeCpuSet(m.conf.AdvancedWall.CpusLow)
-		m.cpusMid = makeCpuSet(m.conf.AdvancedWall.CpusMid)
-		m.cpusHigh = makeCpuSet(m.conf.AdvancedWall.CpusHigh)
-		m.cpusActive = makeCpuSet(m.conf.AdvancedWall.CpusActive)
+		cgroups := []string{
+			"idle",
+			"low",
+			"mid",
+			"high",
+			"active",
+		}
+		aff := []int{
+			m.conf.AdvancedWall.CpusIdle,
+			m.conf.AdvancedWall.CpusLow,
+			m.conf.AdvancedWall.CpusMid,
+			m.conf.AdvancedWall.CpusHigh,
+			m.conf.AdvancedWall.CpusActive,
+		}
+		for i, cgroup := range cgroups {
+			path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cpuset.cpus", cgroup)
+			d := fmt.Sprintf("0-%d", aff[i]-1)
+			err := os.WriteFile(path, []byte(d), 0644)
+			if err != nil {
+				return errors.Wrapf(err, "write cgroup %d", i)
+			}
+		}
 	}
 
 	// Start polling for X events.
@@ -222,19 +239,22 @@ func (m *Wall) Run() error {
 		case err := <-readerErrors:
 			log.Printf("Fatal reader error: %s\n", err)
 			return nil
+		case id := <-m.pause:
+			if m.states[id].State == mc.StIdle || m.states[id].State == mc.StPreview {
+				m.instances[id].Pause(0)
+			}
 		case update := <-updates:
 			state := update.State
 			id := update.Id
 
 			// Pause the instance if it is now idle and not focused.
 			nowIdle := m.states[id].State != mc.StIdle && state.State == mc.StIdle
-			if nowIdle && m.current != id {
-				time.Sleep(10 * time.Millisecond)
-				m.instances[id].Pause(0)
-			}
-			if state.State == mc.StPreview && state.Progress > 5 && !m.states[id].WpPause {
-				m.instances[id].Pause(0)
-				m.states[id].WpPause = true
+			nowPreview := m.states[id].State != mc.StPreview && state.State == mc.StPreview
+			if (nowIdle || nowPreview) && m.current != id {
+				go func(i int) {
+					<-time.After(time.Millisecond * time.Duration(m.conf.Reset.PauseDelay))
+					m.pause <- i
+				}(id)
 			}
 			m.states[id].InstanceState = state
 
@@ -419,7 +439,9 @@ func (m *Wall) GotoWall() {
 		log.Printf("Failed to get projector children: %s\n", err)
 	}
 	m.DeleteSleepbgLock()
-	m.SetAffinities()
+	if m.conf.AdvancedWall.Affinity {
+		m.SetAffinities()
+	}
 }
 
 // GrabWallKeys attempts to grab wall-only keys from the X server.
@@ -528,25 +550,30 @@ func (m *Wall) SetAffinities() {
 // SetAffinity sets the CPU affinity of a specific instance.
 func (m *Wall) SetAffinity(id int, affinity int) {
 	m.states[id].Affinity = affinity
-	var set unix.CPUSet
-	switch affinity {
-	case affIdle:
-		set = m.cpusIdle
-	case affLow:
-		set = m.cpusLow
-	case affHigh:
-		if m.current == -1 {
-			// on wall
-			set = m.cpusHigh
-		} else {
-			// on instance
-			set = m.cpusMid
-		}
-	case affActive:
-		set = m.cpusActive
+	if affinity == affHigh && m.current != -1 {
+		affinity = affMid
 	}
-	if err := m.instances[id].SetAffinity(&set); err != nil {
-		log.Printf("SetAffinity failed: %s\n", err)
+	cgroup := []string{
+		"idle",
+		"low",
+		"mid",
+		"high",
+		"active",
+	}[affinity]
+	path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", cgroup)
+	fh, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("SetAffinity OpenFile failed: %s\n", err)
+		return
+	}
+	defer func() {
+		if err := fh.Close(); err != nil {
+			log.Printf("SetAffinity CloseFile failed: %s\n", err)
+		}
+	}()
+	_, err = fh.WriteString(strconv.Itoa(int(m.instances[id].Pid)))
+	if err != nil {
+		log.Printf("SetAffinity WriteString failed: %s\n", err)
 	}
 }
 
@@ -617,7 +644,9 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
 	if m.states[id].State != mc.StIdle {
 		return
 	}
-	m.SetAffinity(id, affActive)
+	if m.conf.AdvancedWall.Affinity {
+		m.SetAffinity(id, affActive)
+	}
 	m.states[id].State = mc.StIngame
 	if err := m.obs.SetScene(fmt.Sprintf("Instance %d", id+1)); err != nil {
 		log.Printf("Failed to set scene: %s\n", err)
@@ -670,7 +699,9 @@ func (m *Wall) WallLock(id int, timestamp xproto.Timestamp) {
 	if m.states[id].Locked {
 		go runHook(m.conf.Hooks.Lock)
 		if m.states[id].State == mc.StPreview {
-			m.SetAffinity(id, affHigh)
+			if m.conf.AdvancedWall.Affinity {
+				m.SetAffinity(id, affHigh)
+			}
 		}
 	} else {
 		go runHook(m.conf.Hooks.Unlock)

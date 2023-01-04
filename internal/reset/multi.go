@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
@@ -28,6 +29,7 @@ type Multi struct {
 	states     []mc.InstanceState
 	instances  []mc.Instance
 	current    int // the index of the current instance
+	pause      chan int
 }
 
 // NewMulti creates a new Multi for multi-instance resetting.
@@ -36,6 +38,7 @@ func NewMulti(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Multi {
 		conf:       conf,
 		x:          x,
 		logReaders: make([]LogReader, 0, len(infos)),
+		pause:      make(chan int, len(infos)*2),
 	}
 	multi.instances = make([]mc.Instance, 0, len(infos))
 	for _, info := range infos {
@@ -142,14 +145,22 @@ func (m *Multi) Run() error {
 		case err := <-readerErrors:
 			log.Printf("Fatal reader error: %s\n", err)
 			return nil
+		case id := <-m.pause:
+			if m.states[id].State == mc.StIdle || m.states[id].State == mc.StPreview {
+				m.instances[id].Pause(0)
+			}
 		case update := <-updates:
 			state := update.State
 			id := update.Id
 
 			// Pause the instance if it is now idle and not focused.
 			nowIdle := m.states[id].State != mc.StIdle && state.State == mc.StIdle
-			if nowIdle && m.current != id {
-				m.instances[id].Pause(0)
+			nowPreview := m.states[id].State != mc.StPreview && state.State == mc.StPreview
+			if (nowIdle || nowPreview) && m.current != id {
+				go func(i int) {
+					<-time.After(time.Millisecond * time.Duration(m.conf.Reset.PauseDelay))
+					m.pause <- i
+				}(id)
 			}
 			m.states[id] = state
 		case evt := <-xEvt:
