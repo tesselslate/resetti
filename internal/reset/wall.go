@@ -407,6 +407,16 @@ func (m *Wall) Run() error {
 				}
 			}
 		}
+		if m.conf.MovingWall.UseMovingWall {
+			err := m.movingWall.lockedView.update()
+			if err != nil {
+				return err
+			}
+			err = m.movingWall.loadingView.update()
+			if err != nil {
+				return err
+			}
+		}
 	}
 }
 
@@ -535,7 +545,7 @@ func (m *Wall) HandleInput(id int, mod x11.Keymod, timestamp xproto.Timestamp) e
 }
 
 // HandleResetInput handles the user pressing the Reset keybind.
-func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
+func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) error {
 	if m.current == -1 && !m.conf.MovingWall.UseMovingWall {
 		log.Println("Resetting all")
 		for idx := range m.instances {
@@ -559,11 +569,12 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 		}
 	}
 	m.GotoWall()
+	return nil
 }
 
 // reset performs all of the common tasks for resetting an instance (those
 // which would be done both for resetting from ingame and on the wall.)
-func (m *Wall) reset(id int, timestamp xproto.Timestamp) {
+func (m *Wall) reset(id int, timestamp xproto.Timestamp) error {
 	m.instances[id].Reset(timestamp)
 	m.counter.Increment()
 	m.states[id].State = mc.StDirt
@@ -571,6 +582,13 @@ func (m *Wall) reset(id int, timestamp xproto.Timestamp) {
 	if m.conf.AdvancedWall.Affinity {
 		m.SetAffinity(id, affHigh)
 	}
+	if m.conf.MovingWall.UseMovingWall {
+		err := m.movingWall.loadingView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetAffinities sets the CPU affinity of each instance to the correct value.
@@ -618,29 +636,31 @@ func (m *Wall) SetLocked(id int, locked bool) error {
 	if m.states[id].Locked == locked {
 		return nil
 	}
-	if locked {
-		err := m.movingWall.lockedView.renderInstance(m.instances[id])
-		if err != nil {
-			return err
+	if m.states[id].InstanceState.State != mc.StDirt {
+		m.states[id].Locked = locked
+		err := m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), locked)
+		if !m.conf.MovingWall.UseMovingWall && err != nil {
+			log.Printf("SetLocked error: %s\n", err)
 		}
-		err = m.movingWall.loadingView.unrenderInstance(m.instances[id])
-		if err != nil {
-			return err
+		if locked {
+			err := m.movingWall.lockedView.renderInstance(m.instances[id])
+			if err != nil {
+				return err
+			}
+			err = m.movingWall.loadingView.unrenderInstance(m.instances[id])
+			if err != nil {
+				return err
+			}
+		} else {
+			err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
+			if err != nil {
+				return err
+			}
+			err = m.movingWall.loadingView.renderInstance(m.instances[id])
+			if err != nil {
+				return err
+			}
 		}
-	} else {
-		err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
-		if err != nil {
-			return err
-		}
-		err = m.movingWall.loadingView.renderInstance(m.instances[id])
-		if err != nil {
-			return err
-		}
-	}
-	m.states[id].Locked = locked
-	err := m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), locked)
-	if !m.conf.MovingWall.UseMovingWall && err != nil {
-		log.Printf("SetLocked error: %s\n", err)
 	}
 	return nil
 }
@@ -681,12 +701,6 @@ func (m *Wall) UpdateAffinity(id int) error {
 	switch state.State {
 	case mc.StDirt:
 		m.SetAffinity(id, affHigh)
-		if m.conf.MovingWall.UseMovingWall {
-			err := m.movingWall.loadingView.unrenderInstance(m.instances[id])
-			if err != nil {
-				return err
-			}
-		}
 	case mc.StPreview:
 		if state.Progress >= m.conf.AdvancedWall.LowThreshold && !wallState.Locked {
 			m.SetAffinity(id, affLow)

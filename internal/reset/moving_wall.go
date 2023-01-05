@@ -104,7 +104,7 @@ func (m *LockedView) renderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
-	if m.renderedInstances != 4 {
+	if m.renderedInstances < 4 {
 		m.instances = append(m.instances, instance)
 		m.renderedInstances++
 	} else {
@@ -122,25 +122,23 @@ func (m *LockedView) unrenderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
-	if len(m.lockQueue) == 0 {
-		for i, inst := range m.instances {
-			if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
-				copy(m.instances[i:], m.instances[i+1:])
-				m.instances[len(m.instances)-1] = mc.Instance{}
-				m.instances = m.instances[:len(m.instances)-1]
-				m.renderedInstances--
-				break
-			}
+	for i, inst := range m.instances {
+		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
+			copy(m.instances[i:], m.instances[i+1:])
+			m.instances[len(m.instances)-1] = mc.Instance{}
+			m.instances = m.instances[:len(m.instances)-1]
+			break
 		}
-
-	} else {
+	}
+	if len(m.lockQueue) != 0 {
 		m.instances = append(m.instances, m.lockQueue[0])
 		if len(m.lockQueue) != 1 {
 			copy(m.lockQueue[0:], m.lockQueue[1:])
 			m.lockQueue[len(m.lockQueue)-1] = mc.Instance{}
 		}
 		m.lockQueue = m.lockQueue[:len(m.lockQueue)-1]
-
+	} else {
+		m.renderedInstances--
 	}
 	err = m.update()
 	if err != nil {
@@ -189,7 +187,7 @@ func (m *LoadingView) renderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
-	if m.renderedInstances != 4 {
+	if m.renderedInstances < 4 {
 		m.instances = append(m.instances, instance)
 		m.renderedInstances++
 	} else {
@@ -207,25 +205,23 @@ func (m *LoadingView) unrenderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
-	if len(m.loadQueue) == 0 {
-		for i, inst := range m.instances {
-			if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
-				copy(m.instances[i:], m.instances[i+1:])
-				m.instances[len(m.instances)-1] = mc.Instance{}
-				m.instances = m.instances[:len(m.instances)-1]
-				m.renderedInstances--
-				break
-			}
+	for i, inst := range m.instances {
+		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
+			copy(m.instances[i:], m.instances[i+1:])
+			m.instances[len(m.instances)-1] = mc.Instance{}
+			m.instances = m.instances[:len(m.instances)-1]
+			break
 		}
-
-	} else {
+	}
+	if len(m.loadQueue) != 0 {
 		m.instances = append(m.instances, m.loadQueue[0])
 		if len(m.loadQueue) != 1 {
 			copy(m.loadQueue[0:], m.loadQueue[1:])
 			m.loadQueue[len(m.loadQueue)-1] = mc.Instance{}
 		}
 		m.loadQueue = m.loadQueue[:len(m.loadQueue)-1]
-
+	} else {
+		m.renderedInstances--
 	}
 	err = m.update()
 	if err != nil {
