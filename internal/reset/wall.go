@@ -553,7 +553,10 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) error {
 		}
 	}
 	log.Printf("Resetting %d from ingame\n", m.current)
-	m.reset(m.current, timestamp)
+	err := m.reset(m.current, timestamp)
+	if err != nil {
+		return err
+	}
 	if m.conf.Wall.StretchWindows {
 		if err := m.instances[m.current].Stretch(m.conf); err != nil {
 			log.Printf("Failed to stretch instance: %s\n", err)
@@ -774,7 +777,10 @@ func (m *Wall) WallReset(id int, timestamp xproto.Timestamp) error {
 	if state.Locked || state.State == mc.StDirt {
 		return nil
 	}
-	m.reset(id, timestamp)
+	err := m.reset(id, timestamp)
+	if err != nil {
+		return err
+	}
 	go runHook(m.conf.Hooks.WallReset)
 	return nil
 }
