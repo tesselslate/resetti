@@ -148,12 +148,12 @@ func (m *LockedView) unrenderInstance(instance mc.Instance) error {
 }
 
 func (m *LockedView) update() error {
-	sqrt := math.Sqrt(float64(m.renderedInstances))
+	sqrt := math.Ceil(math.Sqrt(float64(m.renderedInstances)))
 	instWidth := float64(m.width) / (sqrt + 1)
 	instHeight := float64(m.height) / (sqrt + 1)
 	idx := 0
-	for y := 0.0; y <= float64(m.height); y += instHeight {
-		for x := 0.0; x <= float64(m.width); x += instWidth {
+	for y := 0.0; y < float64(m.height); y += instHeight {
+		for x := 0.0; x < float64(m.width); x += instWidth {
 			if idx < m.renderedInstances {
 				instName := fmt.Sprintf("MC %d LockedView", m.instances[idx].Id+1)
 				err := m.obs.SetSceneItemVisible("LockedView", instName, true)
@@ -231,12 +231,12 @@ func (m *LoadingView) unrenderInstance(instance mc.Instance) error {
 }
 
 func (m *LoadingView) update() error {
-	sqrt := math.Sqrt(float64(m.renderedInstances))
+	sqrt := math.Ceil(math.Sqrt(float64(m.renderedInstances)))
 	instWidth := float64(m.width) / (sqrt + 1)
 	instHeight := float64(m.height) / (sqrt + 1)
 	idx := 0
-	for y := 0.0; y <= float64(m.height); y += instHeight {
-		for x := 0.0; x <= float64(m.width); x += instWidth {
+	for y := 0.0; y < float64(m.height); y += instHeight {
+		for x := 0.0; x < float64(m.width); x += instWidth {
 			if idx < m.renderedInstances {
 				instName := fmt.Sprintf("MC %d LoadingView", m.instances[idx].Id+1)
 				err := m.obs.SetSceneItemVisible("LoadingView", instName, true)
@@ -266,36 +266,27 @@ func (m *LoadingView) hideAll() error {
 }
 
 func (m *MovingWall) render(instances []mc.Instance) error {
-	width, height := m.loadingView.width, m.loadingView.height
-	instWidth, instHeight := width/len(instances), height/len(instances)
 	pos_x, pos_y := 0, 0
 	divisor := math.Sqrt(float64(len(instances)))
-	lastPos := [2]int{pos_x, pos_y}
 	for i, instance := range instances {
 		instName := fmt.Sprintf("MC %d LockedView", instance.Id+1)
 		err := m.obs.SetSceneItemVisible("LockedView", instName, false)
 		if err != nil {
 			return err
 		}
-		instName = fmt.Sprintf("MC %d LoadingView", instance.Id+1)
-		err = m.obs.SetSceneItemVisible("LoadingView", instName, true)
-		if err != nil {
-			return err
-		}
-		err = m.obs.SetSceneItemTransform("LoadingView", instName, obs.Transform{X: float64(lastPos[0]), Y: float64(lastPos[1]), Width: float64(instWidth), Height: float64(instHeight)})
-		if err != nil {
-			return err
-		}
-		if float64(i) >= divisor {
-			lastPos = [2]int{pos_x, pos_y + instHeight}
+		if i < 4 {
+			m.loadingView.instances = append(m.loadingView.instances, instance)
+			m.loadingView.renderedInstances++
+			err := m.loadingView.update()
+			if err != nil {
+				return err
+			}
 		} else {
-			lastPos = [2]int{pos_x + instWidth, pos_y}
+			m.loadingView.loadQueue = append(m.loadingView.loadQueue, instance)
 		}
-		m.loadingView.instances = append(m.loadingView.instances, instance)
-		m.loadingView.renderedInstances++
 	}
-	width, height = m.fullView.width, m.fullView.height
-	instWidth, instHeight = width/len(instances), height/len(instances)
+	width, height := m.fullView.width, m.fullView.height
+	instWidth, instHeight := width/len(instances), height/len(instances)
 	m.fullView.lastAddedPos = [2]int{pos_x, pos_y}
 	for i, instance := range instances {
 		err := m.fullView.renderInstance(instance, m.fullView.lastAddedPos[0], m.fullView.lastAddedPos[1], instWidth, instHeight, i)

@@ -407,16 +407,6 @@ func (m *Wall) Run() error {
 				}
 			}
 		}
-		if m.conf.MovingWall.UseMovingWall {
-			err := m.movingWall.lockedView.update()
-			if err != nil {
-				return err
-			}
-			err = m.movingWall.loadingView.update()
-			if err != nil {
-				return err
-			}
-		}
 	}
 }
 
