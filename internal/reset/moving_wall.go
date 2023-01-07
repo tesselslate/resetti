@@ -26,11 +26,10 @@ type LoadingView struct {
 	loadQueue         []mc.Instance
 }
 type FullView struct {
-	width        int
-	height       int
-	lastAddedPos [2]int
-	instances    []mc.Instance
-	obs          *obs.Client
+	width     int
+	height    int
+	instances []mc.Instance
+	obs       *obs.Client
 }
 
 type MovingWall struct {
@@ -266,8 +265,6 @@ func (m *LoadingView) hideAll() error {
 }
 
 func (m *MovingWall) render(instances []mc.Instance) error {
-	pos_x, pos_y := 0, 0
-	divisor := math.Sqrt(float64(len(instances)))
 	for i, instance := range instances {
 		instName := fmt.Sprintf("MC %d LockedView", instance.Id+1)
 		err := m.obs.SetSceneItemVisible("LockedView", instName, false)
@@ -285,18 +282,20 @@ func (m *MovingWall) render(instances []mc.Instance) error {
 			m.loadingView.loadQueue = append(m.loadingView.loadQueue, instance)
 		}
 	}
-	width, height := m.fullView.width, m.fullView.height
-	instWidth, instHeight := width/len(instances), height/len(instances)
-	m.fullView.lastAddedPos = [2]int{pos_x, pos_y}
-	for i, instance := range instances {
-		err := m.fullView.renderInstance(instance, m.fullView.lastAddedPos[0], m.fullView.lastAddedPos[1], instWidth, instHeight, i)
-		if err != nil {
-			return err
-		}
-		if float64(i) >= divisor {
-			m.fullView.lastAddedPos = [2]int{pos_x, pos_y + instHeight}
-		} else {
-			m.fullView.lastAddedPos = [2]int{pos_x + instWidth, pos_y}
+	cols := int(math.Floor(math.Sqrt(float64(len(instances)))))
+	rows := int(math.Ceil(float64(len(instances)) / float64(cols)))
+	width, height := m.fullView.width/cols, m.fullView.height/rows
+	id := 0
+	for y := 0; y < rows; y += 1 {
+		for x := 0; x < cols; x += 1 {
+			if id == len(instances) {
+				break
+			}
+			err := m.fullView.renderInstance(instances[id], width*x, height*y, width, height, id)
+			if err != nil {
+				return err
+			}
+			id += 1
 		}
 	}
 	return nil
