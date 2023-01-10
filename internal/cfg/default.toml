@@ -32,9 +32,35 @@ unlock = ""
 
 # Moving wall is the modern wall arrangement where instances move between
 # sections of the screen based on their state.
+
 [moving_wall]
 # Whether to use moving wall or not.
 use_moving_wall = false
+
+# Set a keybind to reset the first loaded instance in the loading view.
+# The same rules for reset keybinds work here.
+# Eg: reset_first_loaded = "R"
+reset_first_loaded = "R"
+
+# Set a keybind to lock the first loaded instance.
+# The same rules for reset keybinds work here.
+# Eg: lock_first_loaded = "L"
+lock_first_loaded = "L"
+
+# Set a keybind to unlock the first locked instance.
+# The same rules for reset keybinds work here.
+# Eg: unlock_first_loaded = "Ctrl-L"
+unlock_first_loaded = "Ctrl-L"
+
+# Set a keybind to play the first locked instance.
+# The same rules for reset keybinds work here.
+# Eg: play_first_locked = "Shift-L"
+play_first_locked = "Shift-L"
+
+# Set a keybind to play the first loaded instance.
+# The same rules for reset keybinds work here.
+# Eg: play_first_loaded = "Shift-R"
+play_first_loaded = "Shift-R"
 
 [obs]
 # Whether or not to enable OBS websocket support. This is *required* for wall and moving_wall.

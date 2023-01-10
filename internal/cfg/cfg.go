@@ -68,7 +68,12 @@ type Profile struct {
 		LowThreshold int  `toml:"low_threshold"`
 	} `toml:"advanced_wall"`
 	MovingWall struct {
-		UseMovingWall bool `toml:"use_moving_wall"`
+		UseMovingWall     bool    `toml:"use_moving_wall"`
+		ResetFirstLoaded  x11.Key `toml:"reset_first_loaded"`
+		LockFirstLoaded   x11.Key `toml:"lock_first_loaded"`
+		UnlockFirstLocked x11.Key `toml:"unlock_first_loaded"`
+		PlayFirstLocked   x11.Key `toml:"play_first_locked"`
+		PlayFirstLoaded   x11.Key `toml:"play_first_loaded"`
 	} `toml:"moving_wall"`
 }
 

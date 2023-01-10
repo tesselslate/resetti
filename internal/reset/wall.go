@@ -296,6 +296,38 @@ func (m *Wall) Run() error {
 					continue
 				}
 				switch evt.Key {
+				case m.conf.Keys.Reset:
+					m.HandleResetInput(evt.Time)
+				case m.conf.MovingWall.ResetFirstLoaded:
+					if m.conf.MovingWall.UseMovingWall {
+						if err = m.HandleResetLoading(evt.Time); err != nil {
+							log.Panicf("Error Resetting the loading view: %s\n", err)
+						}
+					}
+				case m.conf.MovingWall.LockFirstLoaded:
+					if m.conf.MovingWall.UseMovingWall {
+						if err = m.HandleLockLoaded(evt.Time); err != nil {
+							log.Panicf("Error locking from loading view: %s\n", err)
+						}
+					}
+				case m.conf.MovingWall.UnlockFirstLocked:
+					if m.conf.MovingWall.UseMovingWall {
+						if err = m.HandleUnlockLocked(evt.Time); err != nil {
+							log.Panicf("Error unlocking from loading view: %s\n", err)
+						}
+					}
+				case m.conf.MovingWall.PlayFirstLocked:
+					if m.conf.MovingWall.UseMovingWall {
+						if err = m.HandlePlayLocked(evt.Time); err != nil {
+							log.Panicf("Error playing from the locked view: %s\n", err)
+						}
+					}
+				case m.conf.MovingWall.PlayFirstLoaded:
+					if m.conf.MovingWall.UseMovingWall {
+						if err = m.HandlePlayLoaded(evt.Time); err != nil {
+							log.Panicf("Error playing from the loading view: %s\n", err)
+						}
+					}
 				case m.conf.Keys.Focus:
 					if m.current == -1 {
 						if err = m.FocusProjector(); err != nil {
@@ -304,8 +336,6 @@ func (m *Wall) Run() error {
 					} else {
 						m.instances[m.current].Focus()
 					}
-				case m.conf.Keys.Reset:
-					m.HandleResetInput(evt.Time)
 				default:
 					if m.current != -1 {
 						continue
@@ -491,6 +521,21 @@ func (m *Wall) GrabWallKeys() error {
 				return err
 			}
 		}
+
+		if m.conf.MovingWall.UseMovingWall {
+			movingWallKeys := []x11.Key{
+				m.conf.MovingWall.LockFirstLoaded,
+				m.conf.MovingWall.UnlockFirstLocked,
+				m.conf.MovingWall.PlayFirstLocked,
+				m.conf.MovingWall.PlayFirstLoaded,
+				m.conf.MovingWall.ResetFirstLoaded,
+			}
+			for _, key := range movingWallKeys {
+				if err := m.x.GrabKey(key, win); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	m.wallGrab = true
 	if m.conf.Wall.UseMouse {
@@ -527,6 +572,62 @@ func (m *Wall) HandleInput(id int, mod x11.Keymod, timestamp xproto.Timestamp) e
 		m.WallResetOthers(id, timestamp)
 	case m.conf.Keys.WallLock:
 		err := m.WallLock(id, timestamp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Handles resetting the first instance of the loading view.
+func (m *Wall) HandleResetLoading(timestamp xproto.Timestamp) error {
+	if m.movingWall.loadingView.renderedInstances > 0 && m.current == -1 {
+		err := m.reset(m.movingWall.loadingView.instances[0].Id, timestamp)
+		if err != nil {
+			return err
+		}
+		go runHook(m.conf.Hooks.Reset)
+	}
+	return nil
+}
+
+// Handles the locking of the first loaded instance.
+func (m *Wall) HandleLockLoaded(timestamp xproto.Timestamp) error {
+	if m.movingWall.loadingView.renderedInstances > 0 && m.current == -1 {
+		err := m.WallLock(m.movingWall.loadingView.instances[0].Id, timestamp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Handles the unlocking of the first locked instance.
+func (m *Wall) HandleUnlockLocked(timestamp xproto.Timestamp) error {
+	if m.movingWall.lockedView.renderedInstances > 0 && m.current == -1 {
+		err := m.WallLock(m.movingWall.lockedView.instances[0].Id, timestamp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Handles playing the first locked instance.
+func (m *Wall) HandlePlayLocked(timestamp xproto.Timestamp) error {
+	if m.movingWall.lockedView.renderedInstances > 0 && m.current == -1 {
+		err := m.WallPlay(m.movingWall.lockedView.instances[0].Id, timestamp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Handles playing the first loaded instance.
+func (m *Wall) HandlePlayLoaded(timestamp xproto.Timestamp) error {
+	if m.movingWall.loadingView.renderedInstances > 0 && m.current == -1 {
+		err := m.WallPlay(m.movingWall.loadingView.instances[0].Id, timestamp)
 		if err != nil {
 			return err
 		}
@@ -676,6 +777,20 @@ func (m *Wall) UngrabWallKeys() error {
 			key.Mod = v
 			if err := m.x.UngrabKey(key, win); err != nil {
 				return err
+			}
+		}
+		if m.conf.MovingWall.UseMovingWall {
+			movingWallKeys := []x11.Key{
+				m.conf.MovingWall.LockFirstLoaded,
+				m.conf.MovingWall.UnlockFirstLocked,
+				m.conf.MovingWall.PlayFirstLocked,
+				m.conf.MovingWall.PlayFirstLoaded,
+				m.conf.MovingWall.ResetFirstLoaded,
+			}
+			for _, key := range movingWallKeys {
+				if err := m.x.UngrabKey(key, win); err != nil {
+					return err
+				}
 			}
 		}
 	}
