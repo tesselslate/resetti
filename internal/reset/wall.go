@@ -740,29 +740,12 @@ func (m *Wall) SetLocked(id int, locked bool) error {
 	if m.states[id].Locked == locked {
 		return nil
 	}
-	if m.states[id].InstanceState.State != mc.StDirt {
+	if m.states[id].State != mc.StDirt {
 		m.states[id].Locked = locked
-		err := m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), locked)
-		if !m.conf.MovingWall.UseMovingWall && err != nil {
-			log.Printf("SetLocked error: %s\n", err)
-		}
-		if locked {
-			err := m.movingWall.lockedView.renderInstance(m.instances[id])
+		if !m.conf.MovingWall.UseMovingWall {
+			err := m.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), locked)
 			if err != nil {
-				return err
-			}
-			err = m.movingWall.loadingView.unrenderInstance(m.instances[id])
-			if err != nil {
-				return err
-			}
-		} else {
-			err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
-			if err != nil {
-				return err
-			}
-			err = m.movingWall.loadingView.renderInstance(m.instances[id])
-			if err != nil {
-				return err
+				log.Printf("SetLocked error: %s\n", err)
 			}
 		}
 	}
@@ -858,6 +841,16 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) error {
 	if err != nil {
 		return err
 	}
+	if m.conf.MovingWall.UseMovingWall {
+		err = m.movingWall.loadingView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+		err = m.movingWall.lockedView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+	}
 	m.current = id
 	m.CreateSleepbgLock()
 	if m.conf.AdvancedWall.Affinity {
@@ -910,6 +903,28 @@ func (m *Wall) WallLock(id int, timestamp xproto.Timestamp) error {
 		}
 	} else {
 		go runHook(m.conf.Hooks.Unlock)
+	}
+	if !m.conf.MovingWall.UseMovingWall {
+		return nil
+	}
+	if m.states[id].Locked {
+		err := m.movingWall.lockedView.renderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+		err = m.movingWall.loadingView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+	} else {
+		err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
+		err = m.movingWall.loadingView.renderInstance(m.instances[id])
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

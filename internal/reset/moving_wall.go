@@ -214,27 +214,18 @@ func (m *LoadingView) renderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
-	if m.renderedInstances < 4 {
-		flag := false
-		for _, inst := range m.instances {
-			if inst.Id == instance.Id {
-				flag = true
-				break
-			}
+	flag := false
+	for _, inst := range m.instances {
+		if inst.Id == instance.Id {
+			flag = true
+			break
 		}
-		if !flag {
+	}
+	if !flag {
+		if m.renderedInstances < 4 {
 			m.instances = append(m.instances, instance)
 			m.renderedInstances++
-		}
-	} else {
-		flag := false
-		for _, inst := range m.instances {
-			if inst.Id == instance.Id {
-				flag = true
-				break
-			}
-		}
-		if !flag {
+		} else {
 			m.loadQueue = append(m.loadQueue, instance)
 		}
 	}
@@ -250,23 +241,27 @@ func (m *LoadingView) unrenderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
+	flag := false
 	for i, inst := range m.instances {
 		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
 			copy(m.instances[i:], m.instances[i+1:])
 			m.instances[len(m.instances)-1] = mc.Instance{}
 			m.instances = m.instances[:len(m.instances)-1]
+			flag = true
 			break
 		}
 	}
-	if len(m.loadQueue) != 0 {
-		m.instances = append(m.instances, m.loadQueue[0])
-		if len(m.loadQueue) != 1 {
-			copy(m.loadQueue[0:], m.loadQueue[1:])
-			m.loadQueue[len(m.loadQueue)-1] = mc.Instance{}
+	if flag {
+		if len(m.loadQueue) != 0 {
+			m.instances = append(m.instances, m.loadQueue[0])
+			if len(m.loadQueue) != 1 {
+				copy(m.loadQueue[0:], m.loadQueue[1:])
+				m.loadQueue[len(m.loadQueue)-1] = mc.Instance{}
+			}
+			m.loadQueue = m.loadQueue[:len(m.loadQueue)-1]
+		} else {
+			m.renderedInstances--
 		}
-		m.loadQueue = m.loadQueue[:len(m.loadQueue)-1]
-	} else {
-		m.renderedInstances--
 	}
 	err = m.update()
 	if err != nil {
@@ -279,12 +274,10 @@ func (m *LoadingView) update() error {
 	if m.renderedInstances == 0 {
 		return nil
 	}
-	cols := int(math.Floor(math.Sqrt(float64(m.renderedInstances))))
-	rows := int(math.Ceil(float64(m.renderedInstances) / float64(cols)))
-	width, height := float64(m.width/cols), float64(m.height/rows)
+	width, height := float64(m.width)/2, float64(m.height)/2
 	id := 0
-	for y := 0; y < rows; y += 1 {
-		for x := 0; x < cols; x += 1 {
+	for y := 0; y < 2; y += 1 {
+		for x := 0; x < 2; x += 1 {
 			if id == m.renderedInstances {
 				break
 			}
