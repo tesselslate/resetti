@@ -289,6 +289,17 @@ func (m *Wall) Run() error {
 			if m.conf.AdvancedWall.Affinity {
 				m.UpdateAffinity(id)
 			}
+
+			// Update the moving wall state.
+			if !m.conf.MovingWall.UseMovingWall {
+				continue
+			}
+			if nowPreview {
+				err := m.movingWall.loadingView.renderInstance(m.instances[id])
+				if err != nil {
+					return err
+				}
+			}
 		case evt := <-xEvt:
 			switch evt := evt.(type) {
 			case x11.KeyEvent:
@@ -671,7 +682,6 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) error {
 func (m *Wall) reset(id int, timestamp xproto.Timestamp) error {
 	m.instances[id].Reset(timestamp)
 	m.counter.Increment()
-	m.states[id].State = mc.StDirt
 	m.states[id].WpPause = false
 	if m.conf.AdvancedWall.Affinity {
 		m.SetAffinity(id, affHigh)
@@ -815,29 +825,10 @@ func (m *Wall) UpdateAffinity(id int) error {
 		} else {
 			m.SetAffinity(id, affHigh)
 		}
-		if m.conf.MovingWall.UseMovingWall {
-			err := m.movingWall.loadingView.renderInstance(m.instances[id])
-			if err != nil {
-				return err
-			}
-		}
 	case mc.StIdle:
 		m.SetAffinity(id, affIdle)
 	case mc.StIngame:
 		m.SetAffinity(id, affActive)
-		if m.conf.MovingWall.UseMovingWall {
-			if m.states[id].Locked {
-				err := m.movingWall.lockedView.unrenderInstance(m.instances[id])
-				if err != nil {
-					return err
-				}
-			} else {
-				err := m.movingWall.loadingView.unrenderInstance(m.instances[id])
-				if err != nil {
-					return err
-				}
-			}
-		}
 	}
 	return nil
 }
