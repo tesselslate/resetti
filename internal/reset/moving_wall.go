@@ -104,10 +104,28 @@ func (m *LockedView) renderInstance(instance mc.Instance) error {
 		return err
 	}
 	if m.renderedInstances < 4 {
-		m.instances = append(m.instances, instance)
-		m.renderedInstances++
+		flag := false
+		for _, inst := range m.instances {
+			if inst.Id == instance.Id {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			m.instances = append(m.instances, instance)
+			m.renderedInstances++
+		}
 	} else {
-		m.lockQueue = append(m.lockQueue, instance)
+		flag := false
+		for _, inst := range m.instances {
+			if inst.Id == instance.Id {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			m.lockQueue = append(m.lockQueue, instance)
+		}
 	}
 	err = m.update()
 	if err != nil {
@@ -197,10 +215,28 @@ func (m *LoadingView) renderInstance(instance mc.Instance) error {
 		return err
 	}
 	if m.renderedInstances < 4 {
-		m.instances = append(m.instances, instance)
-		m.renderedInstances++
+		flag := false
+		for _, inst := range m.instances {
+			if inst.Id == instance.Id {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			m.instances = append(m.instances, instance)
+			m.renderedInstances++
+		}
 	} else {
-		m.loadQueue = append(m.loadQueue, instance)
+		flag := false
+		for _, inst := range m.instances {
+			if inst.Id == instance.Id {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			m.loadQueue = append(m.loadQueue, instance)
+		}
 	}
 	err = m.update()
 	if err != nil {
