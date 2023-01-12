@@ -104,28 +104,10 @@ func (m *LockedView) renderInstance(instance mc.Instance) error {
 		return err
 	}
 	if m.renderedInstances < 4 {
-		flag := false
-		for _, inst := range m.instances {
-			if inst.Id == instance.Id {
-				flag = true
-				break
-			}
-		}
-		if !flag {
-			m.instances = append(m.instances, instance)
-			m.renderedInstances++
-		}
+		m.instances = append(m.instances, instance)
+		m.renderedInstances++
 	} else {
-		flag := false
-		for _, inst := range m.instances {
-			if inst.Id == instance.Id {
-				flag = true
-				break
-			}
-		}
-		if !flag {
-			m.lockQueue = append(m.lockQueue, instance)
-		}
+		m.lockQueue = append(m.lockQueue, instance)
 	}
 	err = m.update()
 	if err != nil {
@@ -139,23 +121,27 @@ func (m *LockedView) unrenderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
+	flag := false
 	for i, inst := range m.instances {
 		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
 			copy(m.instances[i:], m.instances[i+1:])
 			m.instances[len(m.instances)-1] = mc.Instance{}
 			m.instances = m.instances[:len(m.instances)-1]
+			flag = true
 			break
 		}
 	}
-	if len(m.lockQueue) != 0 {
-		m.instances = append(m.instances, m.lockQueue[0])
-		if len(m.lockQueue) != 1 {
-			copy(m.lockQueue[0:], m.lockQueue[1:])
-			m.lockQueue[len(m.lockQueue)-1] = mc.Instance{}
+	if flag {
+		if len(m.lockQueue) != 0 {
+			m.instances = append(m.instances, m.lockQueue[0])
+			if len(m.lockQueue) != 1 {
+				copy(m.lockQueue[0:], m.lockQueue[1:])
+				m.lockQueue[len(m.lockQueue)-1] = mc.Instance{}
+			}
+			m.lockQueue = m.lockQueue[:len(m.lockQueue)-1]
+		} else {
+			m.renderedInstances--
 		}
-		m.lockQueue = m.lockQueue[:len(m.lockQueue)-1]
-	} else {
-		m.renderedInstances--
 	}
 	err = m.update()
 	if err != nil {
@@ -214,20 +200,11 @@ func (m *LoadingView) renderInstance(instance mc.Instance) error {
 	if err != nil {
 		return err
 	}
-	flag := false
-	for _, inst := range m.instances {
-		if inst.Id == instance.Id {
-			flag = true
-			break
-		}
-	}
-	if !flag {
-		if m.renderedInstances < 4 {
-			m.instances = append(m.instances, instance)
-			m.renderedInstances++
-		} else {
-			m.loadQueue = append(m.loadQueue, instance)
-		}
+	if m.renderedInstances < 4 {
+		m.instances = append(m.instances, instance)
+		m.renderedInstances++
+	} else {
+		m.loadQueue = append(m.loadQueue, instance)
 	}
 	err = m.update()
 	if err != nil {
