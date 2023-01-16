@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"sync"
@@ -94,6 +95,15 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 // Run attempts to run the wall resetter. If an error occurs during
 // setup, it will be returned.
 func (m *Wall) Run() error {
+	// Run pre-requisite setup scripts before starting the wall.
+	if m.conf.AdvancedWall.Affinity {
+		log.Printf("Executing script: scripts/set_cgroups.sh with elevated privileges.")
+		cmd := exec.Command("sudo", "scripts/set_cgroups.sh")
+		_, stderr := cmd.Output()
+		if stderr != nil {
+			return stderr
+		}
+	}
 	// Ensure that the user's window manager supports the necessary EWMH
 	// properties.
 	if m.conf.Wall.UseMouse && m.conf.MovingWall.UseMovingWall {
@@ -149,6 +159,16 @@ func (m *Wall) Run() error {
 		}
 	}
 	updates, readerErrors := mux(m.logReaders)
+
+	// Execute the necessary scripts after the instances have been opened.
+	if m.conf.AdvancedWall.Affinity {
+		log.Printf("Executing script: scripts/after_load.sh with elevated privileges.")
+		cmd := exec.Command("sudo", "scripts/after_load.sh")
+		_, stderr := cmd.Output()
+		if stderr != nil {
+			return stderr
+		}
+	}
 
 	// Setup OBS.
 	m.obs = &obs.Client{}
