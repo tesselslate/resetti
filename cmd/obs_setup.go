@@ -172,14 +172,10 @@ func ObsSetup() {
 			"xcomposite_input",
 			nil,
 		))
-		assert(client.SetSceneItemTransform(
+		assert(client.SetSceneItemBounds(
 			scene,
 			source,
-			obs.Transform{
-				Width:  float64(width),
-				Height: float64(height),
-				Bounds: "OBS_BOUNDS_STRETCH",
-			},
+			0, 0, float64(width), float64(height),
 		))
 		assert(client.SetSceneItemLocked(scene, source, true))
 
@@ -204,16 +200,13 @@ func ObsSetup() {
 			for j := 1; j <= count; j++ {
 				source = fmt.Sprintf("MC %d", j)
 				assert(client.AddSceneItem(scene, source))
-				assert(client.SetSceneItemTransform(
+				assert(client.SetSceneItemBounds(
 					scene,
 					source,
-					obs.Transform{
-						X:      float64(x),
-						Y:      float64(y),
-						Width:  float64(w),
-						Height: float64(h),
-						Bounds: "OBS_BOUNDS_STRETCH",
-					},
+					float64(x),
+					float64(y),
+					float64(w),
+					float64(h),
 				))
 				assert(client.SetSceneItemLocked(scene, source, true))
 				y += h
@@ -234,16 +227,13 @@ func ObsSetup() {
 			}
 			source := fmt.Sprintf("MC %d", num)
 			assert(client.AddSceneItem("Wall", source))
-			assert(client.SetSceneItemTransform(
+			assert(client.SetSceneItemBounds(
 				"Wall",
 				source,
-				obs.Transform{
-					X:      float64(x * w),
-					Y:      float64(y * h),
-					Width:  float64(w),
-					Height: float64(h),
-					Bounds: "OBS_BOUNDS_STRETCH",
-				},
+				float64(x*w),
+				float64(y*h),
+				float64(w),
+				float64(h),
 			))
 			assert(client.SetSceneItemLocked("Wall", source, true))
 
@@ -255,16 +245,13 @@ func ObsSetup() {
 				"image_source",
 				obs.StringMap{"file": settings.lockImg},
 			))
-			assert(client.SetSceneItemTransform(
+			assert(client.SetSceneItemBounds(
 				"Wall",
 				source,
-				obs.Transform{
-					X:      float64(x * w),
-					Y:      float64(y * h),
-					Width:  float64(settings.lockWidth),
-					Height: float64(settings.lockHeight),
-					Bounds: "OBS_BOUNDS_STRETCH",
-				},
+				float64(x*w),
+				float64(y*h),
+				float64(settings.lockWidth),
+				float64(settings.lockHeight),
 			))
 			assert(client.SetSceneItemLocked("Wall", source, true))
 		}
@@ -273,7 +260,7 @@ func ObsSetup() {
 	// Remove the scene called "Scene" that gets created for every new scene collection.
 	// However, it will have already been deleted if we are modifying an existing scene
 	// collection.
-	scenes, _, err := client.GetSceneList()
+	scenes, err := client.GetSceneList()
 	if err != nil {
 		fmt.Println("Failed to get scene list:", err)
 		fmt.Println("However, the setup did complete successfully otherwise.")

@@ -1,270 +1,167 @@
 package obs
 
-import (
-	"encoding/json"
+import "github.com/google/uuid"
+
+// Source kinds.
+const (
+	KindWindow SourceKind = "xcomposite_input"
+	KindImage  SourceKind = "image_source"
 )
 
-// Transform holds information about the size and position of scene items.
-type Transform struct {
-	X      float64 `json:"positionX"`
-	Y      float64 `json:"positionY"`
-	Width  float64 `json:"boundsWidth"`
-	Height float64 `json:"boundsHeight"`
-	Bounds string  `json:"boundsType,omitempty"`
+// SourceKind contains the input type for a given source.
+type SourceKind string
+
+type request struct {
+	Type string    `json:"requestType"`
+	Id   uuid.UUID `json:"requestId"`
+	Data StringMap `json:"requestData"`
 }
 
-func (c *Client) getSceneItemId(scene string, name string) (int, error) {
-	if id, ok := c.idCache.Get(scene, name); ok {
-		return id, nil
+func reqAddSceneItem(scene, name string) request {
+	return request{
+		Type: "CreateSceneItem",
+		Data: StringMap{
+			"sceneName":  scene,
+			"sourceName": name,
+		},
 	}
-	type request struct {
-		Scene string `json:"sceneName"`
-		Name  string `json:"sourceName"`
-	}
-	req := request{
-		Scene: scene,
-		Name:  name,
-	}
-	raw, err := c.request(req, "GetSceneItemId")
-	if err != nil {
-		return 0, err
-	}
-	res := struct {
-		Id int `json:"sceneItemId"`
-	}{}
-	err = json.Unmarshal(raw, &res)
-	if err != nil {
-		return 0, err
-	}
-	c.idCache.Set(scene, name, res.Id)
-	return res.Id, nil
 }
 
-func (c *Client) AddSceneItem(scene string, source string) error {
-	type request struct {
-		Scene  string `json:"sceneName"`
-		Source string `json:"sourceName"`
+func reqCreateSceneCollection(name string) request {
+	return request{
+		Type: "CreateSceneCollection",
+		Data: StringMap{
+			"sceneCollectionName": name,
+		},
 	}
-	req := request{
-		Scene:  scene,
-		Source: source,
-	}
-	_, err := c.request(req, "CreateSceneItem")
-	return err
 }
 
-// CreateSceneCollection creates a new scene collection and switches to it. If
-// the given scene collection already exists, an error is returned.
-func (c *Client) CreateSceneCollection(name string) error {
-	type request struct {
-		SceneCollection string `json:"sceneCollectionName"`
+func reqCreateScene(name string) request {
+	return request{
+		Type: "CreateScene",
+		Data: StringMap{
+			"sceneName": name,
+		},
 	}
-	req := request{
-		SceneCollection: name,
-	}
-	_, err := c.request(req, "CreateSceneCollection")
-	return err
 }
 
-func (c *Client) CreateScene(name string) error {
-	type request struct {
-		Scene string `json:"sceneName"`
+func reqCreateSource(scene, name, kind string, settings StringMap) request {
+	return request{
+		Type: "CreateInput",
+		Data: StringMap{
+			"sceneName": scene,
+			"inputName": name,
+			"inputKind": kind,
+			"settings":  settings,
+		},
 	}
-	req := request{
-		Scene: name,
-	}
-	_, err := c.request(req, "CreateScene")
-	return err
 }
 
-func (c *Client) CreateSource(scene string, name string, kind string, settings StringMap) error {
-	type request struct {
-		Scene    string    `json:"sceneName"`
-		Input    string    `json:"inputName"`
-		Kind     string    `json:"inputKind"`
-		Settings StringMap `json:"inputSettings"`
+func reqDeleteScene(name string) request {
+	return request{
+		Type: "RemoveScene",
+		Data: StringMap{
+			"sceneName": name,
+		},
 	}
-	req := request{
-		Scene:    scene,
-		Input:    name,
-		Kind:     kind,
-		Settings: settings,
-	}
-	_, err := c.request(req, "CreateInput")
-	return err
 }
 
-func (c *Client) DeleteScene(scene string) error {
-	type request struct {
-		Scene string `json:"sceneName"`
-	}
-	req := request{
-		Scene: scene,
-	}
-	_, err := c.request(req, "RemoveScene")
-	return err
+func reqGetCanvasSize() request {
+	return request{Type: "GetVideoSettings"}
 }
 
-// GetCanvasSize returns the current base/canvas resolution of OBS.
-func (c *Client) GetCanvasSize() (width int, height int, err error) {
-	raw, err := c.request(nil, "GetVideoSettings")
-	if err != nil {
-		return 0, 0, err
-	}
-	res := struct {
-		Width  int `json:"baseWidth"`
-		Height int `json:"baseHeight"`
-	}{}
-	err = json.Unmarshal(raw, &res)
-	return res.Width, res.Height, err
+func reqGetSceneCollectionList() request {
+	return request{Type: "GetSceneCollectionList"}
 }
 
-func (c *Client) GetSceneCollectionList() (names []string, active string, err error) {
-	raw, err := c.request(nil, "GetSceneCollectionList")
-	if err != nil {
-		return nil, "", err
+func reqGetSceneItemId(scene, name string) request {
+	return request{
+		Type: "GetSceneItemId",
+		Data: StringMap{
+			"sceneName":  scene,
+			"sourceName": name,
+		},
 	}
-	res := struct {
-		Collections []string `json:"sceneCollections"`
-		Current     string   `json:"currentSceneCollectionName"`
-	}{}
-	err = json.Unmarshal(raw, &res)
-	return res.Collections, res.Current, err
 }
 
-// GetSceneItemTransform returns information about the size and position of the
-// given scene item.
-func (c *Client) GetSceneItemTransform(scene string, name string) (Transform, error) {
-	type request struct {
-		Scene string `json:"sceneName"`
-		Item  int    `json:"sceneItemId"`
+func reqGetSceneItemTransform(scene string, id int) request {
+	return request{
+		Type: "GetSceneItemTransform",
+		Data: StringMap{
+			"sceneName":   scene,
+			"sceneItemId": id,
+		},
 	}
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return Transform{}, err
-	}
-	req := request{
-		Scene: scene,
-		Item:  id,
-	}
-	raw, err := c.request(req, "GetSceneItemTransform")
-	if err != nil {
-		return Transform{}, err
-	}
-	res := struct {
-		Transform Transform `json:"sceneItemTransform"`
-	}{}
-	err = json.Unmarshal(raw, &res)
-	return res.Transform, err
 }
 
-func (c *Client) GetSceneList() (names []string, active string, err error) {
-	raw, err := c.request(nil, "GetSceneList")
-	if err != nil {
-		return nil, "", err
-	}
-	res := struct {
-		Scenes  []StringMap `json:"scenes"`
-		Current string      `json:"currentProgramSceneName"`
-	}{}
-	list := make([]string, 0, len(res.Scenes))
-	err = json.Unmarshal(raw, &res)
-	for _, v := range res.Scenes {
-		list = append(list, v["sceneName"].(string))
-	}
-	return list, res.Current, err
+func reqGetSceneList() request {
+	return request{Type: "GetSceneList"}
 }
 
-func (c *Client) SetScene(scene string) error {
-	type request struct {
-		Name string `json:"sceneName"`
+func reqSetScene(scene string) request {
+	return request{
+		Type: "SetCurrentProgramScene",
+		Data: StringMap{
+			"sceneName": scene,
+		},
 	}
-	req := request{
-		Name: scene,
-	}
-	_, err := c.request(req, "SetCurrentProgramScene")
-	return err
 }
 
-func (c *Client) SetSceneCollection(collection string) error {
-	type request struct {
-		Name string `json:"sceneCollectionName"`
+func reqSetSceneCollection(collection string) request {
+	return request{
+		Type: "SetCurrentSceneCollection",
+		Data: StringMap{
+			"sceneCollectionName": collection,
+		},
 	}
-	req := request{
-		Name: collection,
-	}
-	_, err := c.request(req, "SetCurrentSceneCollection")
-	return err
 }
 
-func (c *Client) SetSceneItemLocked(scene string, name string, locked bool) error {
-	type request struct {
-		Scene  string `json:"sceneName"`
-		Item   int    `json:"sceneItemId"`
-		Locked bool   `json:"sceneItemLocked"`
+func reqSetSceneItemLocked(scene string, id int, locked bool) request {
+	return request{
+		Type: "SetSceneItemLocked",
+		Data: StringMap{
+			"sceneName":       scene,
+			"sceneItemId":     id,
+			"sceneItemLocked": locked,
+		},
 	}
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := request{
-		Scene:  scene,
-		Item:   id,
-		Locked: locked,
-	}
-	_, err = c.request(req, "SetSceneItemLocked")
-	return err
 }
 
-func (c *Client) SetSceneItemTransform(scene string, name string, transform Transform) error {
-	type request struct {
-		Scene     string    `json:"sceneName"`
-		Item      int       `json:"sceneItemId"`
-		Transform Transform `json:"sceneItemTransform"`
+func reqSetSceneItemTransform(scene string, id int, x, y, w, h float64) request {
+	return request{
+		Type: "SetSceneItemTransform",
+		Data: StringMap{
+			"sceneName":   scene,
+			"sceneItemId": id,
+			"sceneItemTransform": StringMap{
+				"positionX":    x,
+				"positionY":    y,
+				"boundsWidth":  w,
+				"boundsHeight": h,
+				"boundsType":   "OBS_BOUNDS_STRETCH", // We never use any other stretch type.
+			},
+		},
 	}
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := request{
-		Scene:     scene,
-		Item:      id,
-		Transform: transform,
-	}
-	_, err = c.request(req, "SetSceneItemTransform")
-	return err
 }
 
-func (c *Client) SetSceneItemVisible(scene string, name string, visible bool) error {
-	type request struct {
-		Scene   string `json:"sceneName"`
-		Item    int    `json:"sceneItemId"`
-		Enabled bool   `json:"sceneItemEnabled"`
+func reqSetSceneItemVisible(scene string, id int, visible bool) request {
+	return request{
+		Type: "SetSceneItemEnabled",
+		Data: StringMap{
+			"sceneName":        scene,
+			"sceneItemId":      id,
+			"sceneItemEnabled": visible,
+		},
 	}
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := request{
-		Scene:   scene,
-		Item:    id,
-		Enabled: visible,
-	}
-	_, err = c.request(req, "SetSceneItemEnabled")
-	return err
 }
 
-func (c *Client) SetSourceSettings(name string, settings StringMap, keep bool) error {
-	type request struct {
-		Name     string    `json:"inputName"`
-		Settings StringMap `json:"inputSettings"`
-		Reset    bool      `json:"overlay"`
+func reqSetSourceSettings(name string, settings StringMap, keep bool) request {
+	return request{
+		Type: "SetInputSettings",
+		Data: StringMap{
+			"inputName":     name,
+			"inputSettings": settings,
+			"overlay":       keep,
+		},
 	}
-	req := request{
-		Name:     name,
-		Settings: settings,
-		Reset:    keep,
-	}
-	_, err := c.request(req, "SetInputSettings")
-	return err
 }
