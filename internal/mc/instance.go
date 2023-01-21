@@ -88,12 +88,23 @@ func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
 	}
 }
 
-// Pause presses F3+Escape to pause the instance. If an error occurs, it will
+// PressEsc presses escape to [un]pause the instance. If an error occurs, it will
 // be logged.
-func (i *Instance) Pause(timestamp xproto.Timestamp) {
+func (i *Instance) PressEsc(timestamp xproto.Timestamp) {
+	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
+}
+
+// PressF3Esc presses F3+Escape to pause the instance without the pause menu.
+// If an error occurs, it will be logged.
+func (i *Instance) PressF3Esc(timestamp xproto.Timestamp) {
 	i.x.SendKeyDown(x11.KeyF3, i.Wid, i.lastTime(timestamp))
 	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
 	i.x.SendKeyUp(x11.KeyF3, i.Wid, i.lastTime(timestamp))
+}
+
+// PressF3 presses F3 to hide the pie chart.
+func (i *Instance) PressF3(timestamp xproto.Timestamp) {
+	i.x.SendKeyPress(x11.KeyF3, i.Wid, i.lastTime(timestamp))
 }
 
 // Reset presses the instance's reset key. If an error occurs, it will be
@@ -114,12 +125,6 @@ func (i *Instance) Stretch(conf cfg.Profile) error {
 		conf.Wall.StretchWidth,
 		conf.Wall.StretchHeight,
 	)
-}
-
-// Unpause presses escape to unpause the instance. If an error occurs, it will
-// be logged.
-func (i *Instance) Unpause(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
 }
 
 // Unstretch resizes the window back to its normal dimensions.

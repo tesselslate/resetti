@@ -241,7 +241,7 @@ func (m *Wall) Run() error {
 			return nil
 		case id := <-m.pause:
 			if m.states[id].State == mc.StIdle || m.states[id].State == mc.StPreview {
-				m.instances[id].Pause(0)
+				m.instances[id].PressF3Esc(0)
 			}
 		case update := <-updates:
 			state := update.State
@@ -507,6 +507,10 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 		return
 	}
 	log.Printf("Resetting %d from ingame\n", m.current)
+
+	// Press F3 before resetting to fix ghost pie.
+	m.instances[m.current].PressF3(timestamp)
+	time.Sleep(time.Duration(m.conf.Reset.Delay) * time.Millisecond)
 	m.reset(m.current, timestamp)
 	if m.conf.Wall.StretchWindows {
 		if err := m.instances[m.current].Stretch(m.conf); err != nil {
@@ -654,11 +658,19 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) {
 	if err := m.UngrabWallKeys(); err != nil {
 		log.Printf("Failed to ungrab wall keys: %s\n", err)
 	}
+
+	// Focus and unpause.
 	m.instances[id].FocusAndUnpause(timestamp, true)
 	if m.conf.Wall.StretchWindows {
 		if err := m.instances[id].Unstretch(m.conf); err != nil {
 			log.Printf("Failed to unstretch instance: %s\n", err)
 		}
+
+		// If using stretch windows, pause and unpause to fix the cursor
+		// position the next time the pause menu or inventory is opened.
+		time.Sleep(time.Millisecond * time.Duration(m.conf.Reset.Delay))
+		m.instances[id].PressEsc(0)
+		m.instances[id].PressEsc(0)
 	}
 	m.SetLocked(id, false)
 	m.current = id
