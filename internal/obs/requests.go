@@ -49,10 +49,10 @@ func reqCreateSource(scene, name, kind string, settings StringMap) request {
 	return request{
 		Type: "CreateInput",
 		Data: StringMap{
-			"sceneName": scene,
-			"inputName": name,
-			"inputKind": kind,
-			"settings":  settings,
+			"sceneName":     scene,
+			"inputName":     name,
+			"inputKind":     kind,
+			"inputSettings": settings,
 		},
 	}
 }
