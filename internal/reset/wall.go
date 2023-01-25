@@ -4,6 +4,7 @@ package reset
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +22,13 @@ import (
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
+
+// Embedding affinity scripts into the binary.
+//go:embed scripts/set_cgroups.sh
+var set_cgroups_script string
+
+//go:embed scripts/after_load.sh
+var after_load_script string
 
 // Affinity states
 const (
@@ -62,6 +70,9 @@ type Wall struct {
 	lastMouseId       int
 	projector         xproto.Window
 	projectorChildren []xproto.Window
+
+	set_cgroups_script string
+	after_load_script  string
 }
 
 // wallState contains the state of an instance, as well as some auxiliary
@@ -77,12 +88,14 @@ type wallState struct {
 func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 	// Create a different instance of `wall` for the moving wall setting.
 	wall := Wall{
-		conf:        conf,
-		x:           x,
-		logReaders:  make([]LogReader, 0, len(infos)),
-		current:     -1,
-		pause:       make(chan int, len(infos)*2),
-		lastMouseId: -1,
+		conf:               conf,
+		x:                  x,
+		logReaders:         make([]LogReader, 0, len(infos)),
+		current:            -1,
+		pause:              make(chan int, len(infos)*2),
+		lastMouseId:        -1,
+		set_cgroups_script: set_cgroups_script,
+		after_load_script:  after_load_script,
 	}
 	wall.instances = make([]mc.Instance, 0, len(infos))
 	for _, info := range infos {
@@ -97,8 +110,8 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 func (m *Wall) Run() error {
 	// Run pre-requisite setup scripts before starting the wall.
 	if m.conf.AdvancedWall.Affinity {
-		log.Printf("Executing script: scripts/set_cgroups.sh with elevated privileges.")
-		cmd := exec.Command("sudo", "scripts/set_cgroups.sh")
+		log.Printf("Executing script to set cgroups with elevated privileges. Please enter password as prompted.")
+		cmd := exec.Command("sudo", "sh", "-c", m.set_cgroups_script)
 		_, stderr := cmd.Output()
 		if stderr != nil {
 			return stderr
@@ -162,8 +175,8 @@ func (m *Wall) Run() error {
 
 	// Execute the necessary scripts after the instances have been opened.
 	if m.conf.AdvancedWall.Affinity {
-		log.Printf("Executing script: scripts/after_load.sh with elevated privileges.")
-		cmd := exec.Command("sudo", "scripts/after_load.sh")
+		log.Printf("Executing post load script with elevateed privileges. Enter password as prompted.")
+		cmd := exec.Command("sudo", "sh", "-c", m.after_load_script)
 		_, stderr := cmd.Output()
 		if stderr != nil {
 			return stderr
