@@ -147,7 +147,7 @@ func (m *Multi) Run() error {
 			return nil
 		case id := <-m.pause:
 			if m.states[id].State == mc.StIdle || m.states[id].State == mc.StPreview {
-				m.instances[id].Pause(0)
+				m.instances[id].PressF3Esc(0)
 			}
 		case update := <-updates:
 			state := update.State

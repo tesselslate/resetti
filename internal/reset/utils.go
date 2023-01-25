@@ -45,15 +45,15 @@ func getWallSize(o *obs.Client, instances int) (uint16, uint16, error) {
 	}
 	xs, ys := make([]float64, 0), make([]float64, 0)
 	for i := 0; i < instances; i++ {
-		transform, err := o.GetSceneItemTransform(
+		x, y, _, _, err := o.GetSceneItemTransform(
 			"Wall",
 			fmt.Sprintf("MC %d", i+1),
 		)
 		if err != nil {
 			return 0, 0, err
 		}
-		xs = appendUnique(xs, transform.X)
-		ys = appendUnique(ys, transform.Y)
+		xs = appendUnique(xs, x)
+		ys = appendUnique(ys, y)
 	}
 	return uint16(len(xs)), uint16(len(ys)), nil
 }
