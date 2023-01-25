@@ -4,26 +4,29 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 )
 
 type LockedView struct {
-	width             int
-	height            int
-	instances         []mc.Instance
-	obs               *obs.Client
-	renderedInstances int
-	lockQueue         []mc.Instance
+	width              int
+	height             int
+	totalInstanceCount int
+	instances          []mc.Instance
+	obs                *obs.Client
+	renderedInstances  int
+	lockQueue          []mc.Instance
 }
 type LoadingView struct {
-	width             int
-	height            int
-	instances         []mc.Instance
-	obs               *obs.Client
-	renderedInstances int
-	loadQueue         []mc.Instance
+	width              int
+	height             int
+	totalInstanceCount int
+	instances          []mc.Instance
+	obs                *obs.Client
+	renderedInstances  int
+	loadQueue          []mc.Instance
 }
 type FullView struct {
 	width     int
@@ -54,15 +57,15 @@ func (m *MovingWall) SetupWallScene(conf cfg.Profile, instances []mc.Instance) e
 	}
 	// Moving the scene sources in the wall scene to specified places.
 	width, height := float64(canvas_width)/2, float64(canvas_height)/2
-	err = m.obs.SetSceneItemTransform("Wall", "FullView", obs.Transform{X: 3 * width / 2, Y: height, Width: width / 2, Height: height, Bounds: "OBS_BOUNDS_STRETCH"})
+	err = m.obs.SetSceneItemBounds("Wall", "FullView", 3*width/2, height, width/2, height)
 	if err != nil {
 		return err
 	}
-	err = m.obs.SetSceneItemTransform("Wall", "LoadingView", obs.Transform{X: 0, Y: 0, Width: float64(canvas_width), Height: height, Bounds: "OBS_BOUNDS_STRETCH"})
+	err = m.obs.SetSceneItemBounds("Wall", "LoadingView", 0, 0, float64(canvas_width), height)
 	if err != nil {
 		return err
 	}
-	err = m.obs.SetSceneItemTransform("Wall", "LockedView", obs.Transform{X: 0, Y: height, Width: 3 * width / 2, Height: height, Bounds: "OBS_BOUNDS_STRETCH"})
+	err = m.obs.SetSceneItemBounds("Wall", "LockedView", 0, height, 3*width/2, height)
 	if err != nil {
 		return err
 	}
@@ -74,9 +77,11 @@ func (m *MovingWall) SetupWallScene(conf cfg.Profile, instances []mc.Instance) e
 
 	m.loadingView.width = canvas_width
 	m.loadingView.height = canvas_height
+	m.loadingView.totalInstanceCount = len(instances)
 
 	m.lockedView.width = canvas_width
 	m.lockedView.height = canvas_height
+	m.lockedView.totalInstanceCount = len(instances)
 
 	m.loadingView.renderedInstances = 0
 	m.lockedView.renderedInstances = 0
@@ -91,7 +96,7 @@ func (m *MovingWall) SetupWallScene(conf cfg.Profile, instances []mc.Instance) e
 
 func (m *FullView) renderInstance(instance mc.Instance, x int, y int, width int, height int, idx int) error {
 	instance_name := fmt.Sprintf("MC %d FullView", idx+1)
-	err := m.obs.SetSceneItemTransform("FullView", instance_name, obs.Transform{X: float64(x), Y: float64(y), Width: float64(width), Height: float64(height), Bounds: "OBS_BOUNDS_STRETCH"})
+	err := m.obs.SetSceneItemBounds("FullView", instance_name, float64(x), float64(y), float64(width), float64(height))
 	if err != nil {
 		return err
 	}
@@ -99,28 +104,20 @@ func (m *FullView) renderInstance(instance mc.Instance, x int, y int, width int,
 }
 
 func (m *LockedView) renderInstance(instance mc.Instance) error {
-	err := m.hideAll()
-	if err != nil {
-		return err
-	}
 	if m.renderedInstances < 4 {
 		m.instances = append(m.instances, instance)
 		m.renderedInstances++
+		err := m.update()
+		if err != nil {
+			return err
+		}
 	} else {
 		m.lockQueue = append(m.lockQueue, instance)
-	}
-	err = m.update()
-	if err != nil {
-		return err
 	}
 	return nil
 }
 
 func (m *LockedView) unrenderInstance(instance mc.Instance) error {
-	err := m.hideAll()
-	if err != nil {
-		return err
-	}
 	flag := false
 	for i, inst := range m.instances {
 		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
@@ -142,52 +139,7 @@ func (m *LockedView) unrenderInstance(instance mc.Instance) error {
 		} else {
 			m.renderedInstances--
 		}
-	}
-	err = m.update()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (m *LockedView) update() error {
-	if m.renderedInstances == 0 {
-		return nil
-	}
-	cols := int(math.Floor(math.Sqrt(float64(m.renderedInstances))))
-	rows := int(math.Ceil(float64(m.renderedInstances) / float64(cols)))
-	width, height := float64(m.width/cols), float64(m.height/rows)
-	id := 0
-	for y := 0; y < rows; y += 1 {
-		for x := 0; x < cols; x += 1 {
-			if id == m.renderedInstances {
-				break
-			}
-			instName := fmt.Sprintf("MC %d LockedView", m.instances[id].Id+1)
-			err := m.obs.SetSceneItemVisible("LockedView", instName, true)
-			if err != nil {
-				return err
-			}
-			err = m.obs.SetSceneItemTransform("LockedView", instName, obs.Transform{
-				X:      float64(x) * width,
-				Y:      float64(y) * height,
-				Width:  width,
-				Height: height,
-				Bounds: "OBS_BOUNDS_STRETCH",
-			})
-			if err != nil {
-				return err
-			}
-			id += 1
-		}
-	}
-	return nil
-}
-
-func (m *LockedView) hideAll() error {
-	for _, instance := range m.instances {
-		instName := fmt.Sprintf("MC %d LockedView", instance.Id+1)
-		err := m.obs.SetSceneItemVisible("LockedView", instName, false)
+		err := m.update()
 		if err != nil {
 			return err
 		}
@@ -195,29 +147,70 @@ func (m *LockedView) hideAll() error {
 	return nil
 }
 
-func (m *LoadingView) renderInstance(instance mc.Instance) error {
-	err := m.hideAll()
-	if err != nil {
-		return err
+func (m *LockedView) update() error {
+	if m.renderedInstances == 0 {
+		// Hide all.
+		return m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+			for i := 1; i <= m.totalInstanceCount; i += 1 {
+				instName := fmt.Sprintf("MC %d LockedView", i)
+				b.SetItemVisibility("LockedView", instName, false)
+			}
+			return nil
+		})
 	}
+
+	return m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+		cols := int(math.Floor(math.Sqrt(float64(m.renderedInstances))))
+		rows := int(math.Ceil(float64(m.renderedInstances) / float64(cols)))
+		width, height := float64(m.width/cols), float64(m.height/rows)
+		id := 0
+
+		// Hide all the instances.
+		visible := make([]bool, m.totalInstanceCount)
+
+		for _, instance := range m.instances {
+			visible[instance.Id] = true
+		}
+		for i, visible := range visible {
+			instName := fmt.Sprintf("MC %d LockedView", i+1)
+			b.SetItemVisibility("LockedView", instName, visible)
+		}
+
+		// Show and position the correct instances.
+		for y := 0; y < rows; y += 1 {
+			for x := 0; x < cols; x += 1 {
+				if id == m.renderedInstances {
+					break
+				}
+				instName := fmt.Sprintf("MC %d LockedView", m.instances[id].Id+1)
+				b.SetItemPosition("LockedView", instName,
+					float64(x)*width,
+					float64(y)*height,
+					width,
+					height,
+				)
+				id += 1
+			}
+		}
+		return nil
+	})
+}
+
+func (m *LoadingView) renderInstance(instance mc.Instance) error {
 	if m.renderedInstances < 4 {
 		m.instances = append(m.instances, instance)
 		m.renderedInstances++
+		err := m.update()
+		if err != nil {
+			return err
+		}
 	} else {
 		m.loadQueue = append(m.loadQueue, instance)
-	}
-	err = m.update()
-	if err != nil {
-		return err
 	}
 	return nil
 }
 
 func (m *LoadingView) unrenderInstance(instance mc.Instance) error {
-	err := m.hideAll()
-	if err != nil {
-		return err
-	}
 	flag := false
 	for i, inst := range m.instances {
 		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
@@ -239,55 +232,58 @@ func (m *LoadingView) unrenderInstance(instance mc.Instance) error {
 		} else {
 			m.renderedInstances--
 		}
-	}
-	err = m.update()
-	if err != nil {
-		return err
+		err := m.update()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (m *LoadingView) update() error {
 	if m.renderedInstances == 0 {
-		return nil
+		return m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+			for i := 1; i <= m.totalInstanceCount; i += 1 {
+				instName := fmt.Sprintf("MC %d LoadingView", i)
+				b.SetItemVisibility("LoadingView", instName, false)
+			}
+			return nil
+		})
 	}
-	width, height := float64(m.width)/2, float64(m.height)/2
-	id := 0
-	for y := 0; y < 2; y += 1 {
-		for x := 0; x < 2; x += 1 {
-			if id == m.renderedInstances {
-				break
-			}
-			instName := fmt.Sprintf("MC %d LoadingView", m.instances[id].Id+1)
-			err := m.obs.SetSceneItemVisible("LoadingView", instName, true)
-			if err != nil {
-				return err
-			}
-			err = m.obs.SetSceneItemTransform("LoadingView", instName, obs.Transform{
-				X:      float64(x) * width,
-				Y:      float64(y) * height,
-				Width:  width,
-				Height: height,
-				Bounds: "OBS_BOUNDS_STRETCH",
-			})
-			if err != nil {
-				return err
-			}
-			id += 1
-		}
-	}
-	return nil
-}
 
-func (m *LoadingView) hideAll() error {
-	for _, instance := range m.instances {
-		instName := fmt.Sprintf("MC %d LoadingView", instance.Id+1)
-		err := m.obs.SetSceneItemVisible("LoadingView", instName, false)
-		if err != nil {
-			return err
+	return m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+		width, height := float64(m.width)/2, float64(m.height)/2
+		id := 0
+
+		visible := make([]bool, m.totalInstanceCount)
+
+		// Hide all instances.
+		for _, instance := range m.instances {
+			visible[instance.Id] = true
 		}
-	}
-	return nil
+		for i, visible := range visible {
+			instName := fmt.Sprintf("MC %d LoadingView", i+1)
+			b.SetItemVisibility("LoadingView", instName, visible)
+		}
+
+		// Show and position the correct instances.
+		for y := 0; y < 2; y += 1 {
+			for x := 0; x < 2; x += 1 {
+				if id == m.renderedInstances {
+					break
+				}
+				instName := fmt.Sprintf("MC %d LoadingView", m.instances[id].Id+1)
+				b.SetItemPosition("LoadingView", instName,
+					float64(x)*width,
+					float64(y)*height,
+					width,
+					height,
+				)
+				id += 1
+			}
+		}
+		return nil
+	})
 }
 
 func (m *MovingWall) render(instances []mc.Instance) error {
@@ -305,13 +301,13 @@ func (m *MovingWall) render(instances []mc.Instance) error {
 		if i < 4 {
 			m.loadingView.instances = append(m.loadingView.instances, instance)
 			m.loadingView.renderedInstances++
-			err := m.loadingView.update()
-			if err != nil {
-				return err
-			}
 		} else {
 			m.loadingView.loadQueue = append(m.loadingView.loadQueue, instance)
 		}
+	}
+	err := m.loadingView.update()
+	if err != nil {
+		return errors.Wrap(err, "loading view")
 	}
 	cols := int(math.Floor(math.Sqrt(float64(len(instances)))))
 	rows := int(math.Ceil(float64(len(instances)) / float64(cols)))

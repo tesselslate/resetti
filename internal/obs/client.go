@@ -59,7 +59,7 @@ type websocketResponse struct {
 // Batch creates and *synchronously* submits a new request batch. The provided
 // closure can be used to add requests to the batch. If the closure returns an
 // error or panics, the batch will not be submitted.
-func (c *Client) Batch(mode BatchMode, fn func(Batch) error) (err error) {
+func (c *Client) Batch(mode BatchMode, fn func(*Batch) error) (err error) {
 	batch := newBatch(c)
 
 	// Some of Batch's methods will panic when a scene item ID can not be
@@ -69,15 +69,18 @@ func (c *Client) Batch(mode BatchMode, fn func(Batch) error) (err error) {
 		result := recover()
 		if res, ok := result.(error); ok {
 			err = res
-		} else {
+		} else if result != nil {
 			err = errors.Errorf("%+v", result)
 		}
 	}()
 
 	// Run the closure to fill the batch with requests.
-	err = fn(batch)
+	err = fn(&batch)
 	if err != nil {
 		return err
+	}
+	if len(batch.requests) == 0 {
+		return errors.New("batch has no requests")
 	}
 
 	// Submit the batch.
