@@ -112,7 +112,7 @@ func (m *Wall) Run() error {
 	// Run pre-requisite setup scripts before starting the wall.
 	if m.conf.AdvancedWall.Affinity {
 		log.Printf("Executing script to set cgroups with elevated privileges. Please enter password as prompted.")
-		cmd := exec.Command("sudo", "sh", "-c", m.set_cgroups_script)
+		cmd := exec.Command("sudo", "bash", "-c", m.set_cgroups_script)
 		_, stderr := cmd.Output()
 		if stderr != nil {
 			return stderr
@@ -176,8 +176,8 @@ func (m *Wall) Run() error {
 
 	// Execute the necessary scripts after the instances have been opened.
 	if m.conf.AdvancedWall.Affinity {
-		log.Printf("Executing post load script with elevateed privileges. Enter password as prompted.")
-		cmd := exec.Command("sudo", "sh", "-c", m.after_load_script)
+		log.Printf("Executing post load script with elevateed privileges. Please enter password as prompted.")
+		cmd := exec.Command("sudo", "bash", "-c", m.after_load_script)
 		_, stderr := cmd.Output()
 		if stderr != nil {
 			return stderr
