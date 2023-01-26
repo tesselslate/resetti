@@ -137,7 +137,7 @@ func (m *Wall) Run() error {
 			return errors.Wrap(err, "failed to click")
 		}
 	}
-	updates, readerErrors := mux(m.logReaders)
+	updates, readerErrors := Mux(m.logReaders)
 
 	// Setup OBS.
 	m.obs = &obs.Client{}
