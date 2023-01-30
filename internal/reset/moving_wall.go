@@ -120,7 +120,7 @@ func (m *LockedView) renderInstance(instance mc.Instance) error {
 func (m *LockedView) unrenderInstance(instance mc.Instance) error {
 	flag := false
 	for i, inst := range m.instances {
-		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
+		if inst.Id == instance.Id {
 			copy(m.instances[i:], m.instances[i+1:])
 			m.instances[len(m.instances)-1] = mc.Instance{}
 			m.instances = m.instances[:len(m.instances)-1]
@@ -213,7 +213,7 @@ func (m *LoadingView) renderInstance(instance mc.Instance) error {
 func (m *LoadingView) unrenderInstance(instance mc.Instance) error {
 	flag := false
 	for i, inst := range m.instances {
-		if inst.InstanceInfo.Id == instance.InstanceInfo.Id {
+		if inst.Id == instance.Id {
 			copy(m.instances[i:], m.instances[i+1:])
 			m.instances[len(m.instances)-1] = mc.Instance{}
 			m.instances = m.instances[:len(m.instances)-1]
