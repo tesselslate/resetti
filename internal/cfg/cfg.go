@@ -140,6 +140,14 @@ func GetProfile(name string) (Profile, error) {
 		if mode != "standard" && !conf.Obs.Enabled {
 			return Profile{}, errors.New("obs must be enabled for this reset mode")
 		}
+		if conf.MovingWall.UseMovingWall {
+			if conf.Wall.GoToLocked {
+				return Profile{}, errors.New("goto locked cannot be used with moving wall")
+			}
+			if conf.Wall.UseMouse {
+				return Profile{}, errors.New("mouse is not currently supported with moving wall")
+			}
+		}
 	}
 
 	// Set SleepBackground lock path.

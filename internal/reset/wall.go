@@ -104,14 +104,6 @@ func (m *Wall) Run() error {
 
 	// Ensure that the user's window manager supports the necessary EWMH
 	// properties.
-	if m.conf.Wall.UseMouse && m.conf.MovingWall.UseMovingWall {
-		log.Printf("WARNING: Using mouse with moving wall is not supported. Set it to false to stop this log message from appearing. Setting it to false and continuing now....")
-		m.conf.Wall.UseMouse = false
-	}
-	if m.conf.Wall.GoToLocked && m.conf.MovingWall.UseMovingWall {
-		log.Printf("WARNING: Using goto_locked with moving wall is not supported. Set it to false to stop this log message from appearing. Setting it to false and continuing now....")
-		m.conf.Wall.GoToLocked = false
-	}
 	wm_supported, err := m.x.GetWmSupported()
 	if err != nil {
 		return errors.Wrap(err, "wm supported")
@@ -198,10 +190,12 @@ func (m *Wall) Run() error {
 	}
 
 	// Setup moving wall with defaults.
-	m.movingWall = DefaultMovingWall(m.obs, m.conf)
-	err = m.movingWall.SetupWallScene(m.conf, m.instances)
-	if err != nil {
-		return errors.Wrap(err, "failed to setup wall scene for moving wall.")
+	if m.conf.MovingWall.UseMovingWall {
+		m.movingWall = DefaultMovingWall(m.obs, m.conf)
+		err = m.movingWall.SetupWallScene(m.conf, m.instances)
+		if err != nil {
+			return errors.Wrap(err, "failed to setup wall scene for moving wall.")
+		}
 	}
 
 	// Setup reset counter.
@@ -356,7 +350,7 @@ func (m *Wall) Run() error {
 						m.instances[m.current].Focus()
 					}
 				default:
-					if m.current != -1 {
+					if m.current != -1 || m.conf.MovingWall.UseMovingWall {
 						continue
 					}
 					id := int(evt.Key.Code - 10)
@@ -656,11 +650,14 @@ func (m *Wall) HandlePlayLoaded(timestamp xproto.Timestamp) error {
 
 // HandleResetInput handles the user pressing the Reset keybind.
 func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) error {
-	if m.current == -1 && !m.conf.MovingWall.UseMovingWall {
-		log.Println("Resetting all")
-		for idx := range m.instances {
-			m.WallReset(idx, timestamp)
+	if m.current == -1 {
+		if !m.conf.MovingWall.UseMovingWall {
+			log.Println("Resetting all")
+			for idx := range m.instances {
+				m.WallReset(idx, timestamp)
+			}
 		}
+		return nil
 	}
 	log.Printf("Resetting %d from ingame\n", m.current)
 
