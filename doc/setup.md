@@ -13,7 +13,7 @@ README for details on how to install resetti.
 ## Setting up Minecraft
 
 You will first need to setup your Minecraft instances. resetti has only been
-tested with [MultiMC](https://multimc.org/) and forks such as [PolyMC](https://polymc.org/).
+tested with [MultiMC](https://multimc.org/) and forks such as [Prism Launcher](https://prismlauncher.org).
 It is highly recommend that you use MultiMC or a derivative, as it is much
 better for managing multiple instances than the vanilla Minecraft launcher.
 
@@ -66,29 +66,14 @@ focus* disabled. To do so, you can press F3+P while ingame on each instance.
 If you want to record your speedruns, then you should setup OBS. If you want to
 use either the wall or set-seed resetters, then OBS is *required.*
 
-Ensure that you have both OBS and [obs-websocket](https://github.com/obsproject/obs-websocket) installed.
-**resetti does not support `obs-websocket` 5.0; make sure that you have either
-4.x or 4.x-compat installed.**
+Ensure that you have both OBS and [obs-websocket](https://github.com/obsproject/obs-websocket)
+installed. On newer versions of OBS (28 and up), obs-websocket *may* come bundled
+with OBS (depends on your distribution.) If your distribution's OBS build does not
+have obs-websocket bundled, you can compile OBS from source yourself or get it
+from somewhere that does have obs-websocket (e.g. flatpak.)
 
 With OBS and `obs-websocket`, you can run `resetti obs` to automatically
 generate a scene collection for the amount of instances you are running.
-
-### Arguments
-
-- `--port=PORT` - The port to connect to OBS on.
-- `--pass=PASSWORD` - The password to connect to OBS with. (Optional)
-- `--lockImg=PATH` - The path to the lock image. (Optional)
-
-### Verification
-
-The setup wizard will always ask for information about how to setup
-the wall scene and verification. Supply valid information for the wall,
-but you can ignore the verification prompts if you plan on using Source
-Record or 2 OBS instances.
-
-- `None` - No verification included on instance scenes.
-- `Wall` - Embeds wall scene on instance scenes.
-- `Inst` - Embeds individual instances on instance scenes.
 
 ### Notes
 
@@ -112,10 +97,7 @@ configuration.
 ## Usage
 
 Once your configuration profile has been setup, you can launch your instances
-and run resetti. Launching resetti with no profile specified (e.g., just
-entering `resetti` into your shell) will open a profile selection menu.
-You can specify a profile (e.g. `resetti MY_PROFILE`) to immediately launch
-resetti with that configuration profile.
+and run resetti. Run `resetti PROFILE_NAME` to get started.
 
 Refer to the documentation for your reset style for more detailed information
 on how to use resetti from this point onward.

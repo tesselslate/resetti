@@ -10,6 +10,8 @@ Open up an OBS projector for your wall scene before starting `resetti`.
 
 > *Tip:* If you use multiple virtual desktops and some of your instances
 > appear blank, switch to the desktop containing your instances and back.
+> You may not be able to use multiple desktops at all depending on your
+> compositor.
 
 ## On the Wall
 
@@ -41,22 +43,10 @@ Instead of using the number keys, you can enable mouse support within your
 configuration. Doing so allows you to click on instances to perform various
 actions.
 
-**Please note that enabling mouse support will prevent you from using the mouse
-entirely while on the wall. You will have to play an instance to regain control
-of your mouse.**
-
-> *Note:* Make sure that your projector is entirely fullscreen - no window
-> decorations, titlebar, e.t.c. If it is not, where you see instances and where
-> resetti thinks instances are will be different.
-
 For example, if your `wall_reset` bind is set to Shift, then shift clicking an
 instance will reset it. You can continue to hold Shift and the mouse button
 down while dragging your cursor over other instances to apply the same action
 to multiple instances quickly.
-
-> *Note:* Unfortunately, the mouse support can be inconsistent at times, even
-> though the X server reports no errors with grabbing the mouse pointer. You
-> may have to use the number keys if your mouse does not do anything.
 
 ### Locking
 

@@ -33,11 +33,6 @@ If you are using the wall with mouse enabled, you will be unable to click on
 anything while resetti considers you to be on the wall. Enter an instance to
 regain control of your mouse.
 
-Sometimes, resetti will fail to grab the mouse pointer even though the X server
-does not report an error. In this case, clicking will not do anything. Use the
-number keys to perform actions on the wall and try again the next time you go
-back to the wall.
-
 ### Resetting not working
 
 Check that you have pause on lost focus (F3+P) disabled. Try increasing the
@@ -45,9 +40,6 @@ Check that you have pause on lost focus (F3+P) disabled. Try increasing the
 sure that your framerates are not set to excessively low values (e.g. 1.) If
 none of these solve the problem, please open an issue with your configuration
 profile and more details on what problem you are experiencing.
-
-Additionally, you will need to click on each instance at least once before Atum
-handles the global reset hotkey. This is a bug with Atum.
 
 ### No instance with ID 0
 
@@ -102,10 +94,10 @@ JVM arguments:
 -XX:ShenandoahGCHeuristics=compact
 ```
 
-If memory usage is not an issue, try using ZGC instead to improve performance:
+If memory usage is not an issue, stick to G1GC instead to improve performance:
 
 ```
--XX:+UseZGC
+-XX:+UseG1GC
 ```
 
 #### Improving malloc performance
