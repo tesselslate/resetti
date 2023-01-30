@@ -1,7 +1,7 @@
 package reset
 
 import (
-	"errors"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -10,10 +10,15 @@ import (
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
+	"github.com/pkg/errors"
+	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
+
+//go:embed scripts/cgroup_setup.sh
+var cgroup_script []byte
 
 // findProjector finds the OBS wall projector (if open.)
 func findProjector(c *x11.Client) (xproto.Window, error) {
@@ -95,6 +100,71 @@ func printDebugInfo(x *x11.Client, instances []mc.Instance) {
 	}
 }
 
+// runCgroupScript runs the cgroup setup script.
+func runCgroupScript() error {
+	// Check if the script needs to be run. Start by making sure the cgroup
+	// folders exist.
+	checkFolders := []string{
+		"/sys/fs/cgroup/resetti",
+		"/sys/fs/cgroup/resetti/idle",
+		"/sys/fs/cgroup/resetti/low",
+		"/sys/fs/cgroup/resetti/mid",
+		"/sys/fs/cgroup/resetti/high",
+		"/sys/fs/cgroup/resetti/active",
+	}
+	needsRun := false
+	for _, folder := range checkFolders {
+		stat, err := os.Stat(folder)
+		if err != nil || !stat.IsDir() {
+			needsRun = true
+			break
+		}
+	}
+	if !needsRun {
+		log.Println("Skipped cgroup script.")
+		return nil
+	}
+
+	// Check for the script's existence.
+	// TODO: Notify the user if the script is not a match (e.g. needs to
+	// be updated)
+	path, err := cfg.GetFolder()
+	if err != nil {
+		return errors.Wrap(err, "get config folder")
+	}
+	path += "/cgroup_setup.sh"
+	if _, err := os.Stat(path); err != nil {
+		if !os.IsNotExist(err) {
+			return errors.Wrap(err, "find cgroup script")
+		}
+		if err = os.WriteFile(path, cgroup_script, 0644); err != nil {
+			return errors.Wrap(err, "write cgroup script")
+		}
+	}
+
+	// Determine the user's suid binary.
+	suidBin, ok := os.LookupEnv("RESETTI_SUID_BINARY")
+	if !ok {
+		// TODO: More? pkexec, etc
+		options := []string{"sudo", "doas"}
+		for _, option := range options {
+			cmd := exec.Command(option)
+			err = cmd.Run()
+			if !errors.Is(err, exec.ErrNotFound) {
+				suidBin = option
+				break
+			}
+		}
+	}
+	if suidBin == "" {
+		return errors.Wrap(err, "no suid binary found")
+	}
+
+	// Run the script.
+	cmd := exec.Command(suidBin, "sh", path)
+	return errors.Wrap(cmd.Run(), "run cgroup script")
+}
+
 // runHook runs the given command.
 func runHook(str string) {
 	if str == "" {
@@ -115,7 +185,7 @@ func runHook(str string) {
 }
 
 // setSources sets the correct window captures for each Minecraft source.
-func setSources(o *obs.Client, instances []mc.Instance) error {
+func setSources(o *obs.Client, instances []mc.Instance, usingMovingWall bool) error {
 	for i, v := range instances {
 		err := o.SetSourceSettings(
 			fmt.Sprintf("MC %d", i+1),
@@ -126,6 +196,38 @@ func setSources(o *obs.Client, instances []mc.Instance) error {
 		)
 		if err != nil {
 			return err
+		}
+		if usingMovingWall {
+			err = o.SetSourceSettings(
+				fmt.Sprintf("MC %d LockedView", i+1),
+				obs.StringMap{
+					"capture_window": strconv.Itoa(int(v.Wid)),
+				},
+				true,
+			)
+			if err != nil {
+				return err
+			}
+			err = o.SetSourceSettings(
+				fmt.Sprintf("MC %d FullView", i+1),
+				obs.StringMap{
+					"capture_window": strconv.Itoa(int(v.Wid)),
+				},
+				true,
+			)
+			if err != nil {
+				return err
+			}
+			err = o.SetSourceSettings(
+				fmt.Sprintf("MC %d LoadingView", i+1),
+				obs.StringMap{
+					"capture_window": strconv.Itoa(int(v.Wid)),
+				},
+				true,
+			)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

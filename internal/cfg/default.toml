@@ -30,8 +30,40 @@ lock = ""
 # The command/script to run when an instance is unlocked on the wall.
 unlock = ""
 
+# Moving wall is the modern wall arrangement where instances move between
+# sections of the screen based on their state.
+
+[moving_wall]
+# Whether to use moving wall or not.
+use_moving_wall = false
+
+# Set a keybind to reset the first loaded instance in the loading view.
+# The same rules for reset keybinds work here.
+# Eg: reset_first_loaded = "R"
+reset_first_loaded = "R"
+
+# Set a keybind to lock the first loaded instance.
+# The same rules for reset keybinds work here.
+# Eg: lock_first_loaded = "L"
+lock_first_loaded = "L"
+
+# Set a keybind to unlock the first locked instance.
+# The same rules for reset keybinds work here.
+# Eg: unlock_first_loaded = "Ctrl-L"
+unlock_first_loaded = "Ctrl-L"
+
+# Set a keybind to play the first locked instance.
+# The same rules for reset keybinds work here.
+# Eg: play_first_locked = "Shift-L"
+play_first_locked = "Shift-L"
+
+# Set a keybind to play the first loaded instance.
+# The same rules for reset keybinds work here.
+# Eg: play_first_loaded = "Shift-R"
+play_first_loaded = "Shift-R"
+
 [obs]
-# Whether or not to enable OBS websocket support. This is *required* for wall.
+# Whether or not to enable OBS websocket support. This is *required* for wall and moving_wall.
 enabled = false
 
 # The port to connect to OBS websocket on.
@@ -128,10 +160,12 @@ resize_y = 0
 # Whether or not to enable mouse support on the wall. Enabling this will allow
 # you to click on instances to perform various actions instead of having to use
 # the number keys. Note that enabling this does not disable the number keys.
+# NOTE: Mouse support currently doesn't work with moving wall. Please make sure to keep this as false while using moving wall.
 use_mouse = false
 
 # If enabled, resetting from within an instance will switch to the first locked
 # instance (if any) instead of going back to the wall.
+# NOTE: This feature doesn't work with moving wall at the moment. Please make sure to keep this as false while using moving wall.
 goto_locked = false
 
 # Whether or not to create the "sleepbg.lock" file when an instance is being

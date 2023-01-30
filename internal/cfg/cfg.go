@@ -67,6 +67,14 @@ type Profile struct {
 		CpusActive   int  `toml:"affinity_active"`
 		LowThreshold int  `toml:"low_threshold"`
 	} `toml:"advanced_wall"`
+	MovingWall struct {
+		UseMovingWall     bool    `toml:"use_moving_wall"`
+		ResetFirstLoaded  x11.Key `toml:"reset_first_loaded"`
+		LockFirstLoaded   x11.Key `toml:"lock_first_loaded"`
+		UnlockFirstLocked x11.Key `toml:"unlock_first_loaded"`
+		PlayFirstLocked   x11.Key `toml:"play_first_locked"`
+		PlayFirstLoaded   x11.Key `toml:"play_first_loaded"`
+	} `toml:"moving_wall"`
 }
 
 // GetFolder returns the path to the user's configuration folder.
@@ -132,6 +140,14 @@ func GetProfile(name string) (Profile, error) {
 		if mode != "standard" && !conf.Obs.Enabled {
 			return Profile{}, errors.New("obs must be enabled for this reset mode")
 		}
+		if conf.MovingWall.UseMovingWall {
+			if conf.Wall.GoToLocked {
+				return Profile{}, errors.New("goto locked cannot be used with moving wall")
+			}
+			if conf.Wall.UseMouse {
+				return Profile{}, errors.New("mouse is not currently supported with moving wall")
+			}
+		}
 	}
 
 	// Set SleepBackground lock path.
@@ -145,26 +161,6 @@ func GetProfile(name string) (Profile, error) {
 	conf.Wall.SleepBgLockPath += "/sleepbg.lock"
 
 	return conf, nil
-}
-
-// GetProfileList returns a list of all available configuration profiles.
-func GetProfileList() ([]string, error) {
-	dir, err := GetFolder()
-	if err != nil {
-		return nil, err
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	profiles := make([]string, 0)
-	for _, v := range entries {
-		if v.IsDir() || v.Name()[0] == '.' {
-			continue
-		}
-		profiles = append(profiles, v.Name())
-	}
-	return profiles, nil
 }
 
 // MakeProfile makes a new profile with the default configuration.
