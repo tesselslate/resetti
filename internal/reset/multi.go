@@ -78,7 +78,7 @@ func (m *Multi) Run() error {
 			return errors.Wrap(err, "failed to click")
 		}
 	}
-	updates, readerErrors := mux(m.logReaders)
+	updates, readerErrors := Mux(m.logReaders)
 
 	// Setup OBS and the reset counter.
 	var obsError <-chan error
