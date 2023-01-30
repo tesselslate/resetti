@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
 	"sync"
@@ -22,14 +21,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
-
-// Embedding affinity scripts into the binary.
-//
-//go:embed scripts/set_cgroups.sh
-var set_cgroups_script string
-
-//go:embed scripts/after_load.sh
-var after_load_script string
 
 // Affinity states
 const (
@@ -71,9 +62,6 @@ type Wall struct {
 	lastMouseId       int
 	projector         xproto.Window
 	projectorChildren []xproto.Window
-
-	set_cgroups_script string
-	after_load_script  string
 }
 
 // wallState contains the state of an instance, as well as some auxiliary
@@ -89,14 +77,12 @@ type wallState struct {
 func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 	// Create a different instance of `wall` for the moving wall setting.
 	wall := Wall{
-		conf:               conf,
-		x:                  x,
-		logReaders:         make([]LogReader, 0, len(infos)),
-		current:            -1,
-		pause:              make(chan int, len(infos)*2),
-		lastMouseId:        -1,
-		set_cgroups_script: set_cgroups_script,
-		after_load_script:  after_load_script,
+		conf:        conf,
+		x:           x,
+		logReaders:  make([]LogReader, 0, len(infos)),
+		current:     -1,
+		pause:       make(chan int, len(infos)*2),
+		lastMouseId: -1,
 	}
 	wall.instances = make([]mc.Instance, 0, len(infos))
 	for _, info := range infos {
@@ -109,15 +95,13 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 // Run attempts to run the wall resetter. If an error occurs during
 // setup, it will be returned.
 func (m *Wall) Run() error {
-	// Run pre-requisite setup scripts before starting the wall.
+	// Run the cgroup script if necessary.
 	if m.conf.AdvancedWall.Affinity {
-		log.Printf("Executing script to set cgroups with elevated privileges. Please enter password as prompted.")
-		cmd := exec.Command("sudo", "bash", "-c", m.set_cgroups_script)
-		_, stderr := cmd.Output()
-		if stderr != nil {
-			return stderr
+		if err := runCgroupScript(); err != nil {
+			return errors.Wrap(err, "run cgroup script")
 		}
 	}
+
 	// Ensure that the user's window manager supports the necessary EWMH
 	// properties.
 	if m.conf.Wall.UseMouse && m.conf.MovingWall.UseMovingWall {
@@ -173,16 +157,6 @@ func (m *Wall) Run() error {
 		}
 	}
 	updates, readerErrors := mux(m.logReaders)
-
-	// Execute the necessary scripts after the instances have been opened.
-	if m.conf.AdvancedWall.Affinity {
-		log.Printf("Executing post load script with elevateed privileges. Please enter password as prompted.")
-		cmd := exec.Command("sudo", "bash", "-c", m.after_load_script)
-		_, stderr := cmd.Output()
-		if stderr != nil {
-			return stderr
-		}
-	}
 
 	// Setup OBS.
 	m.obs = &obs.Client{}

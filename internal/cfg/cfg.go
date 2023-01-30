@@ -155,26 +155,6 @@ func GetProfile(name string) (Profile, error) {
 	return conf, nil
 }
 
-// GetProfileList returns a list of all available configuration profiles.
-func GetProfileList() ([]string, error) {
-	dir, err := GetFolder()
-	if err != nil {
-		return nil, err
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	profiles := make([]string, 0)
-	for _, v := range entries {
-		if v.IsDir() || v.Name()[0] == '.' {
-			continue
-		}
-		profiles = append(profiles, v.Name())
-	}
-	return profiles, nil
-}
-
 // MakeProfile makes a new profile with the default configuration.
 func MakeProfile(name string) error {
 	dir, err := GetFolder()
