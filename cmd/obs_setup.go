@@ -231,51 +231,50 @@ func ObsSetup() {
 			if settings.verification {
 				makeVerificationItems(settings, client, width, height, scene)
 			}
-			// Create the wall scene.
-			w, h := width/settings.wallWidth, height/settings.wallHeight
-			for x := 0; x < settings.wallWidth; x++ {
-				for y := 0; y < settings.wallHeight; y++ {
-					// Create the instance scene item.
-					num := settings.wallWidth*y + x + 1
-					if num > settings.instanceCount {
-						// The user can have less instances than would fill the wall.
-						// For example, a 4x2 wall with 7 instances is valid.
-						break
-					}
-					source := fmt.Sprintf("MC %d", num)
-					assert(client.AddSceneItem("Wall", source))
-					assert(client.SetSceneItemBounds(
-						"Wall",
-						source,
-						float64(x*w),
-						float64(y*h),
-						float64(w),
-						float64(h),
-					))
-					assert(client.SetSceneItemLocked("Wall", source, true))
-
-					// Create the lock scene item.
-					source = fmt.Sprintf("Lock %d", num)
-					assert(client.CreateSource(
-						"Wall",
-						source,
-						"image_source",
-						obs.StringMap{"file": settings.lockImg},
-					))
-					assert(client.SetSceneItemBounds(
-						"Wall",
-						source,
-						float64(x*w),
-						float64(y*h),
-						float64(settings.lockWidth),
-						float64(settings.lockHeight),
-					))
-					assert(client.SetSceneItemLocked("Wall", source, true))
-				}
-			}
-
 		}
 
+		// Create the wall scene.
+		w, h := width/settings.wallWidth, height/settings.wallHeight
+		for x := 0; x < settings.wallWidth; x++ {
+			for y := 0; y < settings.wallHeight; y++ {
+				// Create the instance scene item.
+				num := settings.wallWidth*y + x + 1
+				if num > settings.instanceCount {
+					// The user can have less instances than would fill the wall.
+					// For example, a 4x2 wall with 7 instances is valid.
+					break
+				}
+				source := fmt.Sprintf("MC %d", num)
+				assert(client.AddSceneItem("Wall", source))
+				assert(client.SetSceneItemBounds(
+					"Wall",
+					source,
+					float64(x*w),
+					float64(y*h),
+					float64(w),
+					float64(h),
+				))
+				assert(client.SetSceneItemLocked("Wall", source, true))
+
+				// Create the lock scene item.
+				source = fmt.Sprintf("Lock %d", num)
+				assert(client.CreateSource(
+					"Wall",
+					source,
+					"image_source",
+					obs.StringMap{"file": settings.lockImg},
+				))
+				assert(client.SetSceneItemBounds(
+					"Wall",
+					source,
+					float64(x*w),
+					float64(y*h),
+					float64(settings.lockWidth),
+					float64(settings.lockHeight),
+				))
+				assert(client.SetSceneItemLocked("Wall", source, true))
+			}
+		}
 	} else {
 		assert(client.CreateScene("LockedView"))
 		assert(client.CreateScene("LoadingView"))
