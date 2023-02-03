@@ -189,6 +189,11 @@ func (m *Wall) Run() error {
 		return errors.Wrap(err, "failed to set scene")
 	}
 
+	// Disable capture cursor on all instances.
+	if err = m.hideCursors(); err != nil {
+		return errors.Wrap(err, "failed to hide cursors")
+	}
+
 	// Setup moving wall with defaults.
 	if m.conf.MovingWall.UseMovingWall {
 		m.movingWall = DefaultMovingWall(m.obs, m.conf)
@@ -507,6 +512,9 @@ func (m *Wall) GotoWall() {
 	if err := m.obs.SetScene("Wall"); err != nil {
 		log.Printf("Failed to go to wall scene: %s\n", err)
 	}
+	if err := m.hideCursors(); err != nil {
+		log.Printf("Failed to hide cursors: %s\n", err)
+	}
 	err := m.FocusProjector()
 	if err != nil {
 		log.Printf("Failed to focus projector: %s\n", err)
@@ -694,6 +702,16 @@ func (m *Wall) HandleResetInput(timestamp xproto.Timestamp) {
 	m.GotoWall()
 }
 
+// hideCursors hides the cursor from all instance sources.
+func (m *Wall) hideCursors() error {
+	return m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+		for i := 1; i <= len(m.instances); i += 1 {
+			b.SetSourceSettings(fmt.Sprintf("MC %d", i), obs.StringMap{"show_cursor": false}, true)
+		}
+		return nil
+	})
+}
+
 // reset performs all of the common tasks for resetting an instance (those
 // which would be done both for resetting from ingame and on the wall.)
 func (m *Wall) reset(id int, timestamp xproto.Timestamp) error {
@@ -875,6 +893,10 @@ func (m *Wall) WallPlay(id int, timestamp xproto.Timestamp) error {
 	m.CreateSleepbgLock()
 	if m.conf.AdvancedWall.Affinity {
 		m.SetAffinities()
+	}
+	err := m.obs.SetSourceSettings(fmt.Sprintf("MC %d", id+1), obs.StringMap{"show_cursor": true}, true)
+	if err != nil {
+		return errors.Wrap(err, "show cursor")
 	}
 	return nil
 }
