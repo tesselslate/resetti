@@ -191,6 +191,12 @@ sleepbg_lock_path = "/home/my_user"
 # - Active: The instance currently being played
 affinity = false
 
+# Splits the instances so that half one on run CCX and the other half run on
+# the other CCX. If enabled, only half as many CPUs will be available for the
+# below configuration options. Only use this if you have an AMD CPU with 2
+# CCXs.
+ccx_split = false
+
 # Number of CPUs to run idle instances on.
 affinity_idle = 1
 

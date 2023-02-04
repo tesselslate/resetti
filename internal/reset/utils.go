@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -101,20 +102,29 @@ func printDebugInfo(x *x11.Client, instances []mc.Instance) {
 }
 
 // runCgroupScript runs the cgroup setup script.
-func runCgroupScript() error {
+func runCgroupScript(conf *cfg.Profile) error {
 	// Check if the script needs to be run. Start by making sure the cgroup
 	// folders exist.
-	checkFolders := []string{
-		"/sys/fs/cgroup/resetti",
-		"/sys/fs/cgroup/resetti/idle",
-		"/sys/fs/cgroup/resetti/low",
-		"/sys/fs/cgroup/resetti/mid",
-		"/sys/fs/cgroup/resetti/high",
-		"/sys/fs/cgroup/resetti/active",
+	baseGroups := []string{
+		"idle",
+		"low",
+		"mid",
+		"high",
+		"active",
+	}
+	var checkFolders []string
+	if !conf.AdvancedWall.CcxSplit {
+		checkFolders = baseGroups
+	} else {
+		checkFolders = make([]string, 0, len(baseGroups)*2)
+		for _, v := range baseGroups {
+			checkFolders = append(checkFolders, v+"0")
+			checkFolders = append(checkFolders, v+"1")
+		}
 	}
 	needsRun := false
 	for _, folder := range checkFolders {
-		stat, err := os.Stat(folder)
+		stat, err := os.Stat("/sys/fs/cgroup/resetti/" + folder)
 		if err != nil || !stat.IsDir() {
 			needsRun = true
 			break
@@ -133,13 +143,8 @@ func runCgroupScript() error {
 		return errors.Wrap(err, "get config folder")
 	}
 	path += "/cgroup_setup.sh"
-	if _, err := os.Stat(path); err != nil {
-		if !os.IsNotExist(err) {
-			return errors.Wrap(err, "find cgroup script")
-		}
-		if err = os.WriteFile(path, cgroup_script, 0644); err != nil {
-			return errors.Wrap(err, "write cgroup script")
-		}
+	if err = os.WriteFile(path, cgroup_script, 0644); err != nil {
+		return errors.Wrap(err, "write cgroup script")
 	}
 
 	// Determine the user's suid binary.
@@ -161,7 +166,8 @@ func runCgroupScript() error {
 	}
 
 	// Run the script.
-	cmd := exec.Command(suidBin, "sh", path)
+	subgroups := strings.Join(checkFolders, " ")
+	cmd := exec.Command(suidBin, "sh", path, subgroups)
 	return errors.Wrap(cmd.Run(), "run cgroup script")
 }
 
@@ -227,6 +233,60 @@ func setSources(o *obs.Client, instances []mc.Instance, usingMovingWall bool) er
 			)
 			if err != nil {
 				return err
+			}
+		}
+	}
+	return nil
+}
+
+// writeCgroups writes the CPU set for each cgroup.
+func writeCgroups(conf *cfg.Profile) error {
+	cgroups := []string{
+		"idle",
+		"low",
+		"mid",
+		"high",
+		"active",
+	}
+	aff := []int{
+		conf.AdvancedWall.CpusIdle,
+		conf.AdvancedWall.CpusLow,
+		conf.AdvancedWall.CpusMid,
+		conf.AdvancedWall.CpusHigh,
+		conf.AdvancedWall.CpusActive,
+	}
+
+	// Set the available CPUs for each cgroup.
+	if !conf.AdvancedWall.CcxSplit {
+		for i, cgroup := range cgroups {
+			path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cpuset.cpus", cgroup)
+			d := fmt.Sprintf("0-%d", aff[i]-1)
+			err := os.WriteFile(path, []byte(d), 0644)
+			if err != nil {
+				return errors.Wrapf(err, "write cgroup %s", cgroup)
+			}
+		}
+	} else {
+		stripe := func(start int) string {
+			list := make([]string, 0)
+			for start < runtime.NumCPU() {
+				list = append(list, strconv.Itoa(start))
+				start += 2
+			}
+			return strings.Join(list, ",")
+		}
+
+		for _, cgroup := range cgroups {
+			path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s0/cpuset.cpus", cgroup)
+			err := os.WriteFile(path, []byte(stripe(0)), 0644)
+			if err != nil {
+				return errors.Wrapf(err, "write cgroup %s0", cgroup)
+			}
+
+			path = fmt.Sprintf("/sys/fs/cgroup/resetti/%s1/cpuset.cpus", cgroup)
+			err = os.WriteFile(path, []byte(stripe(1)), 0644)
+			if err != nil {
+				return errors.Wrapf(err, "write cgroup %s1", cgroup)
 			}
 		}
 	}

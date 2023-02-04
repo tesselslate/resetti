@@ -14,7 +14,7 @@ chown "$USERNAME" $CGROUP_DIR/cgroup.procs
 echo "+cpuset" > $CGROUP_DIR/cgroup.subtree_control
 
 # create subgroups
-for subgroup in idle low mid high active; do
+for subgroup in $1; do
     mkdir $CGROUP_DIR/$subgroup
     chown "$USERNAME" $CGROUP_DIR/$subgroup/cgroup.procs
     chown "$USERNAME" $CGROUP_DIR/$subgroup/cpuset.cpus

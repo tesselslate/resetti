@@ -95,10 +95,14 @@ func NewWall(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Wall {
 // Run attempts to run the wall resetter. If an error occurs during
 // setup, it will be returned.
 func (m *Wall) Run() error {
-	// Run the cgroup script if necessary.
+	// If necessary, run the cgroup script and set up the cpusets for each
+	// cgroup.
 	if m.conf.AdvancedWall.Affinity {
-		if err := runCgroupScript(); err != nil {
+		if err := runCgroupScript(&m.conf); err != nil {
 			return errors.Wrap(err, "run cgroup script")
+		}
+		if err := writeCgroups(&m.conf); err != nil {
+			return errors.Wrap(err, "write cgroups")
 		}
 	}
 
@@ -209,32 +213,6 @@ func (m *Wall) Run() error {
 		return err
 	}
 	m.counter = counter
-
-	// Setup cgroups for affinity.
-	if m.conf.AdvancedWall.Affinity {
-		cgroups := []string{
-			"idle",
-			"low",
-			"mid",
-			"high",
-			"active",
-		}
-		aff := []int{
-			m.conf.AdvancedWall.CpusIdle,
-			m.conf.AdvancedWall.CpusLow,
-			m.conf.AdvancedWall.CpusMid,
-			m.conf.AdvancedWall.CpusHigh,
-			m.conf.AdvancedWall.CpusActive,
-		}
-		for i, cgroup := range cgroups {
-			path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cpuset.cpus", cgroup)
-			d := fmt.Sprintf("0-%d", aff[i]-1)
-			err := os.WriteFile(path, []byte(d), 0644)
-			if err != nil {
-				return errors.Wrapf(err, "write cgroup %d", i)
-			}
-		}
-	}
 
 	// Start polling for X events.
 	xEvt, xErr, err := m.x.Poll(ctx, true)
@@ -752,6 +730,13 @@ func (m *Wall) SetAffinity(id int, affinity int) {
 		"high",
 		"active",
 	}[affinity]
+	if m.conf.AdvancedWall.CcxSplit {
+		if id <= len(m.instances)/2 {
+			cgroup += "0"
+		} else {
+			cgroup += "1"
+		}
+	}
 	path := fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", cgroup)
 	fh, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {

@@ -60,6 +60,7 @@ type Profile struct {
 	} `toml:"wall"`
 	AdvancedWall struct {
 		Affinity     bool `toml:"affinity"`
+		CcxSplit     bool `toml:"ccx_split"`
 		CpusIdle     int  `toml:"affinity_idle"`
 		CpusLow      int  `toml:"affinity_low"`
 		CpusMid      int  `toml:"affinity_mid"`
@@ -110,6 +111,9 @@ func GetProfile(name string) (Profile, error) {
 	// Validate configuration.
 	{
 		cpus := runtime.NumCPU()
+		if conf.AdvancedWall.CcxSplit {
+			cpus /= 2
+		}
 		if conf.AdvancedWall.Affinity {
 			idle := conf.AdvancedWall.CpusIdle
 			low := conf.AdvancedWall.CpusLow
