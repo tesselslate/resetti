@@ -685,6 +685,11 @@ func (m *Wall) hideCursors() error {
 	return m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
 		for i := 1; i <= len(m.instances); i += 1 {
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), obs.StringMap{"show_cursor": false}, true)
+			if m.conf.MovingWall.UseMovingWall {
+				b.SetSourceSettings(fmt.Sprintf("MC %d LockedView", i), obs.StringMap{"show_cursor": false}, true)
+				b.SetSourceSettings(fmt.Sprintf("MC %d LoadingView", i), obs.StringMap{"show_cursor": false}, true)
+				b.SetSourceSettings(fmt.Sprintf("MC %d FullView", i), obs.StringMap{"show_cursor": false}, true)
+			}
 		}
 		return nil
 	})
