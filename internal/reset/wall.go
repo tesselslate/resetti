@@ -736,7 +736,7 @@ func (m *Wall) SetAffinity(id int, affinity int) {
 		"active",
 	}[affinity]
 	if m.conf.AdvancedWall.CcxSplit {
-		if id <= len(m.instances)/2 {
+		if id < len(m.instances)/2 {
 			cgroup += "0"
 		} else {
 			cgroup += "1"
