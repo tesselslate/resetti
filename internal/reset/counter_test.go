@@ -7,12 +7,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/reset"
 )
 
+// enabledConf contains a configuration profile with `count_resets` enabled.
 var enabledConf = cfg.Profile{
 	General: struct {
 		ResetType   string "toml:\"type\""
@@ -23,6 +23,8 @@ var enabledConf = cfg.Profile{
 	},
 }
 
+// makeCounter creates a new Counter with the given configuration and increments
+// it 1000 times.
 func makeCounter(t *testing.T, conf cfg.Profile) {
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -35,11 +37,12 @@ func makeCounter(t *testing.T, conf cfg.Profile) {
 			counter.Increment()
 		}()
 	}
-	time.Sleep(time.Millisecond * 5)
 	cancel()
 	wg.Wait()
 }
 
+// TestCounterCreate creates a fresh counter and checks that it captures all
+// 1000 resets.
 func TestCounterCreate(t *testing.T) {
 	path := t.TempDir() + "/count"
 	conf := enabledConf
@@ -58,10 +61,14 @@ func TestCounterCreate(t *testing.T) {
 	}
 }
 
+// TestCounterDisabled tests that the reset counter does not crash when
+// disabled.
 func TestCounterDisabled(t *testing.T) {
 	makeCounter(t, cfg.Profile{})
 }
 
+// TestCounterRead creates a counter with 1000 existing resets and checks that
+// it ends up with 2000 resets.
 func TestCounterRead(t *testing.T) {
 	path := t.TempDir() + "/count"
 	conf := enabledConf
