@@ -21,12 +21,13 @@ const (
 // InstanceInfo contains information about how to interact with a Minecraft
 // instance, such as its game directory and window ID.
 type InstanceInfo struct {
-	Id       int           // Instance number
-	Pid      uint32        // Process ID
-	Wid      xproto.Window // Window ID
-	Dir      string        // .minecraft directory
-	Version  int           // Minecraft version
-	ResetKey x11.Key       // Atum reset key
+	Id         int           // Instance number
+	Pid        uint32        // Process ID
+	Wid        xproto.Window // Window ID
+	Dir        string        // .minecraft directory
+	Version    int           // Minecraft version
+	ResetKey   x11.Key       // Atum reset key
+	PreviewKey x11.Key       // Leave preview key
 }
 
 // InstanceState contains information about the current state of the instance.
