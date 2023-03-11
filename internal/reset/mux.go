@@ -17,11 +17,11 @@ type stateUpdate struct {
 // Mux takes a slice of LogReaders as input and multiplexes their outputs onto
 // one single channel, which can be selected on. Whenever an error is received
 // over the returned error channel, resetti should terminate.
-func Mux(readers []LogReader) (<-chan stateUpdate, <-chan error) {
-	ch := make(chan stateUpdate, update_channel_size*len(readers))
+func Mux(readers []mc.LogReader) (<-chan stateUpdate, <-chan error) {
+	ch := make(chan stateUpdate, 32*len(readers))
 	errch := make(chan error, 1)
 	for i, v := range readers {
-		go func(i int, v LogReader) {
+		go func(i int, v mc.LogReader) {
 			for {
 				select {
 				case err := <-v.Errors:

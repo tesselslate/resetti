@@ -41,7 +41,7 @@ type InstanceState struct {
 type Instance struct {
 	InstanceInfo
 	conf *cfg.Profile
-	time xproto.Timestamp // the last time a key event was sent
+	time xproto.Timestamp // The last time a key event was sent
 	x    *x11.Client
 }
 

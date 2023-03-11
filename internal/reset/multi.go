@@ -25,7 +25,7 @@ type Multi struct {
 	obs  *obs.Client
 	x    *x11.Client
 
-	logReaders []LogReader
+	logReaders []mc.LogReader
 	states     []mc.InstanceState
 	instances  []mc.Instance
 	current    int // the index of the current instance
@@ -37,7 +37,7 @@ func NewMulti(conf cfg.Profile, infos []mc.InstanceInfo, x *x11.Client) Multi {
 	multi := Multi{
 		conf:       conf,
 		x:          x,
-		logReaders: make([]LogReader, 0, len(infos)),
+		logReaders: make([]mc.LogReader, 0, len(infos)),
 		pause:      make(chan int, len(infos)*2),
 	}
 	multi.instances = make([]mc.Instance, 0, len(infos))
@@ -65,15 +65,12 @@ func (m *Multi) Run() error {
 
 	// Start log readers and click instances to fix the Atum bug.
 	for i, v := range m.instances {
-		reader, err := NewLogReader(ctx, &wg, v.InstanceInfo)
+		reader, state, err := mc.NewLogReader(ctx, v.InstanceInfo)
 		if err != nil {
 			return errors.Wrap(err, "failed to setup log reader")
 		}
 		m.logReaders = append(m.logReaders, reader)
-		if _, err = reader.readState(); err != nil {
-			return errors.Wrap(err, "failed to read state")
-		}
-		m.states[i] = reader.state
+		m.states[i] = state
 		if err = v.Click(); err != nil {
 			return errors.Wrap(err, "failed to click")
 		}

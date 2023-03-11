@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/jezek/xgb"
@@ -32,17 +31,16 @@ func main() {
 		fmt.Println("Failed to find instances:", err)
 		return
 	}
-	wg := sync.WaitGroup{}
-	readers := make([]reset.LogReader, 0)
+	readers := make([]mc.LogReader, 0)
 	lastStates := make([]mc.InstanceState, 0)
 	for _, info := range instances {
-		reader, err := reset.NewLogReader(context.Background(), &wg, info)
+		reader, state, err := mc.NewLogReader(context.Background(), info)
 		if err != nil {
 			fmt.Println("Failed to start log reader:", err)
 			return
 		}
 		readers = append(readers, reader)
-		lastStates = append(lastStates, mc.InstanceState{})
+		lastStates = append(lastStates, state)
 	}
 	ch, errch := reset.Mux(readers)
 
