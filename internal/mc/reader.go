@@ -25,10 +25,7 @@ const (
 // LogReader reads the log file of an instance and provides updates to its
 // state.
 type LogReader struct {
-	Errors <-chan error
-	Events <-chan InstanceState
-	state  InstanceState
-
+	state   InstanceState
 	id      int
 	path    string
 	file    *os.File
@@ -36,8 +33,8 @@ type LogReader struct {
 	watcher *fsnotify.Watcher
 }
 
-// NewLogReader creates a new logReader for the given instance.
-func NewLogReader(ctx context.Context, info InstanceInfo) (LogReader, InstanceState, error) {
+// NewLogReader creates a new LogReader for the given instance.
+func NewLogReader(info InstanceInfo) (LogReader, InstanceState, error) {
 	logFile := info.Dir + "/logs/latest.log"
 	file, err := os.Open(logFile)
 	if err != nil {
@@ -54,11 +51,7 @@ func NewLogReader(ctx context.Context, info InstanceInfo) (LogReader, InstanceSt
 		_ = file.Close()
 		return LogReader{}, InstanceState{}, errors.Wrap(err, "watch log file")
 	}
-	errch := make(chan error, 1)
-	evtch := make(chan InstanceState, 32)
 	r := LogReader{
-		errch,
-		evtch,
 		InstanceState{},
 		info.Id,
 		logFile,
@@ -72,17 +65,14 @@ func NewLogReader(ctx context.Context, info InstanceInfo) (LogReader, InstanceSt
 		_ = file.Close()
 		return LogReader{}, InstanceState{}, errors.Wrap(err, "read state")
 	}
-	go r.run(ctx, errch, evtch)
 	return r, r.state, nil
 }
 
-// run starts reading the log file and processing updates in the background.
-func (r *LogReader) run(ctx context.Context, errch chan<- error, evtch chan<- InstanceState) {
+// Run starts reading the log file and processing updates in the background.
+func (r *LogReader) Run(ctx context.Context, errch chan<- error, evtch chan<- Update) {
 	defer func() {
 		_ = r.file.Close()
 		_ = r.watcher.Close()
-		close(evtch)
-		close(errch)
 	}()
 
 	for {
@@ -110,7 +100,7 @@ func (r *LogReader) run(ctx context.Context, errch chan<- error, evtch chan<- In
 					return
 				}
 				if updated {
-					evtch <- r.state
+					evtch <- Update{r.state, r.id}
 				}
 			}
 		}

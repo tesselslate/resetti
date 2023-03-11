@@ -27,6 +27,12 @@ const (
 
 // Event masks
 const (
+	maskButton uint32 = xproto.EventMaskButtonPress |
+		xproto.EventMaskButtonRelease
+
+	maskEnterLeave uint32 = xproto.EventMaskEnterWindow |
+		xproto.EventMaskLeaveWindow
+
 	maskKeyPress uint32 = xproto.EventMaskKeyPress |
 		xproto.EventMaskKeyRelease
 
@@ -83,6 +89,16 @@ func NewClient() (Client, error) {
 	if err != nil {
 		return Client{}, err
 	}
+	root := xproto.Setup(conn).DefaultScreen(conn).Root
+	err = xproto.ChangeWindowAttributesChecked(
+		conn,
+		root,
+		xproto.CwEventMask,
+		[]uint32{maskProperty},
+	).Check()
+	if err != nil {
+		return Client{}, err
+	}
 	offset, err := approximateOffset(conn)
 	if err != nil {
 		return Client{}, err
@@ -93,26 +109,50 @@ func NewClient() (Client, error) {
 			data: make(map[string]xproto.Atom),
 		},
 		conn,
-		xproto.Setup(conn).DefaultScreen(conn).Root,
+		root,
 		offset,
 	}, nil
 }
 
 // Click clicks the top left corner (0, 0) of the given window.
 func (c *Client) Click(win xproto.Window) error {
-	// TODO: Figure out how to move mouse to 0,0 to stop clicking menu buttons.
-	log.Printf("TODO click")
-	return nil
+	evt := xproto.EnterNotifyEvent{
+		Root:  win,
+		Event: win,
+		Child: win,
+	}
+	if err := c.sendEvent(evt, maskEnterLeave, win); err != nil {
+		return err
+	}
+	evt2 := xproto.LeaveNotifyEvent(evt)
+	if err := c.sendEvent(evt2, maskEnterLeave, win); err != nil {
+		return err
+	}
+	evt3 := xproto.ButtonPressEvent{
+		Detail: 1,
+		Root:   win,
+		Event:  win,
+		Child:  win,
+	}
+	if err := c.sendEvent(evt3, maskButton, win); err != nil {
+		return err
+	}
+	evt4 := xproto.ButtonReleaseEvent(evt3)
+	return c.sendEvent(evt4, maskButton, win)
 }
 
 // FocusWindow activates the given window.
 func (c *Client) FocusWindow(win xproto.Window) error {
-	winDesktop, err := c.getPropertyInt(win, netWmDesktop, xproto.AtomCardinal)
-	if err != nil {
+	winDesktop, err := c.getPropertyInt(c.root, netWmDesktop, xproto.AtomCardinal)
+	switch err {
+	case errInvalidLength:
+		break
+	case nil:
+		if err = c.setCurrentDesktop(winDesktop); err != nil {
+			return errors.Wrap(err, "set current desktop")
+		}
+	default:
 		return errors.Wrap(err, "get window desktop")
-	}
-	if err = c.setCurrentDesktop(winDesktop); err != nil {
-		return errors.Wrap(err, "set current desktop")
 	}
 	activeWindow, err := c.atoms.Get(netActiveWindow)
 	if err != nil {
@@ -165,7 +205,7 @@ func (c *Client) GetWindowChildren(win xproto.Window) ([]xproto.Window, error) {
 	// visited windows in case windows are moved around in a way which
 	// causes an infinite loop.
 	queue := []xproto.Window{win}
-	seen := map[xproto.Window]bool{win: true}
+	seen := map[xproto.Window]bool{}
 	for ptr := 0; ptr < len(queue); ptr += 1 {
 		next := queue[ptr]
 		if seen[next] {
@@ -265,36 +305,25 @@ func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) error {
 func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
 	ch := make(chan Event, 256)
 	errch := make(chan error, 8)
-	err := xproto.ChangeWindowAttributesChecked(
-		c.conn,
-		c.root,
-		xproto.CwEventMask,
-		[]uint32{maskProperty},
-	).Check()
-	if err != nil {
-		return nil, nil, err
-	}
 	go c.poll(ctx, ch, errch)
 	return ch, errch, nil
 }
 
 // SendKeyDown sends a key down event to the given window with the given key.
-func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, time uint32) error {
-	return c.sendKeyEvent(code, StateDown, win, time)
+func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, time uint32) {
+	c.sendKeyEvent(code, StateDown, win, time)
 }
 
 // SendKeyPress sends a key press (key down and key up event) to the given
 // window with the given key.
-func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, time uint32) error {
-	if err := c.sendKeyEvent(code, StateDown, win, time); err != nil {
-		return err
-	}
-	return c.sendKeyEvent(code, StateUp, win, time+1)
+func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, time uint32) {
+	c.sendKeyEvent(code, StateDown, win, time)
+	c.sendKeyEvent(code, StateUp, win, time+1)
 }
 
 // SendKeyUp sends a key up event to the given window with the given key.
-func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, time uint32) error {
-	return c.sendKeyEvent(code, StateUp, win, time)
+func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, time uint32) {
+	c.sendKeyEvent(code, StateUp, win, time)
 }
 
 // UngrabKey releases a grabbed key and returns it back to the X server.
@@ -367,7 +396,7 @@ func (c *Client) sendEvent(evt event, mask uint32, win xproto.Window) error {
 }
 
 // sendKeyEvent sends a key event to the given window.
-func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.Window, time uint32) error {
+func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.Window, time uint32) {
 	evt := xproto.KeyPressEvent{
 		Detail:     key,
 		Time:       xproto.Timestamp(time),
@@ -376,10 +405,14 @@ func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.W
 		Child:      win,
 		SameScreen: true,
 	}
+	var err error
 	if state == StateDown {
-		return c.sendEvent(evt, maskKeyPress, win)
+		err = c.sendEvent(evt, maskKeyPress, win)
 	} else {
-		return c.sendEvent(xproto.KeyReleaseEvent(evt), maskKeyPress, win)
+		err = c.sendEvent(xproto.KeyReleaseEvent(evt), maskKeyPress, win)
+	}
+	if err != nil {
+		log.Printf("Failed to send key event: %s\n", err)
 	}
 }
 

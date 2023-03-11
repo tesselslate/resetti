@@ -31,8 +31,6 @@ func main() {
 			" - Minecraft resetting macro\n",
 			notice,
 		)
-	case "obs":
-		cmd.ObsSetup()
 	case "new":
 		if len(os.Args) < 3 {
 			printHelp()
@@ -60,7 +58,5 @@ func printHelp() {
                                 the default configuration.
         resetti help            Print this message.
         resetti version         Get the version of resetti installed.
-        resetti obs [ARGUMENTS] Setup OBS for resetti. Run the command with
-                                no arguments to see help.
     `)
 }

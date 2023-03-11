@@ -41,16 +41,21 @@ type InstanceState struct {
 type Instance struct {
 	InstanceInfo
 	conf *cfg.Profile
-	time xproto.Timestamp // The last time a key event was sent
 	x    *x11.Client
+}
+
+// Update represents an update to the state of an Instance.
+type Update struct {
+	State InstanceState
+	Id    int
 }
 
 // NewInstance creates a new Instance from the given instance information.
 func NewInstance(info InstanceInfo, conf *cfg.Profile, x *x11.Client) Instance {
 	return Instance{
-		InstanceInfo: info,
-		conf:         conf,
-		x:            x,
+		info,
+		conf,
+		x,
 	}
 }
 
@@ -69,49 +74,54 @@ func (i *Instance) Focus() {
 // FocusAndUnpause focuses the instance's window and then unpauses if the user
 // has set `unpause_on_focus` in their config. If an error occurs, it will be
 // logged.
-func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
+func (i *Instance) FocusAndUnpause(timestamp uint32, idle bool) {
 	i.Focus()
 
 	time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.Delay))
 	if i.conf.Reset.UnpauseFocus && idle {
 		i.x.SendKeyPress(
-			x11.KeyEscape,
+			x11.KeyEsc,
 			i.Wid,
-			i.lastTime(timestamp),
+			timestamp,
 		)
 	}
 	if i.conf.Wall.HideGui && i.conf.General.ResetType == "wall" {
 		i.x.SendKeyPress(
 			x11.KeyF1,
 			i.Wid,
-			i.lastTime(timestamp),
+			timestamp+2,
 		)
 	}
 }
 
+// LeavePreview presses the instance's leave preview key.
+func (i *Instance) LeavePreview(timestamp uint32) {
+	i.x.SendKeyPress(i.PreviewKey.Code, i.Wid, timestamp)
+}
+
 // PressEsc presses escape to [un]pause the instance. If an error occurs, it will
 // be logged.
-func (i *Instance) PressEsc(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
+func (i *Instance) PressEsc(timestamp uint32) {
+	i.x.SendKeyPress(x11.KeyEsc, i.Wid, timestamp)
 }
 
 // PressF3Esc presses F3+Escape to pause the instance without the pause menu.
 // If an error occurs, it will be logged.
-func (i *Instance) PressF3Esc(timestamp xproto.Timestamp) {
-	i.x.SendKeyDown(x11.KeyF3, i.Wid, i.lastTime(timestamp))
-	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
-	i.x.SendKeyUp(x11.KeyF3, i.Wid, i.lastTime(timestamp))
+func (i *Instance) PressF3Esc(timestamp uint32) {
+	i.x.SendKeyDown(x11.KeyF3, i.Wid, timestamp)
+	i.x.SendKeyPress(x11.KeyEsc, i.Wid, timestamp+1)
+	i.x.SendKeyUp(x11.KeyF3, i.Wid, timestamp+3)
 }
 
 // PressF3 presses F3 to hide the pie chart.
-func (i *Instance) PressF3(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(x11.KeyF3, i.Wid, i.lastTime(timestamp))
+func (i *Instance) PressF3(timestamp uint32) {
+	i.x.SendKeyPress(x11.KeyF3, i.Wid, timestamp)
 }
 
 // Reset presses the instance's reset key. If an error occurs, it will be
 // logged.
-func (i *Instance) Reset(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(i.ResetKey.Code, i.Wid, i.lastTime(timestamp))
+func (i *Instance) Reset(timestamp uint32) {
+	i.x.SendKeyPress(i.ResetKey.Code, i.Wid, timestamp)
 }
 
 // Stretch stretches the instance's window.
@@ -140,14 +150,4 @@ func (i *Instance) Unstretch(conf cfg.Profile) error {
 		conf.Wall.UnstretchWidth,
 		conf.Wall.UnstretchHeight,
 	)
-}
-
-// lastTime returns the maximum of the given timestamp and the last stored
-// timestamp. If the given timestamp is later, then the last stored timestamp
-// is set to that value.
-func (i *Instance) lastTime(timestamp xproto.Timestamp) *xproto.Timestamp {
-	if timestamp > i.time {
-		i.time = timestamp
-	}
-	return &i.time
 }

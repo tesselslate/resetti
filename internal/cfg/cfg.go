@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/BurntSushi/toml"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -37,12 +36,8 @@ type Profile struct {
 		UnpauseFocus bool `toml:"unpause_on_focus"`
 	} `toml:"reset"`
 	Keys struct {
-		Focus           x11.Key    `toml:"focus"`
-		Reset           x11.Key    `toml:"reset"`
-		WallReset       x11.Keymod `toml:"wall_reset"`
-		WallResetOthers x11.Keymod `toml:"wall_reset_others"`
-		WallPlay        x11.Keymod `toml:"wall_play"`
-		WallLock        x11.Keymod `toml:"wall_lock"`
+		Focus x11.Key `toml:"focus"`
+		Reset x11.Key `toml:"reset"`
 	} `toml:"keybinds"`
 	Wall struct {
 		HideGui         bool   `toml:"hide_gui"`
@@ -108,51 +103,7 @@ func GetProfile(name string) (Profile, error) {
 		return Profile{}, err
 	}
 
-	// Validate configuration.
-	{
-		cpus := runtime.NumCPU()
-		if conf.AdvancedWall.CcxSplit {
-			cpus /= 2
-		}
-		if conf.AdvancedWall.Affinity {
-			idle := conf.AdvancedWall.CpusIdle
-			low := conf.AdvancedWall.CpusLow
-			mid := conf.AdvancedWall.CpusMid
-			high := conf.AdvancedWall.CpusHigh
-			active := conf.AdvancedWall.CpusActive
-			if idle > cpus || low > cpus || mid > cpus || high > cpus || active > cpus {
-				return Profile{}, errors.New("too many CPUs set in advanced affinity")
-			}
-			if idle <= 0 || low <= 0 || mid <= 0 || high <= 0 || active <= 0 {
-				return Profile{}, errors.New("all CPU counts must be above zero in affinity")
-			}
-		}
-		if conf.Keys.Focus == conf.Keys.Reset {
-			return Profile{}, errors.New("keybinds cannot be the same")
-		}
-		a := conf.Keys.WallReset
-		b := conf.Keys.WallResetOthers
-		c := conf.Keys.WallPlay
-		d := conf.Keys.WallLock
-		if a == b || a == c || a == d || b == c || b == d || c == d {
-			return Profile{}, errors.New("keybinds cannot be the same")
-		}
-		mode := conf.General.ResetType
-		if mode != "standard" && mode != "wall" {
-			return Profile{}, errors.New("invalid reset type")
-		}
-		if mode != "standard" && !conf.Obs.Enabled {
-			return Profile{}, errors.New("obs must be enabled for this reset mode")
-		}
-		if conf.MovingWall.UseMovingWall {
-			if conf.Wall.GoToLocked {
-				return Profile{}, errors.New("goto locked cannot be used with moving wall")
-			}
-			if conf.Wall.UseMouse {
-				return Profile{}, errors.New("mouse is not currently supported with moving wall")
-			}
-		}
-	}
+	// TODO: validate config
 
 	// Set SleepBackground lock path.
 	if conf.Wall.SleepBgLock && conf.Wall.SleepBgLockPath == "" {

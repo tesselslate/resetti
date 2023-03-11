@@ -7,9 +7,7 @@ import (
 	"os"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/reset"
-	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 func Run() {
@@ -33,43 +31,8 @@ func Run() {
 		fmt.Println("Failed to get profile:", err)
 		os.Exit(1)
 	}
-
-	// Connect to the X server.
-	x, err := x11.NewClient()
-	if err != nil {
-		fmt.Println("Failed to start X11 connection:", err)
+	if err = reset.Run(profile); err != nil {
+		fmt.Println("Failed to launch:", err)
 		os.Exit(1)
-	}
-
-	// Find Minecraft instances.
-	instanceInfo, err := mc.FindInstances(x)
-	if err != nil {
-		fmt.Println("Failed to find instances:", err)
-		os.Exit(1)
-	}
-
-	switch profile.General.ResetType {
-	case "standard":
-		multi := reset.NewMulti(profile, instanceInfo, x)
-		if err != nil {
-			fmt.Println("Failed to start multi:", err)
-			os.Exit(1)
-		}
-		err = multi.Run()
-		if err != nil {
-			fmt.Println("Multi failed:", err)
-			os.Exit(1)
-		}
-	case "wall":
-		wall := reset.NewWall(profile, instanceInfo, x)
-		if err != nil {
-			fmt.Println("Failed to start wall:", err)
-			os.Exit(1)
-		}
-		err = wall.Run()
-		if err != nil {
-			fmt.Println("Wall failed:", err)
-			os.Exit(1)
-		}
 	}
 }

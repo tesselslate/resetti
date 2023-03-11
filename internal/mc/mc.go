@@ -19,7 +19,7 @@ import (
 // or an error if the running instances do not form a list.
 func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
 	instances := make([]InstanceInfo, 0)
-	windows, err := x.GetAllWindows()
+	windows, err := x.GetWindowList()
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -111,13 +112,13 @@ func (c *Client) Batch(mode BatchMode, fn func(*Batch) error) (err error) {
 
 // Connect attempts to connect to an OBS instance at the given address. If
 // authentication is required, the given password will be used.
-func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan error, error) {
+func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan error, error) {
 	// Setup websocket connection.
 	c.mx = &sync.Mutex{}
 	c.idCache = newIdCache()
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
-	conn, _, err := websocket.Dial(ctx, "ws://"+addr, nil)
+	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("wss://localhost:%d", port), nil)
 	if err != nil {
 		return nil, err
 	}

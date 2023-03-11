@@ -23,7 +23,7 @@ var cgroup_script []byte
 
 // findProjector finds the OBS wall projector (if open.)
 func findProjector(c *x11.Client) (xproto.Window, error) {
-	windows, err := c.GetAllWindows()
+	windows, err := c.GetWindowList()
 	if err != nil {
 		return 0, err
 	}
@@ -67,15 +67,8 @@ func getWallSize(o *obs.Client, instances int) (uint16, uint16, error) {
 // printDebugInfo prints some debug information to the log.
 func printDebugInfo(x *x11.Client, instances []mc.Instance) {
 	log.Printf("Running %d instances\n", len(instances))
-	log.Printf("Root: %d\n", x.RootWindow())
+	log.Printf("Root: %d\n", x.GetRootWindow())
 	log.Println("WM properties:")
-	log.Printf("_NET_WM_NAME: %s", x.GetWmName())
-	supported, err := x.GetWmSupported()
-	if err != nil {
-		log.Printf("Failed to get _NET_SUPPORTED: %s\n", err)
-	} else {
-		log.Printf("_NET_SUPPORTED: %s", strings.Join(supported, ", "))
-	}
 	for id, inst := range instances {
 		log.Printf(
 			"Instance %d, wid %d, pid %d version %d\n",
@@ -136,8 +129,6 @@ func runCgroupScript(conf *cfg.Profile) error {
 	}
 
 	// Check for the script's existence.
-	// TODO: Notify the user if the script is not a match (e.g. needs to
-	// be updated)
 	path, err := cfg.GetFolder()
 	if err != nil {
 		return errors.Wrap(err, "get config folder")
