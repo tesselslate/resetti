@@ -118,7 +118,7 @@ func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan er
 	c.idCache = newIdCache()
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
-	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("wss://localhost:%d", port), nil)
+	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:%d", port), nil)
 	if err != nil {
 		return nil, err
 	}

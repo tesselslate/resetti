@@ -3,7 +3,7 @@ package x11
 import "github.com/jezek/xgb/xproto"
 
 // Key modifiers (for TOML unmarshalling)
-var keymods = map[string]uint16{
+var keymods = map[string]Keymod{
 	"ctrl":    ModCtrl,
 	"control": ModCtrl,
 	"shift":   ModShift,
@@ -97,7 +97,7 @@ var keycodesToml = map[string]xproto.Keycode{
 }
 
 // Key codes (options.txt)
-var keycodesMc = map[string]xproto.Keycode{
+var KeycodesMc = map[string]xproto.Keycode{
 	"0":               19,
 	"1":               10,
 	"2":               11,
@@ -189,22 +189,4 @@ var keycodesMc = map[string]xproto.Keycode{
 	"pause":           127,
 	"menu":            135,
 	"print.screen":    107,
-}
-
-// Mouse buttons (for TOML unmarshalling)
-var buttons = map[string]byte{
-	"leftbutton": 1,
-	"lbutton":    1,
-	"mouseleft":  1,
-	"leftmouse":  1,
-
-	"rightbutton": 3,
-	"rbutton":     3,
-	"mouseright":  3,
-	"rightmouse":  3,
-
-	"middlebutton": 2,
-	"mbutton":      2,
-	"mousemiddle":  2,
-	"middlemouse":  2,
 }

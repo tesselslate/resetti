@@ -125,7 +125,7 @@ func (i *Instance) Reset(timestamp uint32) {
 }
 
 // Stretch stretches the instance's window.
-func (i *Instance) Stretch(conf cfg.Profile) error {
+func (i *Instance) Stretch(conf *cfg.Profile) error {
 	if !conf.Wall.StretchWindows {
 		return nil
 	}
@@ -139,7 +139,7 @@ func (i *Instance) Stretch(conf cfg.Profile) error {
 }
 
 // Unstretch resizes the window back to its normal dimensions.
-func (i *Instance) Unstretch(conf cfg.Profile) error {
+func (i *Instance) Unstretch(conf *cfg.Profile) error {
 	if !conf.Wall.StretchWindows {
 		return nil
 	}

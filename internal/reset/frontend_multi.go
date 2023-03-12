@@ -16,10 +16,9 @@ type FrontendMulti struct {
 	obs  *obs.Client
 	x    *x11.Client
 
-	active        int
-	instanceCount int
-	instances     []mc.Instance
-	states        []mc.InstanceState
+	active    int
+	instances []mc.Instance
+	states    []mc.InstanceState
 }
 
 func (f *FrontendMulti) HandleInput(event x11.Event) error {
@@ -34,7 +33,7 @@ func (f *FrontendMulti) HandleInput(event x11.Event) error {
 	case f.conf.Keys.Focus:
 		f.instances[f.active].Focus()
 	case f.conf.Keys.Reset:
-		next := (f.active + 1) % f.instanceCount
+		next := (f.active + 1) % len(f.instances)
 		f.instances[next].FocusAndUnpause(f.x.GetCurrentTime(), f.states[next].State == mc.StIdle)
 		f.host.ResetInstance(f.active, f.x.GetCurrentTime())
 		if f.obs != nil {
@@ -59,7 +58,6 @@ func (f *FrontendMulti) Setup(opts FrontendOptions) error {
 	f.host = opts.Controller
 	f.obs = opts.Obs
 	f.x = opts.X
-	f.instanceCount = len(opts.Instances)
 	f.instances = make([]mc.Instance, len(opts.Instances))
 	f.states = make([]mc.InstanceState, len(opts.Instances))
 	copy(f.instances, opts.Instances)

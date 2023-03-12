@@ -108,9 +108,11 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 			continue
 		}
 		key := x11.Key{}
-		if err = key.UnmarshalTOML(keyName); err != nil {
-			return InstanceInfo{}, err
+		keycode, ok := x11.KeycodesMc[keyName]
+		if !ok {
+			return InstanceInfo{}, errors.Errorf("unknown keycode %s", keyName)
 		}
+		key.Code = keycode
 
 		// Store it.
 		if isResetKey {

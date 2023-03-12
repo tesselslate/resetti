@@ -1,11 +1,15 @@
 package reset
 
 import (
+	_ "embed"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 )
@@ -28,6 +32,9 @@ const (
 	// affActive is used for the currently active instance.
 	affActive
 )
+
+//go:embed scripts/cgroup_setup.sh
+var cgroup_script []byte
 
 // CpuManager manages the CPU affinity of instances to improve performance.
 type CpuManager struct {
@@ -85,6 +92,7 @@ func (m *CpuManager) moveInstance(id int, affinity int) error {
 	if m.groups[id] == affinity {
 		return nil
 	}
+	m.groups[id] = affinity
 	group := []string{"idle", "low", "mid", "high", "active"}[affinity]
 	if m.conf.AdvancedWall.CcxSplit {
 		if id < len(m.instances)/2 {
@@ -113,10 +121,12 @@ func (m *CpuManager) updateAffinities() error {
 // updateAffinity updates the affinity of an individual instance.
 func (m *CpuManager) updateAffinity(id int) error {
 	switch m.states[id].State {
+	case mc.StMenu:
+		return nil
 	case mc.StIdle:
 		return m.moveInstance(id, affIdle)
 	case mc.StDirt:
-		if m.anyActive {
+		if !m.anyActive {
 			return m.moveInstance(id, affHigh)
 		} else {
 			return m.moveInstance(id, affMid)
@@ -125,7 +135,7 @@ func (m *CpuManager) updateAffinity(id int) error {
 		if !m.prioritize[id] && m.states[id].Progress > m.conf.AdvancedWall.LowThreshold {
 			return m.moveInstance(id, affLow)
 		}
-		if m.anyActive {
+		if !m.anyActive {
 			return m.moveInstance(id, affHigh)
 		} else {
 			return m.moveInstance(id, affMid)
@@ -133,7 +143,7 @@ func (m *CpuManager) updateAffinity(id int) error {
 	case mc.StIngame:
 		return m.moveInstance(id, affActive)
 	}
-	panic("unreachable")
+	panic(fmt.Sprintf("unreachable (%d)", m.states[id].State))
 }
 
 // writeCpuSet modifies the CPUs assigned to a given cgroup.
@@ -163,7 +173,7 @@ func (m *CpuManager) writeCpuSets() error {
 	for i, group := range baseGroups {
 		set := make([]int, cpus[i])
 		for cpu := 0; cpu < cpus[i]; cpu += 1 {
-			set = append(set, cpu)
+			set = append(set, cpu*2)
 		}
 		if !m.conf.AdvancedWall.CcxSplit {
 			if err := m.writeCpuSet(group, set); err != nil {
@@ -182,4 +192,72 @@ func (m *CpuManager) writeCpuSets() error {
 		}
 	}
 	return nil
+}
+
+// runCgroupScript runs the cgroup setup script.
+func runCgroupScript(conf *cfg.Profile) error {
+	// Check if the script needs to be run. Start by making sure the cgroup
+	// folders exist.
+	baseGroups := []string{
+		"idle",
+		"low",
+		"mid",
+		"high",
+		"active",
+	}
+	var checkFolders []string
+	if !conf.AdvancedWall.CcxSplit {
+		checkFolders = baseGroups
+	} else {
+		checkFolders = make([]string, 0, len(baseGroups)*2)
+		for _, v := range baseGroups {
+			checkFolders = append(checkFolders, v+"0")
+			checkFolders = append(checkFolders, v+"1")
+		}
+	}
+	needsRun := false
+	for _, folder := range checkFolders {
+		stat, err := os.Stat("/sys/fs/cgroup/resetti/" + folder)
+		if err != nil || !stat.IsDir() {
+			needsRun = true
+			break
+		}
+	}
+	if !needsRun {
+		log.Println("Skipped cgroup script.")
+		return nil
+	}
+
+	// Check for the script's existence.
+	path, err := cfg.GetFolder()
+	if err != nil {
+		return errors.Wrap(err, "get config folder")
+	}
+	path += "/cgroup_setup.sh"
+	if err = os.WriteFile(path, cgroup_script, 0644); err != nil {
+		return errors.Wrap(err, "write cgroup script")
+	}
+
+	// Determine the user's suid binary.
+	suidBin, ok := os.LookupEnv("RESETTI_SUID_BINARY")
+	if !ok {
+		// TODO: More? pkexec, etc
+		options := []string{"sudo", "doas"}
+		for _, option := range options {
+			cmd := exec.Command(option)
+			err = cmd.Run()
+			if !errors.Is(err, exec.ErrNotFound) {
+				suidBin = option
+				break
+			}
+		}
+	}
+	if suidBin == "" {
+		return errors.Wrap(err, "no suid binary found")
+	}
+
+	// Run the script.
+	subgroups := strings.Join(checkFolders, " ")
+	cmd := exec.Command(suidBin, "sh", path, subgroups)
+	return errors.Wrap(cmd.Run(), "run cgroup script")
 }

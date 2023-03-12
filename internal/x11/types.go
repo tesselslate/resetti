@@ -10,7 +10,7 @@ import (
 
 // Key modifiers
 const (
-	ModShift uint16 = 1 << 0
+	ModShift Keymod = 1 << 0
 	ModLock         = 1 << 1
 	ModCtrl         = 1 << 2
 	Mod1            = 1 << 3
@@ -42,8 +42,11 @@ type InputState int
 // Key represents the key in a keybinding or keypress event.
 type Key struct {
 	Code xproto.Keycode
-	Mod  uint16
+	Mod  Keymod
 }
+
+// Keymod represents a key modifier.
+type Keymod uint16
 
 // Point represents a point on the X screen.
 type Point struct {
@@ -62,7 +65,7 @@ type Event interface {
 // ButtonEvent represents a single mouse button press.
 type ButtonEvent struct {
 	Button    xproto.Button
-	Mod       uint16
+	Mod       Keymod
 	Point     Point
 	Timestamp uint32
 	Window    xproto.Window
@@ -83,9 +86,10 @@ type KeyEvent struct {
 
 // MoveEvent represents a single mouse movement.
 type MoveEvent struct {
-	Mod       uint16
+	Mod       Keymod
 	Point     Point
 	Timestamp uint32
+	Window    xproto.Window
 }
 
 func (e ButtonEvent) Time() uint32 {
@@ -125,6 +129,26 @@ func (k *Key) UnmarshalTOML(value any) error {
 				return errors.New("key code out of bounds (0 <= N <= 255)")
 			}
 			k.Code = xproto.Keycode(code)
+		} else {
+			return errors.Errorf("invalid key component %s", component)
+		}
+	}
+	return nil
+}
+
+func (m *Keymod) UnmarshalTOML(value any) error {
+	str, ok := value.(string)
+	if !ok {
+		return errors.New("value not a string")
+	}
+	if str == "" {
+		return nil
+	}
+	components := strings.Split(str, "-")
+	for _, component := range components {
+		component = strings.ToLower(component)
+		if mod, ok := keymods[component]; ok {
+			*m |= mod
 		} else {
 			return errors.Errorf("invalid key component %s", component)
 		}

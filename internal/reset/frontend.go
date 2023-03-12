@@ -1,6 +1,10 @@
 package reset
 
 import (
+	"log"
+	"os/exec"
+	"strings"
+
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
@@ -31,4 +35,23 @@ type FrontendOptions struct {
 	X          *x11.Client
 	States     []mc.InstanceState
 	Instances  []mc.Instance
+}
+
+// runHook runs the given command.
+func runHook(str string) {
+	if str == "" {
+		return
+	}
+	splits := strings.Split(str, " ")
+	var cmd *exec.Cmd
+	if len(splits) == 1 {
+		cmd = exec.Command(splits[0])
+	} else {
+		cmd = exec.Command(splits[0], splits[1:]...)
+	}
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("runHook err: %s\n", err)
+		return
+	}
 }

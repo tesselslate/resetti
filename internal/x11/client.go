@@ -240,7 +240,7 @@ func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
 
 // GetWindowSize returns the size of the given window.
 func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
-	// TODO: Cache window size changes from poll loop?
+	// XXX: cache window size from poll loop?
 	geo, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
 	if err != nil {
 		return 0, 0, err
@@ -261,7 +261,7 @@ func (c *Client) GrabKey(key Key, win xproto.Window) error {
 		c.conn,
 		true,
 		win,
-		key.Mod,
+		uint16(key.Mod),
 		key.Code,
 		xproto.GrabModeAsync,
 		xproto.GrabModeAsync,
@@ -269,11 +269,11 @@ func (c *Client) GrabKey(key Key, win xproto.Window) error {
 }
 
 // GrabPointer grabs the mouse pointer, diverting all mouse events to resetti.
-func (c *Client) GrabPointer() error {
+func (c *Client) GrabPointer(win xproto.Window) error {
 	reply, err := xproto.GrabPointer(
 		c.conn,
 		true,
-		c.root,
+		win,
 		maskPointer,
 		xproto.GrabModeAsync,
 		xproto.GrabModeAsync,
@@ -332,7 +332,7 @@ func (c *Client) UngrabKey(key Key, win xproto.Window) error {
 		c.conn,
 		key.Code,
 		win,
-		key.Mod,
+		uint16(key.Mod),
 	).Check()
 }
 
@@ -465,29 +465,30 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 		switch evt := evt.(type) {
 		case xproto.KeyPressEvent:
 			ch <- KeyEvent{
-				Key:       Key{Code: evt.Detail, Mod: evt.State},
+				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State)},
 				State:     StateDown,
 				Timestamp: uint32(evt.Time),
 			}
 		case xproto.KeyReleaseEvent:
 			ch <- KeyEvent{
-				Key:       Key{Code: evt.Detail, Mod: evt.State},
+				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State)},
 				State:     StateUp,
 				Timestamp: uint32(evt.Time),
 			}
 		case xproto.ButtonPressEvent:
 			ch <- ButtonEvent{
 				Button:    evt.Detail,
-				Mod:       evt.State,
+				Mod:       Keymod(evt.State),
 				Point:     Point{evt.EventX, evt.EventY},
 				Timestamp: uint32(evt.Time),
-				Window:    evt.Event,
+				Window:    evt.Child,
 			}
 		case xproto.MotionNotifyEvent:
 			ch <- MoveEvent{
-				Mod:       evt.State,
+				Mod:       Keymod(evt.State),
 				Point:     Point{evt.EventX, evt.EventY},
 				Timestamp: uint32(evt.Time),
+				Window:    evt.Child,
 			}
 		case xproto.PropertyNotifyEvent:
 			if activeWindow != evt.Atom {

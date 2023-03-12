@@ -114,9 +114,10 @@ func Run(conf cfg.Profile) error {
 	}
 
 	// Setup frontend.
-	if c.conf.General.ResetType == "standard" {
+	switch c.conf.General.ResetType {
+	case "standard":
 		c.frontend = &FrontendMulti{}
-	} else if c.conf.General.ResetType == "wall" {
+	case "wall":
 		c.frontend = &FrontendWall{}
 	}
 	err = c.frontend.Setup(FrontendOptions{
@@ -138,8 +139,12 @@ func Run(conf cfg.Profile) error {
 }
 
 // PlayInstance sets the given instance as active.
-func (c *Controller) PlayInstance(id int) {
+func (c *Controller) PlayInstance(id int) error {
 	c.states[id].State = mc.StIngame
+	if c.conf.AdvancedWall.Affinity {
+		return c.affinity.Update(id, c.states[id])
+	}
+	return nil
 }
 
 // SetInstancePriority sets the priority of the instance for CPU affinity.

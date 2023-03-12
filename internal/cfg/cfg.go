@@ -36,8 +36,12 @@ type Profile struct {
 		UnpauseFocus bool `toml:"unpause_on_focus"`
 	} `toml:"reset"`
 	Keys struct {
-		Focus x11.Key `toml:"focus"`
-		Reset x11.Key `toml:"reset"`
+		Focus           x11.Key    `toml:"focus"`
+		Reset           x11.Key    `toml:"reset"`
+		WallReset       x11.Keymod `toml:"wall_reset"`
+		WallResetOthers x11.Keymod `toml:"wall_reset_others"`
+		WallPlay        x11.Keymod `toml:"wall_play"`
+		WallLock        x11.Keymod `toml:"wall_lock"`
 	} `toml:"keybinds"`
 	Wall struct {
 		HideGui         bool   `toml:"hide_gui"`
