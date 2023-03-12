@@ -444,7 +444,7 @@ func (f *FrontendWall) wallResetOthers(id int) error {
 	}
 	for idx := range f.instances {
 		if idx != id {
-			f.wallReset(id)
+			f.wallReset(idx)
 		}
 	}
 	return nil
