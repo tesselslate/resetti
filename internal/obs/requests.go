@@ -50,17 +50,6 @@ func reqSetScene(scene string) request {
 	}
 }
 
-func reqSetSceneItemLocked(scene string, id int, locked bool) request {
-	return request{
-		Type: "SetSceneItemLocked",
-		Data: StringMap{
-			"sceneName":       scene,
-			"sceneItemId":     id,
-			"sceneItemLocked": locked,
-		},
-	}
-}
-
 func reqSetSceneItemTransform(scene string, id int, x, y, w, h float64) request {
 	return request{
 		Type: "SetSceneItemTransform",

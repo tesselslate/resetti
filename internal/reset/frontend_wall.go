@@ -57,14 +57,12 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 					f.wallReset(id)
 				}
 			} else {
-				if f.conf.Wall.StretchWindows {
-					if err := f.instances[f.active].Stretch(f.conf); err != nil {
-						return err
-					}
+				if err := f.instances[f.active].Stretch(f.conf); err != nil {
+					return err
 				}
 				go runHook(f.conf.Hooks.Reset)
-				time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
 				f.host.ResetInstance(f.active, f.x.GetCurrentTime())
+				time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
 				if f.conf.Wall.GoToLocked {
 					for idx, state := range f.states {
 						if f.locks[idx] && state.State == mc.StIdle {
@@ -239,19 +237,14 @@ func (f *FrontendWall) focusProjector() error {
 // necessary tasks to go back to the wall.
 func (f *FrontendWall) gotoWall() error {
 	f.active = -1
-	if err := f.obs.SetScene("Wall"); err != nil {
-		return err
-	}
-	err := f.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+	f.obs.SetSceneAsync("Wall")
+	f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
 		for i := 1; i <= len(f.instances); i += 1 {
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), obs.StringMap{"show_cursor": false}, true)
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	if err = f.focusProjector(); err != nil {
+	if err := f.focusProjector(); err != nil {
 		return err
 	}
 	return f.toggleSleepbg(false)
@@ -399,28 +392,25 @@ func (f *FrontendWall) wallPlay(id int) error {
 	}
 	f.states[id].State = mc.StIngame
 	f.active = id
-	if err := f.obs.SetScene(fmt.Sprintf("Instance %d", id+1)); err != nil {
+	f.obs.SetSceneAsync(fmt.Sprintf("Instance %d", id+1))
+	f.instances[id].FocusAndUnpause(f.x.GetCurrentTime()+10, true)
+	if err := f.instances[id].Unstretch(f.conf); err != nil {
 		return err
 	}
-	f.instances[id].FocusAndUnpause(f.x.GetCurrentTime()+10, true)
-	if f.conf.Wall.StretchWindows {
-		if err := f.instances[id].Unstretch(f.conf); err != nil {
-			return err
-		}
 
-		// Pause and unpause after resizing to fix the desynced menu cursor.
-		// Block user inputs for ~20ms while this happens.
-		time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
-		f.instances[id].PressEsc(f.x.GetCurrentTime() + 15)
-		f.instances[id].PressEsc(f.x.GetCurrentTime() + 20)
-	}
+	// Pause and unpause after resizing to fix the desynced menu cursor and/or
+	// failed cursor grab. Block user inputs for ~20ms while this happens.
+	time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
+	f.instances[id].PressEsc(f.x.GetCurrentTime() + 15)
+	f.instances[id].PressEsc(f.x.GetCurrentTime() + 20)
 	if err := f.setLocked(id, false); err != nil {
 		return err
 	}
-	err := f.obs.SetSourceSettings(fmt.Sprintf("MC %d", id+1), obs.StringMap{"show_cursor": true}, true)
-	if err != nil {
-		return err
-	}
+	f.obs.SetSourceSettingsAsync(
+		fmt.Sprintf("MC %d", id+1),
+		obs.StringMap{"show_cursor": true},
+		true,
+	)
 	return f.toggleSleepbg(true)
 }
 

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/google/uuid"
@@ -55,6 +56,17 @@ type requestResponse struct {
 type websocketResponse struct {
 	Data json.RawMessage `json:"d"`
 	Op   int             `json:"op"`
+}
+
+// BatchAsync creates and submits a new request batch in another goroutine. If
+// the batch errors, the error will be logged.
+func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch) error) {
+	go func() {
+		err := c.Batch(mode, fn)
+		if err != nil {
+			log.Printf("BatchAsync error: %s\n", err)
+		}
+	}()
 }
 
 // Batch creates and *synchronously* submits a new request batch. The provided
@@ -372,6 +384,16 @@ func (c *Client) SetScene(name string) error {
 	return err
 }
 
+// SetSceneAsync sets the current scene in a new goroutine and logs any errors
+// that occur.
+func (c *Client) SetSceneAsync(name string) {
+	go func() {
+		if err := c.SetScene(name); err != nil {
+			log.Printf("SetSceneAsync error: %s\n", err)
+		}
+	}()
+}
+
 // SetSceneItemBounds moves and resizes the given scene item.
 func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) error {
 	id, err := c.getSceneItemId(scene, name)
@@ -379,17 +401,6 @@ func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) erro
 		return err
 	}
 	req := reqSetSceneItemTransform(scene, id, x, y, w, h)
-	_, err = c.sendRequest(req)
-	return err
-}
-
-// SetSceneItemLocked locks or unlocks the given scene item.
-func (c *Client) SetSceneItemLocked(scene, name string, locked bool) error {
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := reqSetSceneItemLocked(scene, id, locked)
 	_, err = c.sendRequest(req)
 	return err
 }
@@ -405,9 +416,29 @@ func (c *Client) SetSceneItemVisible(scene, name string, visible bool) error {
 	return err
 }
 
+// SetSceneItemVisibleAsync hides or shows the given scene item in a new
+// goroutine and logs any errors that occur.
+func (c *Client) SetSceneItemVisibleAsync(scene, name string, visible bool) {
+	go func() {
+		if err := c.SetSceneItemVisible(scene, name, visible); err != nil {
+			log.Printf("SetSceneItemVisibleAsync error: %s\n", err)
+		}
+	}()
+}
+
 // SetSourceSettings configures the given source's settings.
 func (c *Client) SetSourceSettings(name string, settings StringMap, overlay bool) error {
 	req := reqSetSourceSettings(name, settings, overlay)
 	_, err := c.sendRequest(req)
 	return err
+}
+
+// SetSourceSettingsAsync configures the given source's settings in a new
+// goroutine and logs any errors that occur.
+func (c *Client) SetSourceSettingsAsync(name string, settings StringMap, overlay bool) {
+	go func() {
+		if err := c.SetSourceSettings(name, settings, overlay); err != nil {
+			log.Printf("SetSourceSettingsAsync error: %s\n", err)
+		}
+	}()
 }
