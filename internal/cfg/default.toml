@@ -215,3 +215,19 @@ affinity_active = 12
 # The world generation percentage to reach before moving an instance
 # from high priority to low priority.
 low_threshold = 20
+
+# Whether or not to freeze instances on the wall as they approach 100%
+# world generation (to eliminate the rendering lag on world load.) Requires
+# the Freeze Filter OBS plugin.
+freeze_previews = false
+
+# What percentage to freeze previews at.
+freeze_threshold = 90
+
+# Whether or not to hide instances from the wallwhile they are on the dirt
+# screen.
+hide_instances = false
+
+# How to crop instances on the wall scene (left x right x top x bottom). Only
+# useful for preview freezing to hide the chunkmap.
+crop_instances = "0x0x0x0"

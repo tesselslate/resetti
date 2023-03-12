@@ -58,14 +58,18 @@ type Profile struct {
 		SleepBgLockPath string `toml:"sleepbg_lock_path"`
 	} `toml:"wall"`
 	AdvancedWall struct {
-		Affinity     bool `toml:"affinity"`
-		CcxSplit     bool `toml:"ccx_split"`
-		CpusIdle     int  `toml:"affinity_idle"`
-		CpusLow      int  `toml:"affinity_low"`
-		CpusMid      int  `toml:"affinity_mid"`
-		CpusHigh     int  `toml:"affinity_high"`
-		CpusActive   int  `toml:"affinity_active"`
-		LowThreshold int  `toml:"low_threshold"`
+		Affinity        bool   `toml:"affinity"`
+		CcxSplit        bool   `toml:"ccx_split"`
+		CpusIdle        int    `toml:"affinity_idle"`
+		CpusLow         int    `toml:"affinity_low"`
+		CpusMid         int    `toml:"affinity_mid"`
+		CpusHigh        int    `toml:"affinity_high"`
+		CpusActive      int    `toml:"affinity_active"`
+		LowThreshold    int    `toml:"low_threshold"`
+		PreviewFreezing bool   `toml:"freeze_previews"`
+		FreezeThreshold int    `toml:"freeze_threshold"`
+		InstanceHiding  bool   `toml:"hide_instances"`
+		CropInstances   string `toml:"crop_instances"`
 	} `toml:"advanced_wall"`
 	MovingWall struct {
 		UseMovingWall     bool    `toml:"use_moving_wall"`

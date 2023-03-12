@@ -43,6 +43,11 @@ func (b *Batch) SetItemVisibility(scene, name string, visible bool) {
 	b.requests = append(b.requests, req)
 }
 
+func (b *Batch) SetSourceFilterEnabled(source, filter string, enabled bool) {
+	req := reqSetSourceFilterEnabled(source, filter, enabled)
+	b.requests = append(b.requests, req)
+}
+
 func (b *Batch) SetSourceSettings(source string, settings StringMap, keep bool) {
 	req := reqSetSourceSettings(source, settings, keep)
 	b.requests = append(b.requests, req)

@@ -1,6 +1,7 @@
 package wall
 
 import (
+	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 )
@@ -20,7 +21,7 @@ type ObsController interface {
 	Lock(int) error
 
 	// Setup sets up the ObsController.
-	Setup(*obs.Client, []mc.InstanceState) error
+	Setup(*obs.Client, *cfg.Profile, []mc.InstanceState) error
 
 	// Unlock unlocks the given instance.
 	Unlock(int) error

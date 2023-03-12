@@ -2,7 +2,6 @@ package reset
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
@@ -37,10 +36,12 @@ func (f *FrontendMulti) HandleInput(event x11.Event) error {
 		f.instances[next].FocusAndUnpause(f.x.GetCurrentTime(), f.states[next].State == mc.StIdle)
 		f.host.ResetInstance(f.active, f.x.GetCurrentTime())
 		if f.obs != nil {
-			err := f.obs.SetScene(fmt.Sprintf("Instance %d", next+1))
-			if err != nil {
-				log.Printf("Failed to set scene: %s\n", err)
-			}
+			f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+				for i := 1; i <= len(f.instances); i += 1 {
+					b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == next)
+				}
+				return nil
+			})
 		}
 		go runHook(f.conf.Hooks.Reset)
 		f.active = next

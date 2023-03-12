@@ -3,11 +3,13 @@ package wall
 import (
 	"fmt"
 
+	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 )
 
 type StandardController struct {
+	conf       *cfg.Profile
 	obs        *obs.Client
 	wallWidth  int
 	wallHeight int
@@ -30,10 +32,11 @@ func (c *StandardController) GetResetAllInstances() []int {
 }
 
 func (c *StandardController) Lock(id int) error {
-	return c.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), true)
+	c.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), true)
+	return nil
 }
 
-func (c *StandardController) Setup(obs *obs.Client, states []mc.InstanceState) error {
+func (c *StandardController) Setup(obs *obs.Client, conf *cfg.Profile, states []mc.InstanceState) error {
 	appendUnique := func(slice []float64, item float64) []float64 {
 		for _, v := range slice {
 			if item == v {
@@ -46,7 +49,7 @@ func (c *StandardController) Setup(obs *obs.Client, states []mc.InstanceState) e
 	for i := 0; i < len(states); i++ {
 		x, y, _, _, err := obs.GetSceneItemTransform(
 			"Wall",
-			fmt.Sprintf("MC %d", i+1),
+			fmt.Sprintf("Wall MC %d", i+1),
 		)
 		if err != nil {
 			return err
@@ -55,6 +58,7 @@ func (c *StandardController) Setup(obs *obs.Client, states []mc.InstanceState) e
 		ys = appendUnique(ys, y)
 	}
 	c.obs = obs
+	c.conf = conf
 	c.wallWidth = len(xs)
 	c.wallHeight = len(ys)
 	c.states = make([]mc.InstanceState, len(states))
@@ -63,11 +67,38 @@ func (c *StandardController) Setup(obs *obs.Client, states []mc.InstanceState) e
 }
 
 func (c *StandardController) Unlock(id int) error {
-	return c.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), false)
+	c.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), false)
+	return nil
 }
 
 func (c *StandardController) Update(update mc.Update) error {
-	// TODO: Instance hiding, preview freezing
+	prev := c.states[update.Id]
+	next := update.State
+	nowDirt := next.State == mc.StDirt && prev.State != mc.StDirt
+	if c.conf.AdvancedWall.PreviewFreezing {
+		if next.Progress >= c.conf.AdvancedWall.FreezeThreshold {
+			c.obs.SetSourceFilterEnabledAsync(
+				fmt.Sprintf("Wall MC %d", update.Id+1),
+				fmt.Sprintf("Freeze %d", update.Id+1),
+				true,
+			)
+		}
+		if nowDirt {
+			c.obs.SetSourceFilterEnabledAsync(
+				fmt.Sprintf("Wall MC %d", update.Id+1),
+				fmt.Sprintf("Freeze %d", update.Id+1),
+				false,
+			)
+		}
+	}
+	if c.conf.AdvancedWall.InstanceHiding {
+		if nowDirt {
+			c.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", update.Id+1), false)
+		}
+		if next.Progress > 0 {
+			c.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", update.Id+1), true)
+		}
+	}
 	c.states[update.Id] = update.State
 	return nil
 }

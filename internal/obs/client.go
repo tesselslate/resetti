@@ -426,6 +426,23 @@ func (c *Client) SetSceneItemVisibleAsync(scene, name string, visible bool) {
 	}()
 }
 
+// SetSourceFilterEnabled enables or disables a given filter.
+func (c *Client) SetSourceFilterEnabled(source, filter string, enabled bool) error {
+	req := reqSetSourceFilterEnabled(source, filter, enabled)
+	_, err := c.sendRequest(req)
+	return err
+}
+
+// SetSourceFilterEnabledAsync enables or disables a given filter in a new
+// goroutine and logs any errors that occur.
+func (c *Client) SetSourceFilterEnabledAsync(source, filter string, enabled bool) {
+	go func() {
+		if err := c.SetSourceFilterEnabled(source, filter, enabled); err != nil {
+			log.Printf("SetSourceFilterEnabledAsync error: %s\n", err)
+		}
+	}()
+}
+
 // SetSourceSettings configures the given source's settings.
 func (c *Client) SetSourceSettings(name string, settings StringMap, overlay bool) error {
 	req := reqSetSourceSettings(name, settings, overlay)

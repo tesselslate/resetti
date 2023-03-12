@@ -160,25 +160,53 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	err = f.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
 		for i := 1; i <= len(f.instances); i += 1 {
 			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
-			b.SetItemVisibility("Wall", fmt.Sprintf("MC %d", i), true)
-			b.SetSourceSettings(fmt.Sprintf("MC %d", i), obs.StringMap{"show_cursor": false}, true)
+			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
+			crops := strings.Split(f.conf.AdvancedWall.CropInstances, "x")
+			var cLeft, cRight, cTop, cBot int
+			if len(crops) == 4 {
+				if cLeft, err = strconv.Atoi(crops[0]); err != nil {
+					return err
+				}
+				if cRight, err = strconv.Atoi(crops[1]); err != nil {
+					return err
+				}
+				if cTop, err = strconv.Atoi(crops[2]); err != nil {
+					return err
+				}
+				if cBot, err = strconv.Atoi(crops[3]); err != nil {
+					return err
+				}
+			}
 			settings := obs.StringMap{
 				"show_cursor":    false,
 				"capture_window": strconv.Itoa(int(f.instances[i-1].Wid)),
+				"cut_left":       cLeft,
+				"cut_right":      cRight,
+				"cut_top":        cTop,
+				"cut_bot":        cBot,
 			}
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
+			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
+			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
+			if f.conf.AdvancedWall.PreviewFreezing {
+				b.SetSourceFilterEnabled(
+					fmt.Sprintf("Wall MC %d", i),
+					fmt.Sprintf("Freeze %d", i),
+					false,
+				)
+			}
 		}
 		return nil
 	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "obs setup")
 	}
 	if err = f.obs.SetScene("Wall"); err != nil {
 		return err
 	}
 	// TODO: Different OBS controllers
 	f.obsController = &wall.StandardController{}
-	if err = f.obsController.Setup(f.obs, f.states); err != nil {
+	if err = f.obsController.Setup(f.obs, f.conf, f.states); err != nil {
 		return err
 	}
 	if err = f.focusProjector(); err != nil {
@@ -392,7 +420,13 @@ func (f *FrontendWall) wallPlay(id int) error {
 	}
 	f.states[id].State = mc.StIngame
 	f.active = id
-	f.obs.SetSceneAsync(fmt.Sprintf("Instance %d", id+1))
+	f.obs.SetSceneAsync("Instance")
+	f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+		for i := 1; i <= len(f.instances); i += 1 {
+			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
+		}
+		return nil
+	})
 	f.instances[id].FocusAndUnpause(f.x.GetCurrentTime()+10, true)
 	if err := f.instances[id].Unstretch(f.conf); err != nil {
 		return err

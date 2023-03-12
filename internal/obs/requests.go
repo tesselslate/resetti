@@ -78,6 +78,17 @@ func reqSetSceneItemVisible(scene string, id int, visible bool) request {
 	}
 }
 
+func reqSetSourceFilterEnabled(source, filter string, enabled bool) request {
+	return request{
+		Type: "SetSourceFilterEnabled",
+		Data: StringMap{
+			"sourceName":    source,
+			"filterName":    filter,
+			"filterEnabled": enabled,
+		},
+	}
+}
+
 func reqSetSourceSettings(name string, settings StringMap, keep bool) request {
 	return request{
 		Type: "SetInputSettings",
