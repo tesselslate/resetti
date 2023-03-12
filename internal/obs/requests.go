@@ -17,61 +17,8 @@ type request struct {
 	Data StringMap `json:"requestData"`
 }
 
-func reqAddSceneItem(scene, name string) request {
-	return request{
-		Type: "CreateSceneItem",
-		Data: StringMap{
-			"sceneName":  scene,
-			"sourceName": name,
-		},
-	}
-}
-
-func reqCreateSceneCollection(name string) request {
-	return request{
-		Type: "CreateSceneCollection",
-		Data: StringMap{
-			"sceneCollectionName": name,
-		},
-	}
-}
-
-func reqCreateScene(name string) request {
-	return request{
-		Type: "CreateScene",
-		Data: StringMap{
-			"sceneName": name,
-		},
-	}
-}
-
-func reqCreateSource(scene, name, kind string, settings StringMap) request {
-	return request{
-		Type: "CreateInput",
-		Data: StringMap{
-			"sceneName":     scene,
-			"inputName":     name,
-			"inputKind":     kind,
-			"inputSettings": settings,
-		},
-	}
-}
-
-func reqDeleteScene(name string) request {
-	return request{
-		Type: "RemoveScene",
-		Data: StringMap{
-			"sceneName": name,
-		},
-	}
-}
-
 func reqGetCanvasSize() request {
 	return request{Type: "GetVideoSettings"}
-}
-
-func reqGetSceneCollectionList() request {
-	return request{Type: "GetSceneCollectionList"}
 }
 
 func reqGetSceneItemId(scene, name string) request {
@@ -94,24 +41,11 @@ func reqGetSceneItemTransform(scene string, id int) request {
 	}
 }
 
-func reqGetSceneList() request {
-	return request{Type: "GetSceneList"}
-}
-
 func reqSetScene(scene string) request {
 	return request{
 		Type: "SetCurrentProgramScene",
 		Data: StringMap{
 			"sceneName": scene,
-		},
-	}
-}
-
-func reqSetSceneCollection(collection string) request {
-	return request{
-		Type: "SetCurrentSceneCollection",
-		Data: StringMap{
-			"sceneCollectionName": collection,
 		},
 	}
 }

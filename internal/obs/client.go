@@ -326,44 +326,6 @@ func (c *Client) getSceneItemId(scene, name string) (int, error) {
 	return res.Id, nil
 }
 
-// AddSceneItem adds the source with the given name to the given scene.
-func (c *Client) AddSceneItem(scene, name string) error {
-	req := reqAddSceneItem(scene, name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// CreateSceneCollection creates a new scene collection with the given name
-// if one does not already exist.
-func (c *Client) CreateSceneCollection(name string) error {
-	req := reqCreateSceneCollection(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// CreateScene creates a new scene with the given name in the current scene
-// collection.
-func (c *Client) CreateScene(name string) error {
-	req := reqCreateScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// CreateSource creates a new source with the given name and settings on the
-// given scene.
-func (c *Client) CreateSource(scene, name string, kind SourceKind, settings StringMap) error {
-	req := reqCreateSource(scene, name, string(kind), settings)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// DeleteScene deletes the given scene.
-func (c *Client) DeleteScene(name string) error {
-	req := reqDeleteScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
 // GetCanvasSize returns the base resolution (canvas size) of the current OBS
 // profile.
 func (c *Client) GetCanvasSize() (width, height int, err error) {
@@ -378,22 +340,6 @@ func (c *Client) GetCanvasSize() (width, height int, err error) {
 	}{}
 	err = json.Unmarshal(data, &res)
 	return int(res.Width), int(res.Height), err
-}
-
-// GetSceneCollectionList returns a list of the existing scene collections and
-// which one is currently active.
-func (c *Client) GetSceneCollectionList() (collections []string, active string, err error) {
-	req := reqGetSceneCollectionList()
-	data, err := c.sendRequest(req)
-	if err != nil {
-		return nil, "", err
-	}
-	res := struct {
-		Collections []string `json:"sceneCollections"`
-		Active      string   `json:"currentSceneCollectionName"`
-	}{}
-	err = json.Unmarshal(data, &res)
-	return res.Collections, res.Active, err
 }
 
 // GetSceneItemTransform returns the size and position of the given scene item.
@@ -419,38 +365,9 @@ func (c *Client) GetSceneItemTransform(scene, name string) (x, y, w, h float64, 
 	return res.T.X, res.T.Y, res.T.Width, res.T.Height, err
 }
 
-// GetSceneList returns a list of the existing scenes.
-func (c *Client) GetSceneList() ([]string, error) {
-	req := reqGetSceneList()
-	data, err := c.sendRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	res := struct {
-		Scenes []struct {
-			Name string `json:"sceneName"`
-		} `json:"scenes"`
-	}{}
-	if err = json.Unmarshal(data, &res); err != nil {
-		return nil, err
-	}
-	list := make([]string, 0)
-	for _, scene := range res.Scenes {
-		list = append(list, scene.Name)
-	}
-	return list, nil
-}
-
 // SetScene sets the current scene.
 func (c *Client) SetScene(name string) error {
 	req := reqSetScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// SetSceneCollection sets the current scene collection.
-func (c *Client) SetSceneCollection(name string) error {
-	req := reqSetSceneCollection(name)
 	_, err := c.sendRequest(req)
 	return err
 }
