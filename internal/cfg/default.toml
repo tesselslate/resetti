@@ -6,6 +6,8 @@
 # Available options:
 # - standard    Traditional single/multi-instance resetting for random seeds.
 # - wall        Wall-style resetting for random seeds.
+# - boyenn      Boyenn-style moving wall with separate sections.
+# - moving      Jojoe-style moving wall with the normal grid.
 type = "standard"
 
 # Whether or not to count the amount of resets performed.
@@ -29,38 +31,6 @@ lock = ""
 
 # The command/script to run when an instance is unlocked on the wall.
 unlock = ""
-
-# Moving wall is the modern wall arrangement where instances move between
-# sections of the screen based on their state.
-
-[moving_wall]
-# Whether to use moving wall or not.
-use_moving_wall = false
-
-# Set a keybind to reset the first loaded instance in the loading view.
-# The same rules for reset keybinds work here.
-# Eg: reset_first_loaded = "R"
-reset_first_loaded = "R"
-
-# Set a keybind to lock the first loaded instance.
-# The same rules for reset keybinds work here.
-# Eg: lock_first_loaded = "L"
-lock_first_loaded = "L"
-
-# Set a keybind to unlock the first locked instance.
-# The same rules for reset keybinds work here.
-# Eg: unlock_first_loaded = "Ctrl-L"
-unlock_first_loaded = "Ctrl-L"
-
-# Set a keybind to play the first locked instance.
-# The same rules for reset keybinds work here.
-# Eg: play_first_locked = "Shift-L"
-play_first_locked = "Shift-L"
-
-# Set a keybind to play the first loaded instance.
-# The same rules for reset keybinds work here.
-# Eg: play_first_loaded = "Shift-R"
-play_first_loaded = "Shift-R"
 
 [obs]
 # Whether or not to enable OBS websocket support. This is *required* for wall and moving_wall.
@@ -105,7 +75,7 @@ unpause_on_focus = true
 #               `a` => The A key.
 #         `Shift-A` => The A key, only when Shift is held.
 #  `Ctrl-Shift-F12` => The F12 key with Control and Shift held.
-#         `code135` => The Menu key on my keyboard layout. Use xmodmap to find your desired key.
+#         `code135` => The Menu key on US QWERTY. Use xmodmap to find your desired key.
 #
 [keybinds]
 # Pressing this will focus the current instance.
@@ -137,35 +107,19 @@ hide_gui = false
 # Works with or without fullscreen.
 stretch_windows = false
 
-# The width to stretch windows to on the wall scene.
-stretch_width = 1600
+# The stretched resolution. (WxH+X,Y)
+stretch_res = "1600x300+0,0"
 
-# The height to stretch windows to on the wall scene.
-stretch_height = 300
-
-# The width to unstretch windows to when being played.
-unstretch_width = 1920
-
-# The height to unstretch windows to when being played.
-unstretch_height = 1080
-
-# The X coordinate to move Minecraft windows to when resizing them. Only
-# takes effect if stretch_windows is enabled.
-resize_x = 0
-
-# The Y coordinate to move Minecraft windows to when resizing them. Only
-# takes effect if stretch_windows is enabled.
-resize_y = 0
+# The unstretched resolution. (WxH+X,Y)
+unstretch_res = "1920x1080+0,0"
 
 # Whether or not to enable mouse support on the wall. Enabling this will allow
 # you to click on instances to perform various actions instead of having to use
 # the number keys. Note that enabling this does not disable the number keys.
-# NOTE: Mouse support currently doesn't work with moving wall. Please make sure to keep this as false while using moving wall.
 use_mouse = false
 
 # If enabled, resetting from within an instance will switch to the first locked
 # instance (if any) instead of going back to the wall.
-# NOTE: This feature doesn't work with moving wall at the moment. Please make sure to keep this as false while using moving wall.
 goto_locked = false
 
 # Whether or not to create the "sleepbg.lock" file when an instance is being
@@ -222,7 +176,7 @@ low_threshold = 20
 freeze_previews = false
 
 # What percentage to freeze previews at.
-freeze_threshold = 90
+freeze_threshold = 85
 
 # Whether or not to hide instances from the wallwhile they are on the dirt
 # screen.

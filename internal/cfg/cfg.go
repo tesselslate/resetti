@@ -13,6 +13,13 @@ import (
 //go:embed default.toml
 var defaultConfig string
 
+type Box struct {
+	X      uint32
+	Y      uint32
+	Width  uint32
+	Height uint32
+}
+
 type Profile struct {
 	General struct {
 		ResetType   string `toml:"type"`
@@ -46,12 +53,8 @@ type Profile struct {
 	Wall struct {
 		HideGui         bool   `toml:"hide_gui"`
 		StretchWindows  bool   `toml:"stretch_windows"`
-		StretchWidth    uint32 `toml:"stretch_width"`
-		StretchHeight   uint32 `toml:"stretch_height"`
-		UnstretchWidth  uint32 `toml:"unstretch_width"`
-		UnstretchHeight uint32 `toml:"unstretch_height"`
-		ResizeX         uint32 `toml:"resize_x"`
-		ResizeY         uint32 `toml:"resize_y"`
+		StretchRes      Box    `toml:"stretch_res"`
+		UnstretchRes    Box    `toml:"unstretch_res"`
 		UseMouse        bool   `toml:"use_mouse"`
 		GoToLocked      bool   `toml:"goto_locked"`
 		SleepBgLock     bool   `toml:"sleepbg_lock"`
@@ -71,14 +74,6 @@ type Profile struct {
 		InstanceHiding  bool   `toml:"hide_instances"`
 		CropInstances   string `toml:"crop_instances"`
 	} `toml:"advanced_wall"`
-	MovingWall struct {
-		UseMovingWall     bool    `toml:"use_moving_wall"`
-		ResetFirstLoaded  x11.Key `toml:"reset_first_loaded"`
-		LockFirstLoaded   x11.Key `toml:"lock_first_loaded"`
-		UnlockFirstLocked x11.Key `toml:"unlock_first_loaded"`
-		PlayFirstLocked   x11.Key `toml:"play_first_locked"`
-		PlayFirstLoaded   x11.Key `toml:"play_first_loaded"`
-	} `toml:"moving_wall"`
 }
 
 // GetFolder returns the path to the user's configuration folder.
@@ -147,4 +142,20 @@ func MakeProfile(name string) error {
 		[]byte(defaultConfig),
 		0644,
 	)
+}
+
+func (b *Box) UnmarshalTOML(value any) error {
+	str, ok := value.(string)
+	if !ok {
+		return errors.New("value not a string")
+	}
+	n, err := fmt.Sscanf(str, "%dx%d+%d,%d", &b.Width, &b.Height, &b.X, &b.Y)
+	if err != nil {
+		return err
+	}
+	if n != 4 {
+		return errors.New("missing value")
+	}
+	fmt.Printf("%+v\n", b)
+	return nil
 }

@@ -205,8 +205,14 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	if err = f.obs.SetScene("Wall"); err != nil {
 		return err
 	}
-	// TODO: Different OBS controllers
-	f.obsController = &wall.StandardController{}
+	switch f.conf.General.ResetType {
+	case "boyenn":
+		f.obsController = &wall.BoyennController{}
+	case "moving":
+		f.obsController = &wall.MovingController{}
+	case "wall":
+		f.obsController = &wall.StandardController{}
+	}
 	if err = f.obsController.Setup(f.obs, f.conf, f.states); err != nil {
 		return err
 	}
