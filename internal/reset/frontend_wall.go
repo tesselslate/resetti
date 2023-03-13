@@ -344,7 +344,7 @@ func (f *FrontendWall) handleInput(id int, mod x11.Keymod) error {
 	case f.conf.Keys.WallLock:
 		return f.setLocked(id, !f.locks[id])
 	}
-	panic("unreachable")
+	return nil
 }
 
 // setLocked sets the lock state of an instance.
