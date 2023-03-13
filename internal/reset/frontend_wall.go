@@ -181,13 +181,17 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 			settings := obs.StringMap{
 				"show_cursor":    false,
 				"capture_window": strconv.Itoa(int(f.instances[i-1].Wid)),
+			}
+			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
+			wallSettings := obs.StringMap{
+				"show_cursor":    false,
+				"capture_window": strconv.Itoa(int(f.instances[i-1].Wid)),
 				"cut_left":       cLeft,
 				"cut_right":      cRight,
 				"cut_top":        cTop,
 				"cut_bot":        cBot,
 			}
-			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
-			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
+			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), wallSettings, true)
 			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
 			if f.conf.AdvancedWall.PreviewFreezing {
 				b.SetSourceFilterEnabled(

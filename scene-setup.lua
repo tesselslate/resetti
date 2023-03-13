@@ -13,6 +13,8 @@ local locks_width = nil
 local locks_height = nil
 
 local preview_freezing = nil
+local progress_font = nil
+local progress_offset = nil
 local boyenn = nil
 
 -- Script boilerplate, settings
@@ -29,6 +31,8 @@ function script_update(settings)
     locks_height = O.obs_data_get_int(settings, "locks_height")
     
     preview_freezing = O.obs_data_get_bool(settings, "preview_freezing")
+    progress_font = O.obs_data_get_obj(settings, "progress_font")
+    progress_offset = O.obs_data_get_int(settings, "progress_offset")
     boyenn = O.obs_data_get_bool(settings, "boyenn")
 
     -- Validate the current settings. TODO
@@ -63,8 +67,12 @@ function script_properties()
     O.obs_properties_add_int(locks, "locks_width", "Width", 1, 3840, 1)
     O.obs_properties_add_int(locks, "locks_height", "Height", 1, 2160, 1)
 
-    O.obs_properties_add_bool(wall, "preview_freezing", "Preview Freezing")
+    local freezing = O.obs_properties_create()
+    O.obs_properties_add_font(freezing, "progress_font", "Progress Font")
+    O.obs_properties_add_int(freezing, "progress_offset", "Progress Offset", 1, 100, 1)
+
     O.obs_properties_add_bool(wall, "boyenn", "Boyenn Moving")
+    O.obs_properties_add_group(wall, "preview_freezing", "Preview Freezing", O.OBS_GROUP_CHECKABLE, freezing)
     O.obs_properties_add_group(wall, "locks", "Lock Icons", O.OBS_GROUP_CHECKABLE, locks)
 
     return settings
@@ -163,15 +171,21 @@ function create_wall_scene()
             O.obs_source_release(freeze)
             O.obs_data_release(data)
 
+            local data = O.obs_data_create_from_json('{"text": "0"}')
+            O.obs_data_set_obj(data, "font", progress_font)
             local progress = O.obs_source_create(
                 "text_ft2_source",
                 "Progress " .. tostring(i),
-                nil,
+                data,
                 nil
             )
             item = O.obs_scene_add(scene, progress)
+            vec2.x = inst_width * ((i-1) % wall_width) + 4
+            vec2.y = inst_height * math.floor((i-1) / wall_width) + inst_height - 4 - progress_offset
             O.obs_sceneitem_set_pos(item, vec2)
             O.obs_source_release(progress)
+            O.obs_data_release(settings)
+            O.obs_data_release(data)
         end
         O.obs_source_release(source)
     end
