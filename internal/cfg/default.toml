@@ -178,10 +178,13 @@ freeze_previews = false
 # What percentage to freeze previews at.
 freeze_threshold = 85
 
+# How to crop instances on the wall scene (left x right x top x bottom). Only
+# useful for preview freezing to hide the chunkmap.
+crop_instances = "0x0x0x0"
+
 # Whether or not to hide instances from the wallwhile they are on the dirt
 # screen.
 hide_instances = false
 
-# How to crop instances on the wall scene (left x right x top x bottom). Only
-# useful for preview freezing to hide the chunkmap.
-crop_instances = "0x0x0x0"
+# How many milliseconds to wait between preview start and instance showing.
+show_delay = 0

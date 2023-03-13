@@ -71,8 +71,9 @@ type Profile struct {
 		LowThreshold    int    `toml:"low_threshold"`
 		PreviewFreezing bool   `toml:"freeze_previews"`
 		FreezeThreshold int    `toml:"freeze_threshold"`
-		InstanceHiding  bool   `toml:"hide_instances"`
 		CropInstances   string `toml:"crop_instances"`
+		InstanceHiding  bool   `toml:"hide_instances"`
+		ShowDelay       int    `toml:"show_delay"`
 	} `toml:"advanced_wall"`
 }
 

@@ -32,3 +32,13 @@ type ObsController interface {
 	// UpdateProjector updates the size of the projector window.
 	UpdateProjector(width, height int)
 }
+
+// DisplayAddon provides an interface for additions to the wall display, such
+// as freezing and hiding.
+type DisplayAddon interface {
+	// Setup sets up the DisplayAddon.
+	Setup(*cfg.Profile, *obs.Client, []mc.InstanceState) error
+
+	// Update processes an instance state update.
+	Update(mc.Update)
+}

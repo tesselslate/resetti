@@ -133,6 +133,24 @@ function create_wall_scene()
         vec2.x = inst_width * ((i-1) % wall_width)
         vec2.y = inst_height * math.floor((i-1) / wall_width)
         O.obs_sceneitem_set_pos(item, vec2)
+
+        local data = O.obs_data_create_from_json('{"file": "' .. locks_path .. '"}')
+        local lock = O.obs_source_create(
+            "image_source",
+            "Lock " .. tostring(i),
+            data,
+            nil
+        )
+        item = O.obs_scene_add(scene, lock)
+        O.obs_sceneitem_set_locked(item, true)
+        O.obs_sceneitem_set_pos(item, vec2)
+        vec2.x = locks_width
+        vec2.y = locks_height
+        O.obs_sceneitem_set_bounds(item, vec2)
+        O.obs_sceneitem_set_bounds_type(item, O.OBS_BOUNDS_STRETCH)
+        O.obs_data_release(data)
+        O.obs_source_release(lock)
+
         if preview_freezing then
             local data = O.obs_data_create_from_json('{"settings": {"hide_action": 2, "show_action": 1}}')
             local freeze = O.obs_source_create(
@@ -144,23 +162,17 @@ function create_wall_scene()
             O.obs_source_filter_add(source, freeze)
             O.obs_source_release(freeze)
             O.obs_data_release(data)
-        end
-        O.obs_source_release(source)
 
-        local data = O.obs_data_create_from_json('{"file": "' .. locks_path .. '"}')
-        source = O.obs_source_create(
-            "image_source",
-            "Lock " .. tostring(i),
-            data,
-            nil
-        )
-        item = O.obs_scene_add(scene, source)
-        O.obs_sceneitem_set_pos(item, vec2)
-        vec2.x = locks_width
-        vec2.y = locks_height
-        O.obs_sceneitem_set_bounds(item, vec2)
-        O.obs_sceneitem_set_bounds_type(item, O.OBS_BOUNDS_STRETCH)
-        O.obs_data_release(data)
+            local progress = O.obs_source_create(
+                "text_ft2_source",
+                "Progress " .. tostring(i),
+                nil,
+                nil
+            )
+            item = O.obs_scene_add(scene, progress)
+            O.obs_sceneitem_set_pos(item, vec2)
+            O.obs_source_release(progress)
+        end
         O.obs_source_release(source)
     end
 

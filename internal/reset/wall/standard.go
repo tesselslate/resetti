@@ -9,14 +9,14 @@ import (
 )
 
 type StandardController struct {
-	conf       *cfg.Profile
-	obs        *obs.Client
-	wallWidth  int
-	wallHeight int
-	instWidth  int
-	instHeight int
-
-	states []mc.InstanceState
+	conf          *cfg.Profile
+	obs           *obs.Client
+	addons        []DisplayAddon
+	wallWidth     int
+	wallHeight    int
+	instWidth     int
+	instHeight    int
+	instanceCount int
 }
 
 func (c *StandardController) GetInstanceId(x, y int) int {
@@ -24,7 +24,7 @@ func (c *StandardController) GetInstanceId(x, y int) int {
 }
 
 func (c *StandardController) GetResetAllInstances() []int {
-	list := make([]int, len(c.states))
+	list := make([]int, c.instanceCount)
 	for i := range list {
 		list[i] = i
 	}
@@ -57,12 +57,23 @@ func (c *StandardController) Setup(obs *obs.Client, conf *cfg.Profile, states []
 		xs = appendUnique(xs, x)
 		ys = appendUnique(ys, y)
 	}
-	c.obs = obs
-	c.conf = conf
 	c.wallWidth = len(xs)
 	c.wallHeight = len(ys)
-	c.states = make([]mc.InstanceState, len(states))
-	copy(c.states, states)
+	c.obs = obs
+	c.conf = conf
+	c.instanceCount = len(states)
+	c.addons = make([]DisplayAddon, 0)
+	if c.conf.AdvancedWall.InstanceHiding {
+		c.addons = append(c.addons, &hider{})
+	}
+	if c.conf.AdvancedWall.PreviewFreezing {
+		c.addons = append(c.addons, &freezer{}, &progressDisplay{})
+	}
+	for _, addon := range c.addons {
+		if err := addon.Setup(conf, obs, states); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -72,34 +83,9 @@ func (c *StandardController) Unlock(id int) error {
 }
 
 func (c *StandardController) Update(update mc.Update) error {
-	prev := c.states[update.Id]
-	next := update.State
-	nowDirt := next.State == mc.StDirt && prev.State != mc.StDirt
-	if c.conf.AdvancedWall.PreviewFreezing {
-		if next.Progress >= c.conf.AdvancedWall.FreezeThreshold {
-			c.obs.SetSourceFilterEnabledAsync(
-				fmt.Sprintf("Wall MC %d", update.Id+1),
-				fmt.Sprintf("Freeze %d", update.Id+1),
-				true,
-			)
-		}
-		if nowDirt {
-			c.obs.SetSourceFilterEnabledAsync(
-				fmt.Sprintf("Wall MC %d", update.Id+1),
-				fmt.Sprintf("Freeze %d", update.Id+1),
-				false,
-			)
-		}
+	for _, addon := range c.addons {
+		addon.Update(update)
 	}
-	if c.conf.AdvancedWall.InstanceHiding {
-		if nowDirt {
-			c.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", update.Id+1), false)
-		}
-		if next.Progress > 0 {
-			c.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", update.Id+1), true)
-		}
-	}
-	c.states[update.Id] = update.State
 	return nil
 }
 
