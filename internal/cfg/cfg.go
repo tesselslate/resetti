@@ -157,6 +157,5 @@ func (b *Box) UnmarshalTOML(value any) error {
 	if n != 4 {
 		return errors.New("missing value")
 	}
-	fmt.Printf("%+v\n", b)
 	return nil
 }
