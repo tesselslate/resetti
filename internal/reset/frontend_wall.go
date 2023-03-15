@@ -19,10 +19,11 @@ import (
 // FrontendWall implements a generic "wall" frontend which delegates much of
 // the input/output handling to an OBS controller.
 type FrontendWall struct {
-	conf *cfg.Profile
-	host *Controller
-	obs  *obs.Client
-	x    *x11.Client
+	conf  *cfg.Profile
+	host  *Controller
+	obs   *obs.Client
+	x     *x11.Client
+	hider *hider
 
 	projector    xproto.Window
 	subprojector []xproto.Window
@@ -61,6 +62,9 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 			} else {
 				f.instances[f.active].PressF3(f.x.GetCurrentTime())
 				f.host.ResetInstance(f.active, f.x.GetCurrentTime()+5)
+				if f.hider != nil {
+					f.hider.Hide(f.active)
+				}
 				if err := f.instances[f.active].Stretch(f.conf); err != nil {
 					return err
 				}
@@ -141,6 +145,9 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 
 func (f *FrontendWall) HandleUpdate(update mc.Update) error {
 	f.states[update.Id] = update.State
+	if f.hider != nil {
+		f.hider.Update(update)
+	}
 	return nil
 }
 
@@ -163,6 +170,9 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	err = opts.X.GrabKey(f.conf.Keys.Focus, opts.X.GetRootWindow())
 	if err != nil {
 		return err
+	}
+	if f.conf.AdvancedWall.InstanceHiding {
+		f.hider = NewHider(f.conf, f.obs, f.states)
 	}
 
 	// OBS setup.
@@ -478,6 +488,7 @@ func (f *FrontendWall) wallReset(id int) {
 		return
 	}
 	f.host.ResetInstance(id, f.x.GetCurrentTime())
+	f.hider.Hide(id)
 	go runHook(f.conf.Hooks.WallReset)
 }
 
