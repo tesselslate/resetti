@@ -35,10 +35,11 @@ type FrontendWall struct {
 	wallWidth  int
 	wallHeight int
 
-	active    int
-	instances []mc.Instance
-	states    []mc.InstanceState
-	locks     []bool
+	active      int
+	instances   []mc.Instance
+	states      []mc.InstanceState
+	locks       []bool
+	lastPreview []time.Time
 }
 
 func (f *FrontendWall) HandleInput(event x11.Event) error {
@@ -144,7 +145,12 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 }
 
 func (f *FrontendWall) HandleUpdate(update mc.Update) error {
-	f.states[update.Id] = update.State
+	prev := f.states[update.Id]
+	next := update.State
+	if prev.State != mc.StPreview && next.State == mc.StPreview {
+		f.lastPreview[update.Id] = time.Now()
+	}
+	f.states[update.Id] = next
 	if f.hider != nil {
 		f.hider.Update(update)
 	}
@@ -161,6 +167,7 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	f.instances = make([]mc.Instance, len(opts.Instances))
 	f.states = make([]mc.InstanceState, len(opts.Instances))
 	f.locks = make([]bool, len(opts.Instances))
+	f.lastPreview = make([]time.Time, len(opts.Instances))
 	copy(f.instances, opts.Instances)
 	copy(f.states, opts.States)
 	err := opts.X.GrabKey(f.conf.Keys.Reset, opts.X.GetRootWindow())
@@ -171,7 +178,7 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	if err != nil {
 		return err
 	}
-	if f.conf.AdvancedWall.InstanceHiding {
+	if f.conf.Wall.InstanceHiding {
 		f.hider = NewHider(f.conf, f.obs, f.states)
 	}
 
@@ -484,11 +491,14 @@ func (f *FrontendWall) wallPlay(id int) error {
 // wallReset resets a single instance.
 func (f *FrontendWall) wallReset(id int) {
 	state := f.states[id].State
-	if f.locks[id] || state == mc.StDirt {
+	inGrace := (time.Now().UnixMilli() - f.lastPreview[id].UnixMilli()) <= int64(f.conf.Wall.GracePeriod)
+	if f.locks[id] || state == mc.StDirt || inGrace {
 		return
 	}
 	f.host.ResetInstance(id, f.x.GetCurrentTime())
-	f.hider.Hide(id)
+	if f.hider != nil {
+		f.hider.Hide(id)
+	}
 	go runHook(f.conf.Hooks.WallReset)
 }
 

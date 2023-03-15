@@ -129,6 +129,17 @@ sleepbg_lock = true
 # which is your home directory.
 sleepbg_lock_path = "/home/my_user"
 
+# How long to block instances from resetting for (in milliseconds) after
+# starting preview.
+grace_period = 150
+
+# Whether or not to hide instances from the wall while they are on the dirt
+# screen.
+hide_instances = false
+
+# How many milliseconds to wait between preview start and instance showing.
+show_delay = 0
+
 # Moving wall settings.
 [moving]
 # Whether or not to use moving wall.
@@ -179,10 +190,3 @@ burst_length = 250
 # The world generation percentage to reach before moving an instance
 # from high priority to low priority.
 low_threshold = 20
-
-# Whether or not to hide instances from the wall while they are on the dirt
-# screen.
-hide_instances = false
-
-# How many milliseconds to wait between preview start and instance showing.
-show_delay = 0

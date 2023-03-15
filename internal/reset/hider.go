@@ -37,7 +37,7 @@ func (h *hider) Update(update mc.Update) {
 	h.states[update.Id] = update.State
 	if nowPreview {
 		go func() {
-			<-time.After(time.Duration(h.conf.AdvancedWall.ShowDelay) * time.Millisecond)
+			<-time.After(time.Duration(h.conf.Wall.ShowDelay) * time.Millisecond)
 			h.show <- update.Id
 		}()
 	}

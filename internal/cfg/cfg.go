@@ -59,23 +59,24 @@ type Profile struct {
 		GoToLocked      bool   `toml:"goto_locked"`
 		SleepBgLock     bool   `toml:"sleepbg_lock"`
 		SleepBgLockPath string `toml:"sleepbg_lock_path"`
+		GracePeriod     int    `toml:"grace_period"`
+		InstanceHiding  bool   `toml:"hide_instances"`
+		ShowDelay       int    `toml:"show_delay"`
 	} `toml:"wall"`
 	Moving struct {
 		Enabled   bool   `toml:"enabled"`
 		FocusSize string `toml:"focus_size"`
 	} `toml:"moving"`
 	AdvancedWall struct {
-		Affinity       bool `toml:"affinity"`
-		CcxSplit       bool `toml:"ccx_split"`
-		CpusIdle       int  `toml:"affinity_idle"`
-		CpusLow        int  `toml:"affinity_low"`
-		CpusMid        int  `toml:"affinity_mid"`
-		CpusHigh       int  `toml:"affinity_high"`
-		CpusActive     int  `toml:"affinity_active"`
-		BurstLength    int  `toml:"burst_length"`
-		LowThreshold   int  `toml:"low_threshold"`
-		InstanceHiding bool `toml:"hide_instances"`
-		ShowDelay      int  `toml:"show_delay"`
+		Affinity     bool `toml:"affinity"`
+		CcxSplit     bool `toml:"ccx_split"`
+		CpusIdle     int  `toml:"affinity_idle"`
+		CpusLow      int  `toml:"affinity_low"`
+		CpusMid      int  `toml:"affinity_mid"`
+		CpusHigh     int  `toml:"affinity_high"`
+		CpusActive   int  `toml:"affinity_active"`
+		BurstLength  int  `toml:"burst_length"`
+		LowThreshold int  `toml:"low_threshold"`
 	} `toml:"advanced_wall"`
 }
 
@@ -120,6 +121,11 @@ func GetProfile(name string) (Profile, error) {
 		conf.Wall.SleepBgLockPath = userDir
 	}
 	conf.Wall.SleepBgLockPath += "/sleepbg.lock"
+
+	// Update grace period.
+	if conf.Wall.InstanceHiding {
+		conf.Wall.GracePeriod += conf.Wall.ShowDelay
+	}
 
 	return conf, nil
 }
