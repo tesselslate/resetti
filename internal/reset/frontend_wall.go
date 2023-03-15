@@ -13,7 +13,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
-	"github.com/woofdoggo/resetti/internal/reset/wall"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
@@ -25,11 +24,15 @@ type FrontendWall struct {
 	obs  *obs.Client
 	x    *x11.Client
 
-	obsController wall.ObsController
-	projector     xproto.Window
-	subprojector  []xproto.Window
-	lastMouseId   int
-	grabbed       bool
+	projector    xproto.Window
+	subprojector []xproto.Window
+	projWidth    int
+	projHeight   int
+	lastMouseId  int
+	grabbed      bool
+
+	wallWidth  int
+	wallHeight int
 
 	active    int
 	instances []mc.Instance
@@ -52,8 +55,7 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 			}
 		case f.conf.Keys.Reset:
 			if f.active == -1 {
-				toReset := f.obsController.GetResetAllInstances()
-				for _, id := range toReset {
+				for id := range f.instances {
 					f.wallReset(id)
 				}
 			} else {
@@ -77,9 +79,12 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 			if f.active != -1 {
 				break
 			}
-			list := f.obsController.GetResetAllInstances()
 			id := int(event.Key.Code - 10)
-			if id < 0 || id > len(list) {
+			max := len(f.instances)
+			if max > 10 {
+				max = 10
+			}
+			if id < 0 || id > max {
 				break
 			}
 			return f.handleInput(id, event.Key.Mod)
@@ -93,10 +98,7 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 				if event.Mod&xproto.ButtonMask1 == 0 {
 					break
 				}
-				id := f.obsController.GetInstanceId(int(event.Point.X), int(event.Point.Y))
-                if id == -1 {
-                    return nil
-                }
+				id := f.getId(int(event.Point.X), int(event.Point.Y))
 				if f.lastMouseId == id {
 					break
 				}
@@ -118,10 +120,10 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 		if !found {
 			return f.ungrabKeys()
 		}
-		id := f.obsController.GetInstanceId(int(event.Point.X), int(event.Point.Y))
-        if id == -1 {
-            return nil
-        }
+		id := f.getId(int(event.Point.X), int(event.Point.Y))
+		if id == -1 {
+			return nil
+		}
 		f.lastMouseId = id
 		return f.handleInput(id, event.Mod)
 	case x11.FocusEvent:
@@ -139,7 +141,7 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 
 func (f *FrontendWall) HandleUpdate(update mc.Update) error {
 	f.states[update.Id] = update.State
-	return f.obsController.Update(update)
+	return nil
 }
 
 func (f *FrontendWall) Setup(opts FrontendOptions) error {
@@ -181,15 +183,10 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	if err != nil {
 		return errors.Wrap(err, "obs setup")
 	}
-	if err = f.obs.SetScene("Wall"); err != nil {
+	if err = f.getWallSize(); err != nil {
 		return err
 	}
-	if f.conf.Moving.Enabled {
-		f.obsController = &wall.MovingController{}
-	} else {
-		f.obsController = &wall.StandardController{}
-	}
-	if err = f.obsController.Setup(f.obs, f.conf, f.states); err != nil {
+	if err = f.obs.SetScene("Wall"); err != nil {
 		return err
 	}
 	if err = f.focusProjector(); err != nil {
@@ -224,7 +221,7 @@ func (f *FrontendWall) findProjector() error {
 			if err != nil {
 				return err
 			}
-			f.obsController.UpdateProjector(int(width), int(height))
+			f.projWidth, f.projHeight = int(width), int(height)
 			return nil
 		}
 	}
@@ -242,6 +239,49 @@ func (f *FrontendWall) focusProjector() error {
 	}
 	f.subprojector = subwindows
 	return f.x.FocusWindow(f.projector)
+}
+
+// getId returns the ID of the instance at the specified coordinates, or -1 if
+// it does not exist.
+func (f *FrontendWall) getId(x, y int) int {
+	if x < 0 || y < 0 || x > f.projWidth || y > f.projHeight {
+		return -1
+	}
+	x /= (f.projWidth / f.wallWidth)
+	y /= (f.projHeight / f.wallHeight)
+	id := (y * f.wallWidth) + x
+	if id >= len(f.instances) {
+		return -1
+	} else {
+		return id
+	}
+}
+
+// getWallSize figures out the dimensions of the user's wall.
+func (f *FrontendWall) getWallSize() error {
+	appendUnique := func(slice []float64, item float64) []float64 {
+		for _, v := range slice {
+			if item == v {
+				return slice
+			}
+		}
+		return append(slice, item)
+	}
+	xs, ys := make([]float64, 0), make([]float64, 0)
+	for i := 0; i < len(f.instances); i++ {
+		x, y, _, _, err := f.obs.GetSceneItemTransform(
+			"Wall",
+			fmt.Sprintf("Wall MC %d", i+1),
+		)
+		if err != nil {
+			return err
+		}
+		xs = appendUnique(xs, x)
+		ys = appendUnique(ys, y)
+	}
+	f.wallWidth = len(xs)
+	f.wallHeight = len(ys)
+	return nil
 }
 
 // gotoWall switches focus back to the wall projector and forms all other
@@ -328,11 +368,11 @@ func (f *FrontendWall) setLocked(id int, lock bool) error {
 	f.locks[id] = lock
 	if lock {
 		go runHook(f.conf.Hooks.Lock)
-		return f.obsController.Lock(id)
 	} else {
 		go runHook(f.conf.Hooks.Unlock)
-		return f.obsController.Unlock(id)
 	}
+	f.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), lock)
+	return nil
 }
 
 // toggleSleepbg creates or deletes the sleepbg.lock file.

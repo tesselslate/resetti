@@ -61,8 +61,8 @@ type Profile struct {
 		SleepBgLockPath string `toml:"sleepbg_lock_path"`
 	} `toml:"wall"`
 	Moving struct {
-		Enabled    bool   `toml:"enabled"`
-		FocusSize  string `toml:"focus_size"`
+		Enabled   bool   `toml:"enabled"`
+		FocusSize string `toml:"focus_size"`
 	} `toml:"moving"`
 	AdvancedWall struct {
 		Affinity       bool `toml:"affinity"`
