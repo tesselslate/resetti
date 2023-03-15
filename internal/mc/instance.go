@@ -77,7 +77,7 @@ func (i *Instance) Focus() {
 func (i *Instance) FocusAndUnpause(timestamp uint32, idle bool) {
 	i.Focus()
 
-	time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.Delay))
+	time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.PauseDelay))
 	if i.conf.Reset.UnpauseFocus && idle {
 		i.x.SendKeyPress(
 			x11.KeyEsc,

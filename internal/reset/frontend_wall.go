@@ -60,11 +60,11 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 				}
 			} else {
 				f.instances[f.active].PressF3(f.x.GetCurrentTime())
+				f.host.ResetInstance(f.active, f.x.GetCurrentTime()+5)
 				if err := f.instances[f.active].Stretch(f.conf); err != nil {
 					return err
 				}
 				go runHook(f.conf.Hooks.Reset)
-				f.host.ResetInstance(f.active, f.x.GetCurrentTime()+5)
 				time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
 				if f.conf.Wall.GoToLocked {
 					for idx, state := range f.states {
