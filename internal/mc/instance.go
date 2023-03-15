@@ -131,10 +131,10 @@ func (i *Instance) Stretch(conf *cfg.Profile) error {
 	}
 	return i.x.MoveWindow(
 		i.Wid,
-		conf.Wall.StretchRes.X,
-		conf.Wall.StretchRes.Y,
-		conf.Wall.StretchRes.Width,
-		conf.Wall.StretchRes.Height,
+		uint32(conf.Wall.StretchRes.X),
+		uint32(conf.Wall.StretchRes.Y),
+		uint32(conf.Wall.StretchRes.Width),
+		uint32(conf.Wall.StretchRes.Height),
 	)
 }
 
@@ -145,9 +145,9 @@ func (i *Instance) Unstretch(conf *cfg.Profile) error {
 	}
 	return i.x.MoveWindow(
 		i.Wid,
-		conf.Wall.UnstretchRes.X,
-		conf.Wall.UnstretchRes.Y,
-		conf.Wall.UnstretchRes.Width,
-		conf.Wall.UnstretchRes.Height,
+		uint32(conf.Wall.UnstretchRes.X),
+		uint32(conf.Wall.UnstretchRes.Y),
+		uint32(conf.Wall.UnstretchRes.Width),
+		uint32(conf.Wall.UnstretchRes.Height),
 	)
 }

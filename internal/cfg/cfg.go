@@ -14,10 +14,10 @@ import (
 var defaultConfig string
 
 type Box struct {
-	X      uint32
-	Y      uint32
-	Width  uint32
-	Height uint32
+	X      int
+	Y      int
+	Width  int
+	Height int
 }
 
 type Profile struct {
@@ -60,20 +60,21 @@ type Profile struct {
 		SleepBgLock     bool   `toml:"sleepbg_lock"`
 		SleepBgLockPath string `toml:"sleepbg_lock_path"`
 	} `toml:"wall"`
+	Moving struct {
+		Enabled    bool   `toml:"enabled"`
+		FocusSize  string `toml:"focus_size"`
+	} `toml:"moving"`
 	AdvancedWall struct {
-		Affinity        bool   `toml:"affinity"`
-		CcxSplit        bool   `toml:"ccx_split"`
-		CpusIdle        int    `toml:"affinity_idle"`
-		CpusLow         int    `toml:"affinity_low"`
-		CpusMid         int    `toml:"affinity_mid"`
-		CpusHigh        int    `toml:"affinity_high"`
-		CpusActive      int    `toml:"affinity_active"`
-		LowThreshold    int    `toml:"low_threshold"`
-		PreviewFreezing bool   `toml:"freeze_previews"`
-		FreezeThreshold int    `toml:"freeze_threshold"`
-		CropInstances   string `toml:"crop_instances"`
-		InstanceHiding  bool   `toml:"hide_instances"`
-		ShowDelay       int    `toml:"show_delay"`
+		Affinity       bool `toml:"affinity"`
+		CcxSplit       bool `toml:"ccx_split"`
+		CpusIdle       int  `toml:"affinity_idle"`
+		CpusLow        int  `toml:"affinity_low"`
+		CpusMid        int  `toml:"affinity_mid"`
+		CpusHigh       int  `toml:"affinity_high"`
+		CpusActive     int  `toml:"affinity_active"`
+		LowThreshold   int  `toml:"low_threshold"`
+		InstanceHiding bool `toml:"hide_instances"`
+		ShowDelay      int  `toml:"show_delay"`
 	} `toml:"advanced_wall"`
 }
 

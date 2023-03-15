@@ -6,8 +6,6 @@
 # Available options:
 # - standard    Traditional single/multi-instance resetting for random seeds.
 # - wall        Wall-style resetting for random seeds.
-# - boyenn      Boyenn-style moving wall with separate sections.
-# - moving      Jojoe-style moving wall with the normal grid.
 type = "standard"
 
 # Whether or not to count the amount of resets performed.
@@ -33,7 +31,7 @@ lock = ""
 unlock = ""
 
 [obs]
-# Whether or not to enable OBS websocket support. This is *required* for wall and moving_wall.
+# Whether or not to enable OBS websocket support. This is *required* for wall.
 enabled = false
 
 # The port to connect to OBS websocket on.
@@ -131,6 +129,14 @@ sleepbg_lock = true
 # which is your home directory.
 sleepbg_lock_path = "/home/my_user"
 
+# Moving wall settings.
+[moving]
+# Whether or not to use moving wall.
+enabled = false
+
+# The size (in instances) to make the focus area.
+focus_size = "3x2"
+
 # More advanced wall settings, mainly aimed towards increasing performance.
 [advanced_wall]
 # Whether or not to use advanced affinity. All other affinity settings below
@@ -170,19 +176,7 @@ affinity_active = 12
 # from high priority to low priority.
 low_threshold = 20
 
-# Whether or not to freeze instances on the wall as they approach 100%
-# world generation (to eliminate the rendering lag on world load.) Requires
-# the Freeze Filter OBS plugin.
-freeze_previews = false
-
-# What percentage to freeze previews at.
-freeze_threshold = 85
-
-# How to crop instances on the wall scene (left x right x top x bottom). Only
-# useful for preview freezing to hide the chunkmap.
-crop_instances = "0x0x0x0"
-
-# Whether or not to hide instances from the wallwhile they are on the dirt
+# Whether or not to hide instances from the wall while they are on the dirt
 # screen.
 hide_instances = false
 

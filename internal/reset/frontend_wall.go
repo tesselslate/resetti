@@ -94,6 +94,9 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 					break
 				}
 				id := f.obsController.GetInstanceId(int(event.Point.X), int(event.Point.Y))
+                if id == -1 {
+                    return nil
+                }
 				if f.lastMouseId == id {
 					break
 				}
@@ -116,6 +119,9 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 			return f.ungrabKeys()
 		}
 		id := f.obsController.GetInstanceId(int(event.Point.X), int(event.Point.Y))
+        if id == -1 {
+            return nil
+        }
 		f.lastMouseId = id
 		return f.handleInput(id, event.Mod)
 	case x11.FocusEvent:
@@ -162,44 +168,13 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 		for i := 1; i <= len(f.instances); i += 1 {
 			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
 			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
-			crops := strings.Split(f.conf.AdvancedWall.CropInstances, "x")
-			var cLeft, cRight, cTop, cBot int
-			if len(crops) == 4 {
-				if cLeft, err = strconv.Atoi(crops[0]); err != nil {
-					return err
-				}
-				if cRight, err = strconv.Atoi(crops[1]); err != nil {
-					return err
-				}
-				if cTop, err = strconv.Atoi(crops[2]); err != nil {
-					return err
-				}
-				if cBot, err = strconv.Atoi(crops[3]); err != nil {
-					return err
-				}
-			}
 			settings := obs.StringMap{
 				"show_cursor":    false,
 				"capture_window": strconv.Itoa(int(f.instances[i-1].Wid)),
 			}
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
-			wallSettings := obs.StringMap{
-				"show_cursor":    false,
-				"capture_window": strconv.Itoa(int(f.instances[i-1].Wid)),
-				"cut_left":       cLeft,
-				"cut_right":      cRight,
-				"cut_top":        cTop,
-				"cut_bot":        cBot,
-			}
-			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), wallSettings, true)
+			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
 			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
-			if f.conf.AdvancedWall.PreviewFreezing {
-				b.SetSourceFilterEnabled(
-					fmt.Sprintf("Wall MC %d", i),
-					fmt.Sprintf("Freeze %d", i),
-					false,
-				)
-			}
 		}
 		return nil
 	})
@@ -209,12 +184,9 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	if err = f.obs.SetScene("Wall"); err != nil {
 		return err
 	}
-	switch f.conf.General.ResetType {
-	case "boyenn":
-		f.obsController = &wall.BoyennController{}
-	case "moving":
+	if f.conf.Moving.Enabled {
 		f.obsController = &wall.MovingController{}
-	case "wall":
+	} else {
 		f.obsController = &wall.StandardController{}
 	}
 	if err = f.obsController.Setup(f.obs, f.conf, f.states); err != nil {

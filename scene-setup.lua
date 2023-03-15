@@ -12,10 +12,7 @@ local locks_path = nil
 local locks_width = nil
 local locks_height = nil
 
-local preview_freezing = nil
-local progress_font = nil
-local progress_offset = nil
-local boyenn = nil
+local moving = nil
 
 -- Script boilerplate, settings
 function script_update(settings)
@@ -30,10 +27,7 @@ function script_update(settings)
     locks_width = O.obs_data_get_int(settings, "locks_width")
     locks_height = O.obs_data_get_int(settings, "locks_height")
     
-    preview_freezing = O.obs_data_get_bool(settings, "preview_freezing")
-    progress_font = O.obs_data_get_obj(settings, "progress_font")
-    progress_offset = O.obs_data_get_int(settings, "progress_offset")
-    boyenn = O.obs_data_get_bool(settings, "boyenn")
+    moving = O.obs_data_get_bool(settings, "moving")
 
     -- Validate the current settings. TODO
 end
@@ -67,12 +61,7 @@ function script_properties()
     O.obs_properties_add_int(locks, "locks_width", "Width", 1, 3840, 1)
     O.obs_properties_add_int(locks, "locks_height", "Height", 1, 2160, 1)
 
-    local freezing = O.obs_properties_create()
-    O.obs_properties_add_font(freezing, "progress_font", "Progress Font")
-    O.obs_properties_add_int(freezing, "progress_offset", "Progress Offset", 1, 100, 1)
-
-    O.obs_properties_add_bool(wall, "boyenn", "Boyenn Moving")
-    O.obs_properties_add_group(wall, "preview_freezing", "Preview Freezing", O.OBS_GROUP_CHECKABLE, freezing)
+    O.obs_properties_add_bool(wall, "moving", "Moving")
     O.obs_properties_add_group(wall, "locks", "Lock Icons", O.OBS_GROUP_CHECKABLE, locks)
 
     return settings
@@ -158,39 +147,10 @@ function create_wall_scene()
         O.obs_sceneitem_set_bounds_type(item, O.OBS_BOUNDS_STRETCH)
         O.obs_data_release(data)
         O.obs_source_release(lock)
-
-        if preview_freezing then
-            local data = O.obs_data_create_from_json('{"settings": {"hide_action": 2, "show_action": 1}}')
-            local freeze = O.obs_source_create(
-                "freeze_filter",
-                "Freeze " .. tostring(i),
-                data,
-                nil
-            )
-            O.obs_source_filter_add(source, freeze)
-            O.obs_source_release(freeze)
-            O.obs_data_release(data)
-
-            local data = O.obs_data_create_from_json('{"text": "0"}')
-            O.obs_data_set_obj(data, "font", progress_font)
-            local progress = O.obs_source_create(
-                "text_ft2_source",
-                "Progress " .. tostring(i),
-                data,
-                nil
-            )
-            item = O.obs_scene_add(scene, progress)
-            vec2.x = inst_width * ((i-1) % wall_width) + 4
-            vec2.y = inst_height * math.floor((i-1) / wall_width) + inst_height - 4 - progress_offset
-            O.obs_sceneitem_set_pos(item, vec2)
-            O.obs_source_release(progress)
-            O.obs_data_release(settings)
-            O.obs_data_release(data)
-        end
         O.obs_source_release(source)
     end
 
-    if boyenn_moving then
+    if moving then
         -- TODO: Color source indicators
     end
 
