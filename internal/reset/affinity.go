@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
@@ -38,12 +40,15 @@ var cgroup_script []byte
 
 // CpuManager manages the CPU affinity of instances to improve performance.
 type CpuManager struct {
+	*sync.Mutex
+
 	conf       cfg.Profile
 	instances  []mc.InstanceInfo
 	states     []mc.InstanceState
-	prioritize []bool // Which instances to prioritize.
-	groups     []int  // Which affinity group each instance is in.
-	anyActive  bool   // Whether any instances are ingame.
+	prioritize []bool   // Which instances to prioritize.
+	groups     []int    // Which affinity group each instance is in.
+	burst      chan int // Move instances out of the burst group (mid).
+	anyActive  bool     // Whether any instances are ingame.
 }
 
 // NewCpuManager creates a new CpuManager with the given configuration profile
@@ -53,24 +58,33 @@ func NewCpuManager(conf cfg.Profile, instances []mc.InstanceInfo) (CpuManager, e
 		return CpuManager{}, err
 	}
 	m := CpuManager{
+		&sync.Mutex{},
 		conf,
 		instances,
 		make([]mc.InstanceState, len(instances)),
 		make([]bool, len(instances)),
 		make([]int, len(instances)),
+		make(chan int, len(instances)),
 		false,
+	}
+	if conf.AdvancedWall.BurstLength > 0 {
+		go m.handleBurst()
 	}
 	return m, m.writeCpuSets()
 }
 
 // SetPriority prioritizes or deprioritizes the given instance.
 func (m *CpuManager) SetPriority(id int, prioritize bool) error {
+	m.Lock()
+	defer m.Unlock()
 	m.prioritize[id] = prioritize
 	return m.updateAffinity(id)
 }
 
 // Update changes the state of the instance and updates its affinity group.
 func (m *CpuManager) Update(id int, state mc.InstanceState) error {
+	m.Lock()
+	defer m.Unlock()
 	activeChanged := false
 	if state.State == mc.StIngame {
 		m.anyActive = true
@@ -84,6 +98,20 @@ func (m *CpuManager) Update(id int, state mc.InstanceState) error {
 		return m.updateAffinities()
 	} else {
 		return m.updateAffinity(id)
+	}
+}
+
+// handleBurst runs in the background and handles moving instances out of mid
+// affinity and back to idle.
+func (m *CpuManager) handleBurst() {
+	for id := range m.burst {
+		m.Lock()
+		if m.states[id].State == mc.StIdle {
+			if err := m.moveInstance(id, affIdle); err != nil {
+				log.Printf("Burst handling failure: %s\n", err)
+			}
+		}
+		m.Unlock()
 	}
 }
 
@@ -124,7 +152,15 @@ func (m *CpuManager) updateAffinity(id int) error {
 	case mc.StMenu:
 		return nil
 	case mc.StIdle:
-		return m.moveInstance(id, affIdle)
+		if m.conf.AdvancedWall.BurstLength > 0 {
+			go func() {
+				<-time.After(time.Duration(m.conf.AdvancedWall.BurstLength) * time.Millisecond)
+				m.burst <- id
+			}()
+			return m.moveInstance(id, affMid)
+		} else {
+			return m.moveInstance(id, affIdle)
+		}
 	case mc.StDirt:
 		if !m.anyActive {
 			return m.moveInstance(id, affHigh)

@@ -72,6 +72,7 @@ type Profile struct {
 		CpusMid        int  `toml:"affinity_mid"`
 		CpusHigh       int  `toml:"affinity_high"`
 		CpusActive     int  `toml:"affinity_active"`
+		BurstLength    int  `toml:"burst_length"`
 		LowThreshold   int  `toml:"low_threshold"`
 		InstanceHiding bool `toml:"hide_instances"`
 		ShowDelay      int  `toml:"show_delay"`

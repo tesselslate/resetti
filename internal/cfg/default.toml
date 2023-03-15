@@ -172,6 +172,10 @@ affinity_high = 12
 # Number of CPUs to run the actively played instance on.
 affinity_active = 12
 
+# How long (in milliseconds) to switch instances to mid affinity to after
+# finishing preview. Helps chunks load faster.
+burst_length = 250
+
 # The world generation percentage to reach before moving an instance
 # from high priority to low priority.
 low_threshold = 20

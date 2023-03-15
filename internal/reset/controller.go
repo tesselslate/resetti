@@ -159,6 +159,12 @@ func (c *Controller) SetInstancePriority(id int, priority bool) {
 
 // ResetInstance resets the given instance.
 func (c *Controller) ResetInstance(id int, time uint32) {
+	if c.conf.AdvancedWall.Affinity {
+		err := c.affinity.Update(id, mc.InstanceState{State: mc.StDirt})
+		if err != nil {
+			log.Printf("Failed to set affinity on reset: %s\n", err)
+		}
+	}
 	if c.states[id].State == mc.StPreview {
 		c.instances[id].LeavePreview(time)
 	} else {
