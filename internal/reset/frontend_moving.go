@@ -14,10 +14,11 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/exp/slices"
 )
 
-// FrontendWall implements a static "wall" frontend.
-type FrontendWall struct {
+// FrontendMoving implements a "moving wall" frontend.
+type FrontendMoving struct {
 	conf  *cfg.Profile
 	host  *Controller
 	obs   *obs.Client
@@ -31,8 +32,14 @@ type FrontendWall struct {
 	lastMouseId  int
 	grabbed      bool
 
-	wallWidth  int
-	wallHeight int
+	focusWidth     int
+	focusHeight    int
+	videoWidth     int
+	videoHeight    int
+	lockAreaHeight int
+	lockAreaCount  int
+	focus          []int
+	lockArea       []int
 
 	active      int
 	instances   []mc.Instance
@@ -41,7 +48,7 @@ type FrontendWall struct {
 	lastPreview []time.Time
 }
 
-func (f *FrontendWall) HandleInput(event x11.Event) error {
+func (f *FrontendMoving) HandleInput(event x11.Event) error {
 	switch event := event.(type) {
 	case x11.KeyEvent:
 		if event.State == x11.StateUp {
@@ -56,9 +63,13 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 			}
 		case f.conf.Keys.Reset:
 			if f.active == -1 {
-				for id := range f.instances {
-					f.wallReset(id)
+				for _, id := range f.focus {
+					if id != -1 {
+						f.wallReset(id)
+					}
 				}
+				f.fillFocusGrid(true)
+				f.rerender()
 			} else {
 				f.instances[f.active].PressF3(f.x.GetCurrentTime())
 				f.host.ResetInstance(f.active, f.x.GetCurrentTime()+5)
@@ -73,25 +84,14 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 				if f.conf.Wall.GoToLocked {
 					for idx, state := range f.states {
 						if f.locks[idx] && state.State == mc.StIdle {
-							return f.wallPlay(idx)
+							err := f.wallPlay(idx)
+							f.rerender()
+							return err
 						}
 					}
 				}
 				return f.gotoWall()
 			}
-		default:
-			if f.active != -1 {
-				break
-			}
-			id := int(event.Key.Code - 10)
-			max := len(f.instances)
-			if max > 10 {
-				max = 10
-			}
-			if id < 0 || id > max {
-				break
-			}
-			return f.handleInput(id, event.Key.Mod)
 		}
 	case x11.MoveEvent:
 		if f.active != -1 {
@@ -103,7 +103,12 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 					break
 				}
 				id := f.getId(int(event.Point.X), int(event.Point.Y))
-				if f.lastMouseId == id {
+				if f.lastMouseId == id || id == -1 {
+					break
+				}
+				// The lock area changes immediately, so allowing for dragging
+				// is counterintuitive.
+				if slices.Index(f.lockArea, id) != -1 {
 					break
 				}
 				f.lastMouseId = id
@@ -143,11 +148,18 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 	return nil
 }
 
-func (f *FrontendWall) HandleUpdate(update mc.Update) error {
+func (f *FrontendMoving) HandleUpdate(update mc.Update) error {
 	prev := f.states[update.Id]
 	next := update.State
 	if prev.State != mc.StPreview && next.State == mc.StPreview {
 		f.lastPreview[update.Id] = time.Now()
+		// Replace any dirt focus instances.
+		for idx, id := range f.focus {
+			free := slices.Index(f.focus, update.Id) == -1 && slices.Index(f.lockArea, update.Id) == -1
+			if f.states[id].State == mc.StDirt && free {
+				f.focus[idx] = update.Id
+			}
+		}
 	}
 	f.states[update.Id] = next
 	if f.hider != nil {
@@ -156,7 +168,7 @@ func (f *FrontendWall) HandleUpdate(update mc.Update) error {
 	return nil
 }
 
-func (f *FrontendWall) Setup(opts FrontendOptions) error {
+func (f *FrontendMoving) Setup(opts FrontendOptions) error {
 	f.conf = opts.Conf
 	f.host = opts.Controller
 	f.obs = opts.Obs
@@ -165,6 +177,7 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	f.lastMouseId = -1
 	f.instances = make([]mc.Instance, len(opts.Instances))
 	f.states = make([]mc.InstanceState, len(opts.Instances))
+	f.lockArea = make([]int, 0)
 	f.locks = make([]bool, len(opts.Instances))
 	f.lastPreview = make([]time.Time, len(opts.Instances))
 	copy(f.instances, opts.Instances)
@@ -181,11 +194,25 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 		f.hider = NewHider(f.conf, f.obs, f.states)
 	}
 
+	// Moving wall config setup.
+	n, err := fmt.Sscanf(f.conf.Moving.FocusSize, "%dx%d", &f.focusWidth, &f.focusHeight)
+	if err != nil {
+		return err
+	}
+	if n != 2 {
+		return errors.New("invalid focus size")
+	}
+	f.focus = make([]int, f.focusWidth*f.focusHeight)
+	for i := 0; i < len(f.focus); i += 1 {
+		f.focus[i] = i
+	}
+	f.lockAreaCount = f.conf.Moving.LockAreaCount
+	f.lockAreaHeight = f.conf.Moving.LockAreaHeight
+
 	// OBS setup.
 	err = f.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
 		for i := 1; i <= len(f.instances); i += 1 {
 			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
-			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
 			settings := obs.StringMap{
 				"show_cursor":    false,
 				"capture_window": strconv.Itoa(int(f.instances[i-1].Wid)),
@@ -199,15 +226,17 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	if err != nil {
 		return errors.Wrap(err, "obs setup")
 	}
-	if err = f.getWallSize(); err != nil {
+	if err = f.focusProjector(); err != nil {
 		return err
 	}
 	if err = f.obs.SetScene("Wall"); err != nil {
 		return err
 	}
-	if err = f.focusProjector(); err != nil {
+	f.videoWidth, f.videoHeight, err = f.obs.GetCanvasSize()
+	if err != nil {
 		return err
 	}
+	f.rerender()
 	if err = f.grabKeys(); err != nil {
 		return err
 	}
@@ -216,12 +245,12 @@ func (f *FrontendWall) Setup(opts FrontendOptions) error {
 	return f.toggleSleepbg(false)
 }
 
-func (f *FrontendWall) ShouldPause(id int) bool {
+func (f *FrontendMoving) ShouldPause(id int) bool {
 	return f.active != id
 }
 
 // findProjector finds the OBS projector.
-func (f *FrontendWall) findProjector() error {
+func (f *FrontendMoving) findProjector() error {
 	windows, err := f.x.GetWindowList()
 	if err != nil {
 		return err
@@ -245,7 +274,7 @@ func (f *FrontendWall) findProjector() error {
 }
 
 // focusProjector finds the OBS projector and switches focus to it.
-func (f *FrontendWall) focusProjector() error {
+func (f *FrontendMoving) focusProjector() error {
 	if err := f.findProjector(); err != nil {
 		return err
 	}
@@ -259,50 +288,32 @@ func (f *FrontendWall) focusProjector() error {
 
 // getId returns the ID of the instance at the specified coordinates, or -1 if
 // it does not exist.
-func (f *FrontendWall) getId(x, y int) int {
+func (f *FrontendMoving) getId(x, y int) int {
 	if x < 0 || y < 0 || x > f.projWidth || y > f.projHeight {
 		return -1
 	}
-	x /= (f.projWidth / f.wallWidth)
-	y /= (f.projHeight / f.wallHeight)
-	id := (y * f.wallWidth) + x
-	if id >= len(f.instances) {
-		return -1
+	if y >= f.projHeight-f.lockAreaHeight {
+		id := x / (f.projWidth / f.lockAreaCount)
+		if id >= len(f.lockArea) {
+			return -1
+		} else {
+			return f.lockArea[id]
+		}
 	} else {
-		return id
-	}
-}
-
-// getWallSize figures out the dimensions of the user's wall.
-func (f *FrontendWall) getWallSize() error {
-	appendUnique := func(slice []float64, item float64) []float64 {
-		for _, v := range slice {
-			if item == v {
-				return slice
-			}
+		x /= (f.projWidth / f.focusWidth)
+		y /= ((f.projHeight - f.lockAreaHeight) / f.focusHeight)
+		id := y*f.focusWidth + x
+		if id >= len(f.instances) {
+			return -1
+		} else {
+			return f.focus[id]
 		}
-		return append(slice, item)
 	}
-	xs, ys := make([]float64, 0), make([]float64, 0)
-	for i := 0; i < len(f.instances); i += 1 {
-		x, y, _, _, err := f.obs.GetSceneItemTransform(
-			"Wall",
-			fmt.Sprintf("Wall MC %d", i+1),
-		)
-		if err != nil {
-			return err
-		}
-		xs = appendUnique(xs, x)
-		ys = appendUnique(ys, y)
-	}
-	f.wallWidth = len(xs)
-	f.wallHeight = len(ys)
-	return nil
 }
 
 // gotoWall switches focus back to the wall projector and forms all other
 // necessary tasks to go back to the wall.
-func (f *FrontendWall) gotoWall() error {
+func (f *FrontendMoving) gotoWall() error {
 	f.active = -1
 	f.obs.SetSceneAsync("Wall")
 	f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
@@ -318,31 +329,8 @@ func (f *FrontendWall) gotoWall() error {
 }
 
 // grabKeys grabs keys that are only used on the wall projector.
-func (f *FrontendWall) grabKeys() error {
-	// Grab keys.
-	win := f.x.GetRootWindow()
-	grabCount := len(f.instances)
-	if grabCount > 10 {
-		grabCount = 10
-	}
-	for i := 0; i < grabCount; i += 1 {
-		wallMods := []x11.Keymod{
-			f.conf.Keys.WallPlay,
-			f.conf.Keys.WallReset,
-			f.conf.Keys.WallResetOthers,
-			f.conf.Keys.WallLock,
-		}
-		key := x11.Key{Code: xproto.Keycode(i + 10)}
-		for _, v := range wallMods {
-			key.Mod = v
-			if err := f.x.GrabKey(key, win); err != nil {
-				return err
-			}
-		}
-	}
+func (f *FrontendMoving) grabKeys() error {
 	f.grabbed = true
-
-	// Grab pointer.
 	if f.conf.Wall.UseMouse {
 		timeout := time.Millisecond
 		for tries := 0; tries < 5; tries += 1 {
@@ -360,23 +348,35 @@ func (f *FrontendWall) grabKeys() error {
 }
 
 // handleInput handles a wall action input (reset, lock, etc.)
-func (f *FrontendWall) handleInput(id int, mod x11.Keymod) error {
+func (f *FrontendMoving) handleInput(id int, mod x11.Keymod) error {
 	switch mod {
 	case f.conf.Keys.WallPlay:
-		return f.wallPlay(id)
+		err := f.wallPlay(id)
+		f.rerender()
+		return err
 	case f.conf.Keys.WallReset:
 		f.wallReset(id)
+		f.focus[slices.Index(f.focus, id)] = -1
+		f.rerender()
 		return nil
 	case f.conf.Keys.WallResetOthers:
 		return f.wallResetOthers(id)
 	case f.conf.Keys.WallLock:
+		if !f.locks[id] {
+			f.lockArea = append(f.lockArea, id)
+			f.focus[slices.Index(f.focus, id)] = -1
+		} else {
+			idx := slices.Index(f.lockArea, id)
+			slices.Delete(f.lockArea, idx, idx+1)
+		}
+		f.rerender()
 		return f.setLocked(id, !f.locks[id])
 	}
 	return nil
 }
 
 // setLocked sets the lock state of an instance.
-func (f *FrontendWall) setLocked(id int, lock bool) error {
+func (f *FrontendMoving) setLocked(id int, lock bool) error {
 	if f.locks[id] == lock {
 		return nil
 	}
@@ -387,12 +387,11 @@ func (f *FrontendWall) setLocked(id int, lock bool) error {
 	} else {
 		go runHook(f.conf.Hooks.Unlock)
 	}
-	f.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), lock)
 	return nil
 }
 
 // toggleSleepbg creates or deletes the sleepbg.lock file.
-func (f *FrontendWall) toggleSleepbg(state bool) error {
+func (f *FrontendMoving) toggleSleepbg(state bool) error {
 	if !f.conf.Wall.SleepBgLock {
 		return nil
 	}
@@ -412,31 +411,8 @@ func (f *FrontendWall) toggleSleepbg(state bool) error {
 }
 
 // ungrabKeys ungrabs keys that are only used on the wall projector.
-func (f *FrontendWall) ungrabKeys() error {
-	// Ungrab keys.
-	win := f.x.GetRootWindow()
-	grabCount := len(f.instances)
-	if grabCount > 10 {
-		grabCount = 10
-	}
-	for i := 0; i < grabCount; i += 1 {
-		wallMods := []x11.Keymod{
-			f.conf.Keys.WallPlay,
-			f.conf.Keys.WallReset,
-			f.conf.Keys.WallResetOthers,
-			f.conf.Keys.WallLock,
-		}
-		key := x11.Key{Code: xproto.Keycode(i + 10)}
-		for _, v := range wallMods {
-			key.Mod = v
-			if err := f.x.UngrabKey(key, win); err != nil {
-				return err
-			}
-		}
-	}
+func (f *FrontendMoving) ungrabKeys() error {
 	f.grabbed = false
-
-	// Ungrab pointer.
 	if f.conf.Wall.UseMouse {
 		return f.x.UngrabPointer()
 	}
@@ -444,9 +420,15 @@ func (f *FrontendWall) ungrabKeys() error {
 }
 
 // wallPlay plays a single instance.
-func (f *FrontendWall) wallPlay(id int) error {
+func (f *FrontendMoving) wallPlay(id int) error {
 	if f.states[id].State != mc.StIdle {
 		return nil
+	}
+	if idx := slices.Index(f.focus, id); idx != -1 {
+		f.focus[idx] = -1
+		f.fillFocusGrid(false)
+	} else if idx = slices.Index(f.lockArea, id); idx != -1 {
+		slices.Delete(f.lockArea, idx, idx+1)
 	}
 	// NOTE: Even though the window focus change will cause the wall grabs to
 	// be released, they aren't released in time for Minecraft to grab the
@@ -488,8 +470,9 @@ func (f *FrontendWall) wallPlay(id int) error {
 }
 
 // wallReset resets a single instance.
-func (f *FrontendWall) wallReset(id int) {
+func (f *FrontendMoving) wallReset(id int) {
 	state := f.states[id].State
+	f.states[id].State = mc.StDirt
 	inGrace := (time.Now().UnixMilli() - f.lastPreview[id].UnixMilli()) <= int64(f.conf.Wall.GracePeriod)
 	if f.locks[id] || state == mc.StDirt || inGrace {
 		return
@@ -502,7 +485,7 @@ func (f *FrontendWall) wallReset(id int) {
 }
 
 // wallResetOthers attempts to play one instance and reset all others.
-func (f *FrontendWall) wallResetOthers(id int) error {
+func (f *FrontendMoving) wallResetOthers(id int) error {
 	if f.states[id].State != mc.StIdle {
 		return nil
 	}
@@ -514,5 +497,100 @@ func (f *FrontendWall) wallResetOthers(id int) error {
 			f.wallReset(idx)
 		}
 	}
+	f.fillFocusGrid(true)
+	f.rerender()
 	return nil
+}
+
+// Moving wall layout code
+
+// fillFocusGrid refills the focus grid with new instances.
+func (f *FrontendMoving) fillFocusGrid(replaceAll bool) {
+	nextPicks := f.pickBestInstances()
+	for idx, id := range f.focus {
+		if !replaceAll && id != -1 {
+			continue
+		}
+		if len(nextPicks) == 0 {
+			return
+		}
+		f.focus[idx] = nextPicks[0]
+		nextPicks = nextPicks[1:]
+	}
+}
+
+// pickBestInstances returns a list of the best instances to add to the
+// focus grid.
+func (f *FrontendMoving) pickBestInstances() []int {
+	instances := make([]int, 0)
+	for idx := 0; idx < len(f.instances); idx += 1 {
+		if slices.Index(f.focus, idx) != -1 || slices.Index(f.lockArea, idx) != -1 {
+			continue
+		}
+		instances = append(instances, idx)
+	}
+	slices.SortFunc(instances, func(a, b int) bool {
+		if f.states[a].State < f.states[b].State {
+			return true
+		}
+		if f.states[a].Progress < f.states[b].Progress {
+			return true
+		}
+		if f.lastPreview[a].UnixMilli() > f.lastPreview[b].UnixMilli() {
+			return true
+		}
+		return false
+	})
+	return instances
+}
+
+// rerender updates the OBS layout.
+func (f *FrontendMoving) rerender() {
+	f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+		visible := make([]bool, len(f.instances))
+		instWidth := f.videoWidth / f.focusWidth
+		instHeight := (f.videoHeight - f.lockAreaHeight) / f.focusHeight
+		for idx := 0; idx < len(f.focus); idx += 1 {
+			if f.focus[idx] == -1 {
+				continue
+			}
+			y := idx / f.focusWidth
+			x := idx % f.focusWidth
+			b.SetItemBounds(
+				"Wall",
+				fmt.Sprintf("Wall MC %d", f.focus[idx]+1),
+				float64(x*instWidth),
+				float64(y*instHeight),
+				float64(instWidth),
+				float64(instHeight),
+			)
+			visible[f.focus[idx]] = true
+		}
+		instWidth = f.videoWidth / f.lockAreaCount
+		for idx := 0; idx < len(f.lockArea); idx += 1 {
+			b.SetItemBounds(
+				"Wall",
+				fmt.Sprintf("Wall MC %d", f.lockArea[idx]+1),
+				float64(idx*instWidth),
+				float64(f.videoHeight-f.lockAreaHeight),
+				float64(instWidth),
+				float64(f.lockAreaHeight),
+			)
+			visible[f.focus[idx]] = true
+		}
+
+		for idx, visible := range visible {
+			if !visible {
+				b.SetItemBounds(
+					"Wall",
+					fmt.Sprintf("Wall MC %d", idx+1),
+					float64(-f.projWidth),
+					float64(-f.projHeight),
+					float64(instWidth),
+					float64(instHeight),
+				)
+			}
+		}
+		return nil
+	})
 }

@@ -61,10 +61,14 @@ type websocketResponse struct {
 // BatchAsync creates and submits a new request batch in another goroutine. If
 // the batch errors, the error will be logged.
 func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch) error) {
+	batch, err := c.batchCreate(fn)
+	if err != nil {
+		log.Printf("BatchAsync creation failed: %s\n", err)
+		return
+	}
 	go func() {
-		err := c.Batch(mode, fn)
-		if err != nil {
-			log.Printf("BatchAsync error: %s\n", err)
+		if err := c.batchSubmit(mode, &batch); err != nil {
+			log.Printf("BatchAsync submission failed: %s\n", err)
 		}
 	}()
 }
@@ -72,54 +76,12 @@ func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch) error) {
 // Batch creates and *synchronously* submits a new request batch. The provided
 // closure can be used to add requests to the batch. If the closure returns an
 // error or panics, the batch will not be submitted.
-func (c *Client) Batch(mode BatchMode, fn func(*Batch) error) (err error) {
-	batch := newBatch(c)
-
-	// Some of Batch's methods will panic when a scene item ID can not be
-	// found to remove the need for tedious error handling code. Those
-	// panics must be handled here.
-	defer func() {
-		result := recover()
-		if res, ok := result.(error); ok {
-			err = res
-		} else if result != nil {
-			err = errors.Errorf("%+v", result)
-		}
-	}()
-
-	// Run the closure to fill the batch with requests.
-	err = fn(&batch)
+func (c *Client) Batch(mode BatchMode, fn func(*Batch) error) error {
+	batch, err := c.batchCreate(fn)
 	if err != nil {
 		return err
 	}
-	if len(batch.requests) == 0 {
-		return errors.New("batch has no requests")
-	}
-
-	// Submit the batch.
-	id := uuid.New()
-	rawBatch := StringMap{
-		"op": 8,
-		"d": StringMap{
-			"requestId":     id,
-			"haltOnFailure": true,
-			"executionType": mode,
-			"requests":      batch.requests,
-		},
-	}
-	errch := make(chan error, 1)
-	c.mx.Lock()
-	c.err[id] = errch
-	c.mx.Unlock()
-	err = wsjson.Write(context.Background(), c.ws, &rawBatch)
-	if err != nil {
-		c.mx.Lock()
-		delete(c.err, id)
-		c.mx.Unlock()
-		return err
-	}
-
-	return <-errch
+	return c.batchSubmit(mode, &batch)
 }
 
 // Connect attempts to connect to an OBS instance at the given address. If
@@ -152,6 +114,58 @@ func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan er
 	errch := make(chan error, 1)
 	go c.run(ctx, errch)
 	return errch, nil
+}
+
+func (c *Client) batchCreate(fn func(*Batch) error) (b Batch, err error) {
+	batch := newBatch(c)
+
+	// Some of Batch's methods will panic when a scene item ID can not be
+	// found to remove the need for tedious error handling code. Those
+	// panics must be handled here.
+	defer func() {
+		result := recover()
+		if res, ok := result.(error); ok {
+			err = res
+		} else if result != nil {
+			err = errors.Errorf("%+v", result)
+		}
+	}()
+
+	// Run the closure to fill the batch with requests.
+	err = fn(&batch)
+	if err != nil {
+		return batch, err
+	}
+	if len(batch.requests) == 0 {
+		return batch, errors.New("batch has no requests")
+	}
+	return batch, nil
+}
+
+func (c *Client) batchSubmit(mode BatchMode, batch *Batch) error {
+	id := uuid.New()
+	rawBatch := StringMap{
+		"op": 8,
+		"d": StringMap{
+			"requestId":     id,
+			"haltOnFailure": true,
+			"executionType": mode,
+			"requests":      batch.requests,
+		},
+	}
+	errch := make(chan error, 1)
+	c.mx.Lock()
+	c.err[id] = errch
+	c.mx.Unlock()
+	err := wsjson.Write(context.Background(), c.ws, &rawBatch)
+	if err != nil {
+		c.mx.Lock()
+		delete(c.err, id)
+		c.mx.Unlock()
+		return err
+	}
+
+	return <-errch
 }
 
 func (c *Client) identified(ctx context.Context) error {

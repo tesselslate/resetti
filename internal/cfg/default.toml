@@ -148,6 +148,12 @@ enabled = false
 # The size (in instances) to make the focus area.
 focus_size = "3x2"
 
+# The maximum amount of locked instances to display at once.
+lock_count = 6
+
+# The height of the lock area at the bottom of the projector.
+lock_area_height = 320
+
 # More advanced wall settings, mainly aimed towards increasing performance.
 [advanced_wall]
 # Whether or not to use advanced affinity. All other affinity settings below

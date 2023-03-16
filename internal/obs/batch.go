@@ -25,7 +25,7 @@ func newBatch(client *Client) Batch {
 	}
 }
 
-func (b *Batch) SetItemPosition(scene, name string, x, y, w, h float64) {
+func (b *Batch) SetItemBounds(scene, name string, x, y, w, h float64) {
 	id, err := b.client.getSceneItemId(scene, name)
 	if err != nil {
 		panic(err)

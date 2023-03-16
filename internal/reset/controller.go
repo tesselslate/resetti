@@ -118,7 +118,11 @@ func Run(conf cfg.Profile) error {
 	case "standard":
 		c.frontend = &FrontendMulti{}
 	case "wall":
-		c.frontend = &FrontendWall{}
+		if c.conf.Moving.Enabled {
+			c.frontend = &FrontendMoving{}
+		} else {
+			c.frontend = &FrontendWall{}
+		}
 	}
 	err = c.frontend.Setup(FrontendOptions{
 		&conf,

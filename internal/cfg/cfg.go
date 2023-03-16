@@ -64,8 +64,10 @@ type Profile struct {
 		ShowDelay       int    `toml:"show_delay"`
 	} `toml:"wall"`
 	Moving struct {
-		Enabled   bool   `toml:"enabled"`
-		FocusSize string `toml:"focus_size"`
+		Enabled        bool   `toml:"enabled"`
+		FocusSize      string `toml:"focus_size"`
+		LockAreaCount  int    `toml:"lock_count"`
+		LockAreaHeight int    `toml:"lock_area_height"`
 	} `toml:"moving"`
 	AdvancedWall struct {
 		Affinity     bool `toml:"affinity"`
