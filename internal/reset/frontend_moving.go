@@ -561,10 +561,8 @@ func (f *FrontendMoving) rerender() {
 		visible := make([]bool, len(f.instances))
 		instWidth := f.videoWidth / f.focusWidth
 		instHeight := (f.videoHeight - f.lockAreaHeight) / f.focusHeight
-		nf := 0
 		for idx := 0; idx < len(f.focus); idx += 1 {
 			if f.focus[idx] == -1 {
-				nf += 1
 				continue
 			}
 			y := idx / f.focusWidth
