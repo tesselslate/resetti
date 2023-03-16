@@ -355,6 +355,7 @@ func (f *FrontendMoving) handleInput(id int, mod x11.Keymod) error {
 	switch mod {
 	case f.conf.Keys.WallPlay:
 		err := f.wallPlay(id)
+		f.fillFocusGrid(false)
 		f.rerender()
 		return err
 	case f.conf.Keys.WallReset:
@@ -431,7 +432,6 @@ func (f *FrontendMoving) wallPlay(id int) error {
 	}
 	if idx := slices.Index(f.focus, id); idx != -1 {
 		f.focus[idx] = -1
-		f.fillFocusGrid(false)
 	} else if idx = slices.Index(f.lockArea, id); idx != -1 {
 		f.lockArea = slices.Delete(f.lockArea, idx, idx+1)
 	}
