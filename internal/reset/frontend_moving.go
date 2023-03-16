@@ -108,7 +108,7 @@ func (f *FrontendMoving) HandleInput(event x11.Event) error {
 				}
 				// The lock area changes immediately, so allowing for dragging
 				// is counterintuitive.
-				if slices.Index(f.lockArea, id) != -1 {
+				if slices.Contains(f.lockArea, id) {
 					break
 				}
 				f.lastMouseId = id
@@ -155,7 +155,10 @@ func (f *FrontendMoving) HandleUpdate(update mc.Update) error {
 		f.lastPreview[update.Id] = time.Now()
 		// Replace any dirt focus instances.
 		for idx, id := range f.focus {
-			free := slices.Index(f.focus, update.Id) == -1 && slices.Index(f.lockArea, update.Id) == -1
+			if id == -1 {
+				continue
+			}
+			free := !slices.Contains(f.focus, update.Id) && !slices.Contains(f.lockArea, update.Id)
 			if f.states[id].State == mc.StDirt && free {
 				f.focus[idx] = update.Id
 			}
@@ -356,7 +359,9 @@ func (f *FrontendMoving) handleInput(id int, mod x11.Keymod) error {
 		return err
 	case f.conf.Keys.WallReset:
 		f.wallReset(id)
-		f.focus[slices.Index(f.focus, id)] = -1
+		if idx := slices.Index(f.focus, id); idx != -1 {
+			f.focus[slices.Index(f.focus, id)] = -1
+		}
 		f.rerender()
 		return nil
 	case f.conf.Keys.WallResetOthers:
@@ -367,7 +372,7 @@ func (f *FrontendMoving) handleInput(id int, mod x11.Keymod) error {
 			f.focus[slices.Index(f.focus, id)] = -1
 		} else {
 			idx := slices.Index(f.lockArea, id)
-			slices.Delete(f.lockArea, idx, idx+1)
+			f.lockArea = slices.Delete(f.lockArea, idx, idx+1)
 		}
 		f.rerender()
 		return f.setLocked(id, !f.locks[id])
@@ -428,7 +433,7 @@ func (f *FrontendMoving) wallPlay(id int) error {
 		f.focus[idx] = -1
 		f.fillFocusGrid(false)
 	} else if idx = slices.Index(f.lockArea, id); idx != -1 {
-		slices.Delete(f.lockArea, idx, idx+1)
+		f.lockArea = slices.Delete(f.lockArea, idx, idx+1)
 	}
 	// NOTE: Even though the window focus change will cause the wall grabs to
 	// be released, they aren't released in time for Minecraft to grab the
@@ -524,7 +529,7 @@ func (f *FrontendMoving) fillFocusGrid(replaceAll bool) {
 func (f *FrontendMoving) pickBestInstances() []int {
 	instances := make([]int, 0)
 	for idx := 0; idx < len(f.instances); idx += 1 {
-		if slices.Index(f.focus, idx) != -1 || slices.Index(f.lockArea, idx) != -1 {
+		if slices.Contains(f.focus, idx) || slices.Contains(f.lockArea, idx) {
 			continue
 		}
 		instances = append(instances, idx)
@@ -576,7 +581,7 @@ func (f *FrontendMoving) rerender() {
 				float64(instWidth),
 				float64(f.lockAreaHeight),
 			)
-			visible[f.focus[idx]] = true
+			visible[f.lockArea[idx]] = true
 		}
 
 		for idx, visible := range visible {
