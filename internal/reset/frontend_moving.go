@@ -68,7 +68,7 @@ func (f *FrontendMoving) HandleInput(event x11.Event) error {
 						f.wallReset(id)
 					}
 				}
-				f.fillFocusGrid(true)
+				f.fillFocusGrid()
 				f.rerender()
 			} else {
 				f.instances[f.active].PressF3(f.x.GetCurrentTime())
@@ -296,7 +296,14 @@ func (f *FrontendMoving) getId(x, y int) int {
 		return -1
 	}
 	if y >= f.projHeight-f.lockAreaHeight {
-		id := x / (f.projWidth / f.lockAreaCount)
+		lockCount := f.lockAreaCount
+		if lockCount == 0 {
+			if len(f.lockArea) == 0 {
+				return -1
+			}
+			lockCount = len(f.lockArea)
+		}
+		id := x / (f.projWidth / lockCount)
 		if id >= len(f.lockArea) {
 			return -1
 		} else {
@@ -355,14 +362,11 @@ func (f *FrontendMoving) handleInput(id int, mod x11.Keymod) error {
 	switch mod {
 	case f.conf.Keys.WallPlay:
 		err := f.wallPlay(id)
-		f.fillFocusGrid(false)
+		f.fillFocusGrid()
 		f.rerender()
 		return err
 	case f.conf.Keys.WallReset:
 		f.wallReset(id)
-		if idx := slices.Index(f.focus, id); idx != -1 {
-			f.focus[slices.Index(f.focus, id)] = -1
-		}
 		f.rerender()
 		return nil
 	case f.conf.Keys.WallResetOthers:
@@ -483,6 +487,9 @@ func (f *FrontendMoving) wallReset(id int) {
 		return
 	}
 	f.host.ResetInstance(id, f.x.GetCurrentTime())
+	if idx := slices.Index(f.focus, id); idx != -1 {
+		f.focus[slices.Index(f.focus, id)] = -1
+	}
 	if f.hider != nil {
 		f.hider.Hide(id)
 	}
@@ -502,7 +509,7 @@ func (f *FrontendMoving) wallResetOthers(id int) error {
 			f.wallReset(idx)
 		}
 	}
-	f.fillFocusGrid(true)
+	f.fillFocusGrid()
 	f.rerender()
 	return nil
 }
@@ -510,12 +517,14 @@ func (f *FrontendMoving) wallResetOthers(id int) error {
 // Moving wall layout code
 
 // fillFocusGrid refills the focus grid with new instances.
-func (f *FrontendMoving) fillFocusGrid(replaceAll bool) {
+func (f *FrontendMoving) fillFocusGrid() {
 	nextPicks := f.pickBestInstances()
+	c := 0
 	for idx, id := range f.focus {
-		if !replaceAll && id != -1 {
+		if id != -1 {
 			continue
 		}
+		c += 1
 		if len(nextPicks) == 0 {
 			return
 		}
@@ -534,17 +543,14 @@ func (f *FrontendMoving) pickBestInstances() []int {
 		}
 		instances = append(instances, idx)
 	}
-	slices.SortFunc(instances, func(a, b int) bool {
-		if f.states[a].State < f.states[b].State {
-			return true
+	slices.SortStableFunc(instances, func(a, b int) bool {
+		if f.states[a].State != f.states[b].State {
+			return f.states[a].State > f.states[b].State
 		}
-		if f.states[a].Progress < f.states[b].Progress {
-			return true
+		if f.states[a].Progress != f.states[b].Progress {
+			return f.states[a].Progress > f.states[b].Progress
 		}
-		if f.lastPreview[a].UnixMilli() > f.lastPreview[b].UnixMilli() {
-			return true
-		}
-		return false
+		return f.lastPreview[a].UnixMilli() > f.lastPreview[b].UnixMilli()
 	})
 	return instances
 }
@@ -555,8 +561,10 @@ func (f *FrontendMoving) rerender() {
 		visible := make([]bool, len(f.instances))
 		instWidth := f.videoWidth / f.focusWidth
 		instHeight := (f.videoHeight - f.lockAreaHeight) / f.focusHeight
+		nf := 0
 		for idx := 0; idx < len(f.focus); idx += 1 {
 			if f.focus[idx] == -1 {
+				nf += 1
 				continue
 			}
 			y := idx / f.focusWidth
@@ -571,17 +579,23 @@ func (f *FrontendMoving) rerender() {
 			)
 			visible[f.focus[idx]] = true
 		}
-		instWidth = f.videoWidth / f.lockAreaCount
-		for idx := 0; idx < len(f.lockArea); idx += 1 {
-			b.SetItemBounds(
-				"Wall",
-				fmt.Sprintf("Wall MC %d", f.lockArea[idx]+1),
-				float64(idx*instWidth),
-				float64(f.videoHeight-f.lockAreaHeight),
-				float64(instWidth),
-				float64(f.lockAreaHeight),
-			)
-			visible[f.lockArea[idx]] = true
+		lockCount := f.lockAreaCount
+		if lockCount == 0 {
+			lockCount = len(f.lockArea)
+		}
+		if lockCount != 0 {
+			instWidth = f.videoWidth / lockCount
+			for idx := 0; idx < len(f.lockArea); idx += 1 {
+				b.SetItemBounds(
+					"Wall",
+					fmt.Sprintf("Wall MC %d", f.lockArea[idx]+1),
+					float64(idx*instWidth),
+					float64(f.videoHeight-f.lockAreaHeight),
+					float64(instWidth),
+					float64(f.lockAreaHeight),
+				)
+				visible[f.lockArea[idx]] = true
+			}
 		}
 
 		for idx, visible := range visible {

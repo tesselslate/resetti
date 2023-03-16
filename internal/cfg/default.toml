@@ -148,7 +148,8 @@ enabled = false
 # The size (in instances) to make the focus area.
 focus_size = "3x2"
 
-# The maximum amount of locked instances to display at once.
+# The maximum amount of locked instances to display at once. Set to 0 to
+# stretch all locked instances to fill the locked area.
 lock_count = 6
 
 # The height of the lock area at the bottom of the projector.
