@@ -289,7 +289,7 @@ func runCgroupScript(conf *cfg.Profile) error {
 		}
 	}
 	if suidBin == "" {
-		return errors.Wrap(err, "no suid binary found")
+		return errors.New("no suid binary found")
 	}
 
 	// Run the script.
