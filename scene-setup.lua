@@ -151,7 +151,7 @@ function create_wall_scene()
     end
 
     if moving then
-        -- TODO: Color source indicators
+        -- TODO
     end
 
     O.obs_scene_release(scene)

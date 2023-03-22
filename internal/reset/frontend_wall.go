@@ -61,23 +61,24 @@ func (f *FrontendWall) HandleInput(event x11.Event) error {
 				}
 			} else {
 				f.instances[f.active].PressF3(f.x.GetCurrentTime())
-				f.host.ResetInstance(f.active, f.x.GetCurrentTime()+5)
-				if f.hider != nil {
-					f.hider.Hide(f.active)
-				}
-				if err := f.instances[f.active].Stretch(f.conf); err != nil {
-					return err
-				}
-				go runHook(f.conf.Hooks.Reset)
-				time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
-				if f.conf.Wall.GoToLocked {
-					for idx, state := range f.states {
-						if f.locks[idx] && state.State == mc.StIdle {
-							return f.wallPlay(idx)
+				if f.host.ResetInstance(f.active, f.x.GetCurrentTime()+5) {
+					if f.hider != nil {
+						f.hider.Hide(f.active)
+					}
+					if err := f.instances[f.active].Stretch(f.conf); err != nil {
+						return err
+					}
+					go runHook(f.conf.Hooks.Reset)
+					time.Sleep(time.Millisecond * time.Duration(f.conf.Reset.Delay))
+					if f.conf.Wall.GoToLocked {
+						for idx, state := range f.states {
+							if f.locks[idx] && state.State == mc.StIdle {
+								return f.wallPlay(idx)
+							}
 						}
 					}
+					return f.gotoWall()
 				}
-				return f.gotoWall()
 			}
 		default:
 			if f.active != -1 {
@@ -494,11 +495,12 @@ func (f *FrontendWall) wallReset(id int) {
 	if f.locks[id] || state == mc.StDirt || inGrace {
 		return
 	}
-	f.host.ResetInstance(id, f.x.GetCurrentTime())
-	if f.hider != nil {
-		f.hider.Hide(id)
+	if f.host.ResetInstance(id, f.x.GetCurrentTime()) {
+		if f.hider != nil {
+			f.hider.Hide(id)
+		}
+		go runHook(f.conf.Hooks.WallReset)
 	}
-	go runHook(f.conf.Hooks.WallReset)
 }
 
 // wallResetOthers attempts to play one instance and reset all others.

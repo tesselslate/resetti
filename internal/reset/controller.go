@@ -119,7 +119,7 @@ func Run(conf cfg.Profile) error {
 		c.frontend = &FrontendMulti{}
 	case "wall":
 		if c.conf.Moving.Enabled {
-			c.frontend = &FrontendMoving{}
+			panic("TODO")
 		} else {
 			c.frontend = &FrontendWall{}
 		}
@@ -162,12 +162,15 @@ func (c *Controller) SetInstancePriority(id int, priority bool) {
 }
 
 // ResetInstance resets the given instance.
-func (c *Controller) ResetInstance(id int, time uint32) {
+func (c *Controller) ResetInstance(id int, time uint32) bool {
 	if c.conf.AdvancedWall.Affinity {
 		err := c.affinity.Update(id, mc.InstanceState{State: mc.StDirt})
 		if err != nil {
 			log.Printf("Failed to set affinity on reset: %s\n", err)
 		}
+	}
+	if c.states[id].Progress > 90 {
+		return false
 	}
 	if c.states[id].State == mc.StPreview {
 		c.instances[id].LeavePreview(time)
@@ -175,6 +178,7 @@ func (c *Controller) ResetInstance(id int, time uint32) {
 		c.instances[id].Reset(time)
 	}
 	c.counter.Increment()
+	return true
 }
 
 // run runs the main loop.

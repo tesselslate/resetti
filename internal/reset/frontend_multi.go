@@ -34,17 +34,18 @@ func (f *FrontendMulti) HandleInput(event x11.Event) error {
 	case f.conf.Keys.Reset:
 		next := (f.active + 1) % len(f.instances)
 		f.instances[next].FocusAndUnpause(f.x.GetCurrentTime(), f.states[next].State == mc.StIdle)
-		f.host.ResetInstance(f.active, f.x.GetCurrentTime())
-		if f.obs != nil {
-			f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
-				for i := 1; i <= len(f.instances); i += 1 {
-					b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == next)
-				}
-				return nil
-			})
+		if f.host.ResetInstance(f.active, f.x.GetCurrentTime()) {
+			if f.obs != nil {
+				f.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+					for i := 1; i <= len(f.instances); i += 1 {
+						b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == next)
+					}
+					return nil
+				})
+			}
+			go runHook(f.conf.Hooks.Reset)
+			f.active = next
 		}
-		go runHook(f.conf.Hooks.Reset)
-		f.active = next
 	}
 	return nil
 }
