@@ -169,7 +169,7 @@ func (c *Controller) ResetInstance(id int, time uint32) bool {
 			log.Printf("Failed to set affinity on reset: %s\n", err)
 		}
 	}
-	if c.states[id].Progress > 90 {
+	if c.states[id].State == mc.StPreview && c.states[id].Progress > 90 {
 		return false
 	}
 	if c.states[id].State == mc.StPreview {
