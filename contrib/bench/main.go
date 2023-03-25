@@ -2,12 +2,13 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ type Options struct {
 	ResetCount     int
 	ResetOnPreview bool
 	PauseAfter     bool
+	Pprof          bool
 }
 
 func main() {
@@ -57,6 +59,12 @@ func main() {
 		true,
 		"Whether or not to pause all instances before exiting.",
 	)
+	flag.BoolVar(
+		&opts.Pprof,
+		"profile",
+		false,
+		"Whether or not to collect profiling information.",
+	)
 	flag.Parse()
 	os.Exit(run(opts))
 }
@@ -84,17 +92,31 @@ func run(opts Options) int {
 		fmt.Println(err)
 		return 1
 	}
-	states := make([]mc.InstanceState, 0)
 	evtch := make(chan mc.Update, 16*len(instances))
 	errch := make(chan error, len(instances))
-	for _, info := range instances {
-		reader, state, err := mc.NewLogReader(info)
+	reader, states, err := mc.NewLogReader(instances)
+	if err != nil {
+		fmt.Println(err)
+		return 1
+	}
+	go reader.Run(errch, evtch)
+
+	// Profiling
+	if opts.Pprof {
+		profile, err := os.OpenFile(fmt.Sprintf("/tmp/resetti-prof-%d", rand.Uint64()), os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			fmt.Println(err)
 			return 1
 		}
-		states = append(states, state)
-		go reader.Run(context.Background(), errch, evtch)
+		if err = pprof.StartCPUProfile(profile); err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer func() {
+			pprof.StopCPUProfile()
+			fmt.Println("Wrote profile:", profile.Name())
+			_ = profile.Close()
+		}()
 	}
 
 	// Warmup instances

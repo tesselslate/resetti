@@ -22,7 +22,7 @@ type Controller struct {
 	conf      cfg.Profile
 	instances []mc.Instance
 	states    []mc.InstanceState
-	readers   []mc.LogReader
+	reader    mc.LogReader
 
 	obs *obs.Client
 	x   *x11.Client
@@ -79,8 +79,6 @@ func Run(conf cfg.Profile) error {
 		return errors.Wrap(err, "find instances")
 	}
 	c.instances = make([]mc.Instance, 0)
-	c.states = make([]mc.InstanceState, 0)
-	c.readers = make([]mc.LogReader, 0)
 	updatech := make(chan mc.Update, 16*len(infos))
 	errch := make(chan error, len(infos))
 	c.pause = make(chan int, len(infos))
@@ -92,14 +90,12 @@ func Run(conf cfg.Profile) error {
 			return errors.Wrap(err, "click instance")
 		}
 		c.instances = append(c.instances, instance)
-		reader, state, err := mc.NewLogReader(info)
-		if err != nil {
-			return errors.Wrap(err, "create log reader")
-		}
-		c.states = append(c.states, state)
-		c.readers = append(c.readers, reader)
-		go reader.Run(ctx, errch, updatech)
 	}
+	c.reader, c.states, err = mc.NewLogReader(infos)
+	if err != nil {
+		return errors.Wrap(err, "start log reader")
+	}
+	go c.reader.Run(errch, updatech)
 
 	// Setup miscellaneous resources (reset counter, affinity manager.)
 	c.counter, err = NewCounter(ctx, &wg, conf)
