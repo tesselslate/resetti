@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -20,6 +21,7 @@ import (
 
 type Options struct {
 	Affinity       string
+	Fancy          bool
 	InstanceCount  int
 	ResetCount     int
 	ResetOnPreview bool
@@ -34,6 +36,12 @@ func main() {
 		"affinity",
 		"none",
 		"The affinity type to use (sequence, ccx, none).",
+	)
+	flag.BoolVar(
+		&opts.Fancy,
+		"fancy",
+		false,
+		"Show a fancy progress display or plain text output.",
 	)
 	flag.IntVar(
 		&opts.InstanceCount,
@@ -119,6 +127,21 @@ func run(opts Options) int {
 		}()
 	}
 
+	// Log output
+	if opts.Fancy {
+		fh, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		log.SetOutput(fh)
+		defer func() {
+			_ = fh.Close()
+		}()
+	} else {
+		log.SetOutput(os.Stderr)
+	}
+
 	// Warmup instances
 	for _, instance := range instances {
 		if err := x.Click(instance.Wid); err != nil {
@@ -131,9 +154,29 @@ func run(opts Options) int {
 		x.SendKeyPress(instance.ResetKey.Code, instance.Wid, x.GetCurrentTime())
 	}
 
-	// Main loop
 	resets := 0
-	start := time.Now()
+	var start time.Time
+	printProgress := func(instance int) {
+		since := time.Since(start)
+		if !opts.Fancy {
+			fmt.Printf("%d\t%d\t%d\n", resets, instance, since.Milliseconds())
+			return
+		}
+		rps := float64(resets) / since.Seconds()
+		rem := opts.ResetCount - resets
+		est := float64(rem) / rps
+		fmt.Printf(
+			"\r (%d/%d)\t%.1f / %.1fs (%.1f/s)",
+			resets,
+			opts.ResetCount,
+			since.Seconds(),
+			since.Seconds()+est,
+			rps,
+		)
+	}
+
+	// Main loop
+	start = time.Now()
 	for resets != opts.ResetCount {
 		select {
 		case update := <-evtch:
@@ -147,7 +190,7 @@ func run(opts Options) int {
 					x.GetCurrentTime(),
 				)
 				resets += 1
-				fmt.Println(resets, time.Since(start))
+				printProgress(update.Id)
 			} else if last != mc.StIdle && next == mc.StIdle {
 				x.SendKeyPress(
 					instances[update.Id].ResetKey.Code,
@@ -155,7 +198,7 @@ func run(opts Options) int {
 					x.GetCurrentTime(),
 				)
 				resets += 1
-				fmt.Println(resets, time.Since(start))
+				printProgress(update.Id)
 			}
 		case err := <-errch:
 			fmt.Println(err)
