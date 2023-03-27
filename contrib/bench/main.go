@@ -166,7 +166,7 @@ func run(opts Options) int {
 		rem := opts.ResetCount - resets
 		est := float64(rem) / rps
 		fmt.Printf(
-			"\r (%d/%d)\t%.1f / %.1fs (%.1f/s)",
+			"\r\x1B[K (%d/%d)\t%.1f / %.1fs\t(%.1f/s)",
 			resets,
 			opts.ResetCount,
 			since.Seconds(),
