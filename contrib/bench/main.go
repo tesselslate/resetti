@@ -20,13 +20,13 @@ import (
 )
 
 type Options struct {
-	Affinity       string
-	Fancy          bool
-	InstanceCount  int
-	ResetCount     int
-	ResetOnPreview bool
-	PauseAfter     bool
-	Pprof          bool
+	Affinity      string
+	Fancy         bool
+	InstanceCount int
+	ResetCount    int
+	ResetAt       int
+	PauseAfter    bool
+	Pprof         bool
 }
 
 func main() {
@@ -55,11 +55,11 @@ func main() {
 		2000,
 		"The number of resets to perform.",
 	)
-	flag.BoolVar(
-		&opts.ResetOnPreview,
-		"reset-preview",
-		true,
-		"Whether to reset instances as soon as they reach the preview or finish generating.",
+	flag.IntVar(
+		&opts.ResetAt,
+		"reset-percent",
+		0,
+		"What percent to reset instances at. 0 for preview, 100 for full load.",
 	)
 	flag.BoolVar(
 		&opts.PauseAfter,
@@ -137,6 +137,8 @@ func run(opts Options) int {
 		log.SetOutput(fh)
 		defer func() {
 			_ = fh.Close()
+			// Print a newline since the progress bar does not.
+			fmt.Println()
 		}()
 	} else {
 		log.SetOutput(os.Stderr)
@@ -180,25 +182,39 @@ func run(opts Options) int {
 	for resets != opts.ResetCount {
 		select {
 		case update := <-evtch:
-			last := states[update.Id].State
-			next := update.State.State
+			last := states[update.Id]
+			next := update.State
 			states[update.Id] = update.State
-			if opts.ResetOnPreview && last != mc.StPreview && next == mc.StPreview {
-				x.SendKeyPress(
-					instances[update.Id].PreviewKey.Code,
-					instances[update.Id].Wid,
-					x.GetCurrentTime(),
-				)
-				resets += 1
-				printProgress(update.Id)
-			} else if last != mc.StIdle && next == mc.StIdle {
-				x.SendKeyPress(
-					instances[update.Id].ResetKey.Code,
-					instances[update.Id].Wid,
-					x.GetCurrentTime(),
-				)
-				resets += 1
-				printProgress(update.Id)
+			if opts.ResetAt == 100 {
+				if last.State != mc.StIdle && next.State == mc.StIdle {
+					x.SendKeyPress(
+						instances[update.Id].ResetKey.Code,
+						instances[update.Id].Wid,
+						x.GetCurrentTime(),
+					)
+					resets += 1
+					printProgress(update.Id)
+				}
+			} else if opts.ResetAt == 0 {
+				if last.State != mc.StPreview && next.State == mc.StPreview {
+					x.SendKeyPress(
+						instances[update.Id].PreviewKey.Code,
+						instances[update.Id].Wid,
+						x.GetCurrentTime(),
+					)
+					resets += 1
+					printProgress(update.Id)
+				}
+			} else {
+				if next.State != mc.StDirt && next.Progress >= opts.ResetAt && last.Progress < opts.ResetAt {
+					x.SendKeyPress(
+						instances[update.Id].ResetKey.Code,
+						instances[update.Id].Wid,
+						x.GetCurrentTime(),
+					)
+					resets += 1
+					printProgress(update.Id)
+				}
 			}
 		case err := <-errch:
 			fmt.Println(err)
