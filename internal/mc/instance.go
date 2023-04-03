@@ -30,12 +30,6 @@ type InstanceInfo struct {
 	PreviewKey x11.Key       // Leave preview key
 }
 
-// InstanceState contains information about the current state of the instance.
-type InstanceState struct {
-	State    int // Current state of the instance
-	Progress int // World generation progress (0 to 100)
-}
-
 // Instance represents a single Minecraft instance and takes care of reading its
 // log file and performing actions on it.
 type Instance struct {
@@ -44,9 +38,15 @@ type Instance struct {
 	x    *x11.Client
 }
 
+// State contains information about the current state of an instance.
+type State struct {
+	Type     int // Current state of the instance
+	Progress int // World generation progress (0 to 100)
+}
+
 // Update represents an update to the state of an Instance.
 type Update struct {
-	State InstanceState
+	State State
 	Id    int
 }
 

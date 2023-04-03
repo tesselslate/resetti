@@ -29,21 +29,21 @@ type LogReader struct {
 }
 
 type instanceReader struct {
-	state  InstanceState
+	state  State
 	path   string
 	file   *os.File
 	reader *bufio.Reader
 }
 
 // NewLogReader creates a new LogReader for the given instances.
-func NewLogReader(info []InstanceInfo) (LogReader, []InstanceState, error) {
+func NewLogReader(info []InstanceInfo) (LogReader, []State, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return LogReader{}, nil, errors.Wrap(err, "create watcher")
 	}
 
 	readers := make([]instanceReader, 0)
-	states := make([]InstanceState, 0)
+	states := make([]State, 0)
 	for idx, info := range info {
 		logFile := info.Dir + "/logs/latest.log"
 		file, err := os.Open(logFile)
@@ -55,7 +55,7 @@ func NewLogReader(info []InstanceInfo) (LogReader, []InstanceState, error) {
 		}
 		r := bufio.NewReader(file)
 		reader := instanceReader{
-			InstanceState{},
+			State{},
 			logFile,
 			file,
 			r,
@@ -134,11 +134,11 @@ func (r *instanceReader) process() (bool, error) {
 		if strings.Contains(line, "CHAT") {
 			continue
 		} else if strings.Contains(line, log_reset_rs) || strings.Contains(line, log_reset_ss) {
-			r.state.State = StDirt
+			r.state.Type = StDirt
 			r.state.Progress = 0
 			updated = true
 		} else if strings.Contains(line, log_preview) {
-			r.state.State = StPreview
+			r.state.Type = StPreview
 			updated = true
 		} else if strings.Contains(line, log_progress) {
 			// [XX:XX:XX] [Render thread/INFO]: Preparing spawn area: X%
@@ -154,7 +154,7 @@ func (r *instanceReader) process() (bool, error) {
 			r.state.Progress = progress
 			updated = true
 		} else if strings.Contains(line, log_loaded) {
-			r.state.State = StIdle
+			r.state.Type = StIdle
 			updated = true
 		}
 	}
@@ -185,9 +185,7 @@ func (r *instanceReader) readLine() (string, error) {
 			buf = append(buf, remainder...)
 			switch err {
 			case io.EOF:
-				if tries == 5 {
-					return "", errors.New("read line (5 tries)")
-				}
+				continue
 			case nil:
 				log.Printf("succeeded after %d tries\n", tries+1)
 				return string(buf), nil
@@ -195,8 +193,8 @@ func (r *instanceReader) readLine() (string, error) {
 				return "", err
 			}
 		}
+		return "", errors.New("read failed (5 tries)")
 	default:
 		return "", err
 	}
-	panic("unreachable")
 }

@@ -186,7 +186,7 @@ func run(opts Options) int {
 			next := update.State
 			states[update.Id] = update.State
 			if opts.ResetAt == 100 {
-				if last.State != mc.StIdle && next.State == mc.StIdle {
+				if last.Type != mc.StIdle && next.Type == mc.StIdle {
 					x.SendKeyPress(
 						instances[update.Id].ResetKey.Code,
 						instances[update.Id].Wid,
@@ -196,7 +196,7 @@ func run(opts Options) int {
 					printProgress(update.Id)
 				}
 			} else if opts.ResetAt == 0 {
-				if last.State != mc.StPreview && next.State == mc.StPreview {
+				if last.Type != mc.StPreview && next.Type == mc.StPreview {
 					x.SendKeyPress(
 						instances[update.Id].PreviewKey.Code,
 						instances[update.Id].Wid,
@@ -206,7 +206,7 @@ func run(opts Options) int {
 					printProgress(update.Id)
 				}
 			} else {
-				if next.State != mc.StDirt && next.Progress >= opts.ResetAt && last.Progress < opts.ResetAt {
+				if next.Type != mc.StDirt && next.Progress >= opts.ResetAt && last.Progress < opts.ResetAt {
 					x.SendKeyPress(
 						instances[update.Id].ResetKey.Code,
 						instances[update.Id].Wid,
@@ -230,8 +230,8 @@ func run(opts Options) int {
 	for paused != len(instances) {
 		select {
 		case update := <-evtch:
-			last := states[update.Id].State
-			next := update.State.State
+			last := states[update.Id].Type
+			next := update.State.Type
 			states[update.Id] = update.State
 			if last != mc.StIdle && next == mc.StIdle {
 				time.Sleep(50 * time.Millisecond)
