@@ -1,15 +1,12 @@
 package mc
 
 import (
-	"log"
-	"time"
-
+	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
-	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
-// The set of possible states an instance can be in.
+// Instance state types
 const (
 	StMenu    int = iota // Main menu
 	StDirt               // Dirt world generation screen
@@ -30,124 +27,41 @@ type InstanceInfo struct {
 	PreviewKey x11.Key       // Leave preview key
 }
 
-// Instance represents a single Minecraft instance and takes care of reading its
-// log file and performing actions on it.
-type Instance struct {
-	InstanceInfo
-	conf *cfg.Profile
-	x    *x11.Client
-}
-
 // State contains information about the current state of an instance.
 type State struct {
-	Type     int // Current state of the instance
-	Progress int // World generation progress (0 to 100)
+	// Current main state (e.g. dirt, preview)
+	Type int
+
+	// World generation progress (0 to 100)
+	Progress int
+
+	// Whether or not the instance is in a menu (e.g. pause, inventory).
+	// Requires WorldPreview state reader to detect.
+	Menu bool
 }
 
-// Update represents an update to the state of an Instance.
+// The stateReader interface provides a method for obtaining the state of an
+// instance (e.g. generating, previewing, ingame.)
+//
+// There are currently two implementations: the traditional log reader, and the
+// newer wpstateout.txt reader. The wpstateout.txt reader is preferred and
+// should be used whenever possible, as it is simpler, faster, and more
+// featureful.
+type stateReader interface {
+	// Path returns the path of the file being read.
+	Path() string
+
+	// Process reads any changes to the file and returns any state updates.
+	Process() (state State, updated bool, err error)
+
+	// ProcessEvent handles a non-modification change to the file, such as it
+	// being deleted or moved. A non-nil error return signals an irrecoverable
+	// failure.
+	ProcessEvent(fsnotify.Op) error
+}
+
+// Update contains a change to the state of a specific instance.
 type Update struct {
 	State State
 	Id    int
-}
-
-// NewInstance creates a new Instance from the given instance information.
-func NewInstance(info InstanceInfo, conf *cfg.Profile, x *x11.Client) Instance {
-	return Instance{
-		info,
-		conf,
-		x,
-	}
-}
-
-// Click clicks on the instance's window.
-func (i *Instance) Click() error {
-	return i.x.Click(i.Wid)
-}
-
-// Focus focuses the instance's window. If an error occurs, it will be logged.
-func (i *Instance) Focus() {
-	if err := i.x.FocusWindow(i.Wid); err != nil {
-		log.Printf("Instance %d failed to focus: %s\n", i.Id, err)
-	}
-}
-
-// FocusAndUnpause focuses the instance's window and then unpauses if the user
-// has set `unpause_on_focus` in their config. If an error occurs, it will be
-// logged.
-func (i *Instance) FocusAndUnpause(timestamp uint32, idle bool) {
-	i.Focus()
-
-	time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.PauseDelay))
-	if i.conf.Reset.UnpauseFocus && idle {
-		i.x.SendKeyPress(
-			x11.KeyEsc,
-			i.Wid,
-			timestamp,
-		)
-	}
-	if i.conf.Wall.HideGui && i.conf.General.ResetType == "wall" {
-		i.x.SendKeyPress(
-			x11.KeyF1,
-			i.Wid,
-			timestamp+2,
-		)
-	}
-}
-
-// LeavePreview presses the instance's leave preview key.
-func (i *Instance) LeavePreview(timestamp uint32) {
-	i.x.SendKeyPress(i.PreviewKey.Code, i.Wid, timestamp)
-}
-
-// PressEsc presses escape to [un]pause the instance. If an error occurs, it will
-// be logged.
-func (i *Instance) PressEsc(timestamp uint32) {
-	i.x.SendKeyPress(x11.KeyEsc, i.Wid, timestamp)
-}
-
-// PressF3Esc presses F3+Escape to pause the instance without the pause menu.
-// If an error occurs, it will be logged.
-func (i *Instance) PressF3Esc(timestamp uint32) {
-	i.x.SendKeyDown(x11.KeyF3, i.Wid, timestamp)
-	i.x.SendKeyPress(x11.KeyEsc, i.Wid, timestamp+1)
-	i.x.SendKeyUp(x11.KeyF3, i.Wid, timestamp+3)
-}
-
-// PressF3 presses F3 to hide the pie chart.
-func (i *Instance) PressF3(timestamp uint32) {
-	i.x.SendKeyPress(x11.KeyF3, i.Wid, timestamp)
-}
-
-// Reset presses the instance's reset key. If an error occurs, it will be
-// logged.
-func (i *Instance) Reset(timestamp uint32) {
-	i.x.SendKeyPress(i.ResetKey.Code, i.Wid, timestamp)
-}
-
-// Stretch stretches the instance's window.
-func (i *Instance) Stretch(conf *cfg.Profile) error {
-	if !conf.Wall.StretchWindows {
-		return nil
-	}
-	return i.x.MoveWindow(
-		i.Wid,
-		uint32(conf.Wall.StretchRes.X),
-		uint32(conf.Wall.StretchRes.Y),
-		uint32(conf.Wall.StretchRes.Width),
-		uint32(conf.Wall.StretchRes.Height),
-	)
-}
-
-// Unstretch resizes the window back to its normal dimensions.
-func (i *Instance) Unstretch(conf *cfg.Profile) error {
-	if !conf.Wall.StretchWindows {
-		return nil
-	}
-	return i.x.MoveWindow(
-		i.Wid,
-		uint32(conf.Wall.UnstretchRes.X),
-		uint32(conf.Wall.UnstretchRes.Y),
-		uint32(conf.Wall.UnstretchRes.Width),
-		uint32(conf.Wall.UnstretchRes.Height),
-	)
 }

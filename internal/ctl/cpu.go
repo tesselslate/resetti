@@ -197,9 +197,9 @@ func writeCpuSet(group string, cpus []int) error {
 //
 // Each instance can be in one of several affinity groups and is moved between
 // groups when updates to its state are received. See the documentation for the
-// above constants for more information on each state.
+// affinity group constants for more information on each group.
 type cpuManager struct {
-	anyActive bool // whether there is an active instance
+	anyActive bool // Whether there is an active instance
 	pids      []int
 	states    []cpuState
 
@@ -213,11 +213,11 @@ type cpuManager struct {
 // properties.
 type cpuState struct {
 	mc.State
-	group    int  // affinity group
-	priority bool // move to high priority when appropriate
+	group    int  // Affinity group
+	priority bool // Move to high priority when appropriate
 }
 
-// Update updates the affinity state of the given instance as needed based on
+// Update updates the affinity group of the given instance as needed based on
 // the state change.
 func (c *cpuManager) Update(update mc.Update) {
 	c.updates <- update
@@ -252,7 +252,9 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 			c.moveInstance(update.Id, affHigh)
 		}
 	case mc.StPreview:
-		if update.State.Progress > c.conf.AdvancedWall.LowThreshold {
+		nowOver := update.State.Progress > c.conf.AdvancedWall.LowThreshold
+		wasUnder := c.states[update.Id].Progress <= c.conf.AdvancedWall.LowThreshold
+		if wasUnder && nowOver {
 			c.moveInstance(update.Id, affLow)
 		} else {
 			if c.anyActive {
@@ -264,6 +266,7 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 	case mc.StIngame:
 		c.moveInstance(update.Id, affActive)
 	}
+	c.states[update.Id].State = update.State
 }
 
 // moveInstance attempts to move the given instance to the given group. If

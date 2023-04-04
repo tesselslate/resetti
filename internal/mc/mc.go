@@ -83,7 +83,7 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 	}
 	if version < 14 {
 		// TODO: Pre-1.14 is still unsupported.
-		return InstanceInfo{}, err
+		return InstanceInfo{}, errors.New("only 1.14 and newer are currently supported")
 	}
 
 	// Get the Atum and WorldPreview keys from the user's options.
