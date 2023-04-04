@@ -324,8 +324,8 @@ func (c *cpuManager) updateAffinity(id int) {
 	}
 }
 
-// run handles state updates and moves instances between affinity groups.
-func (c *cpuManager) run(ctx context.Context) {
+// Run handles state updates and moves instances between affinity groups.
+func (c *cpuManager) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
