@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
 )
 
@@ -32,13 +32,13 @@ func newCounter(conf *cfg.Profile) (counter, error) {
 
 	file, err := os.OpenFile(conf.General.CountPath, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
-		return counter{}, errors.Wrap(err, "open file")
+		return counter{}, fmt.Errorf("open file: %w", err)
 	}
 	buf := make([]byte, 32)
 	n, err := file.Read(buf)
 	if err != nil && err != io.EOF {
 		_ = file.Close()
-		return counter{}, errors.Wrap(err, "read file")
+		return counter{}, fmt.Errorf("read file: %w", err)
 	}
 	resets := 0
 	if n != 0 {
@@ -46,7 +46,7 @@ func newCounter(conf *cfg.Profile) (counter, error) {
 		resets, err = strconv.Atoi(strings.TrimSpace(string(buf)))
 		if err != nil {
 			_ = file.Close()
-			return counter{}, errors.Wrap(err, "parse reset count")
+			return counter{}, fmt.Errorf("parse reset count: %w", err)
 		}
 	}
 

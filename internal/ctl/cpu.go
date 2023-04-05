@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 )
@@ -117,11 +117,11 @@ func prepareCgroups(conf *cfg.Profile) error {
 		// every time even when it has not been modified)
 		path, err := cfg.GetFolder()
 		if err != nil {
-			return errors.Wrap(err, "get config folder")
+			return fmt.Errorf("get config folder: %w", err)
 		}
 		path += "/cgroup_setup.sh"
 		if err := os.WriteFile(path, cgroupScript, 0644); err != nil {
-			return errors.Wrap(err, "write cgroup script")
+			return fmt.Errorf("write cgroup script: %w", err)
 		}
 		var suidBin string
 		for _, bin := range suidBinaries {
@@ -136,7 +136,7 @@ func prepareCgroups(conf *cfg.Profile) error {
 		}
 		cmd := exec.Command(suidBin, "sh", path, strings.Join(shouldExist, " "))
 		if err := cmd.Run(); err != nil {
-			return errors.Wrap(err, "run cgroup script")
+			return fmt.Errorf("run cgroup script: %w", err)
 		}
 	}
 

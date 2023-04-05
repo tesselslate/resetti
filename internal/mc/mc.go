@@ -3,6 +3,7 @@
 package mc
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,9 +12,20 @@ import (
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
-	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
+
+// InstanceInfo contains information about how to interact with a Minecraft
+// instance, such as its game directory and window ID.
+type InstanceInfo struct {
+	Id         int           // Instance number
+	Pid        uint32        // Process ID
+	Wid        xproto.Window // Window ID
+	Dir        string        // .minecraft directory
+	Version    int           // Minecraft version
+	ResetKey   x11.Key       // Atum reset key
+	PreviewKey x11.Key       // Leave preview key
+}
 
 // FindInstances returns a sorted list of all running Minecraft instances,
 // or an error if the running instances do not form a list.
@@ -110,7 +122,7 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 		key := x11.Key{}
 		keycode, ok := x11.KeycodesMc[keyName]
 		if !ok {
-			return InstanceInfo{}, errors.Errorf("unknown keycode %s", keyName)
+			return InstanceInfo{}, fmt.Errorf("unknown keycode %s", keyName)
 		}
 		key.Code = keycode
 
@@ -136,8 +148,20 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 // isMinecraftWindow determines whether or not the window is a Minecraft
 // window.
 func isMinecraftWindow(x *x11.Client, win xproto.Window) bool {
+	// Check that the window has "Minecraft" in its class.
+	//
+	// There are more checks which could be performed here (e.g. checking that
+	// the executable is java, and that the process working directory is a
+	// valid Minecraft directory), but any false positives are weeded out when
+	// getting instance info.
 	class, err := x.GetWindowClass(win)
-	return err == nil && strings.Contains(class, "Minecraft")
+	if err != nil {
+		return false
+	}
+	if !strings.Contains(class, "Minecraft") {
+		return false
+	}
+	return true
 }
 
 // sortInstances returns a sorted list of all open instances, or an error if

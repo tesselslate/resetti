@@ -2,6 +2,8 @@ package mc
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -10,7 +12,6 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/pkg/errors"
 )
 
 // Log lines
@@ -107,14 +108,14 @@ func newLogReader(inst InstanceInfo) (logReader, State, error) {
 	path := inst.Dir + "/logs/latest.log"
 	file, err := os.Open(path)
 	if err != nil {
-		return logReader{}, State{}, errors.Wrap(err, "open log")
+		return logReader{}, State{}, fmt.Errorf("open log: %w", err)
 	}
 	r := bufio.NewReader(file)
 	reader := logReader{State{}, path, file, r}
 	state, _, err := reader.Process()
 	if err != nil {
 		_ = file.Close()
-		return logReader{}, State{}, errors.Wrap(err, "read state")
+		return logReader{}, State{}, fmt.Errorf("read state: %w", err)
 	}
 	return reader, state, nil
 }
@@ -124,12 +125,12 @@ func newWpstateReader(inst InstanceInfo) (wpstateReader, State, error) {
 	path := inst.Dir + "/wpstateout.txt"
 	file, err := os.Open(path)
 	if err != nil {
-		return wpstateReader{}, State{}, errors.Wrap(err, "open log")
+		return wpstateReader{}, State{}, fmt.Errorf("open log: %w", err)
 	}
 	reader := wpstateReader{State{}, path, file}
 	state, _, err := reader.Process()
 	if err != nil {
-		return wpstateReader{}, State{}, errors.Wrap(err, "read state")
+		return wpstateReader{}, State{}, fmt.Errorf("read state: %w", err)
 	}
 	return reader, state, nil
 }
@@ -281,7 +282,7 @@ func (r *wpstateReader) Process() (State, bool, error) {
 		}
 		r.state.Menu = b != "unpaused"
 	default:
-		return r.state, false, errors.Errorf("unrecognized log type: %s", a)
+		return r.state, false, fmt.Errorf("unrecognized log type: %s", a)
 	}
 	return r.state, true, nil
 }

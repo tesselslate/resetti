@@ -10,12 +10,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -127,7 +127,7 @@ func (c *Client) batchCreate(fn func(*Batch) error) (b Batch, err error) {
 		if res, ok := result.(error); ok {
 			err = res
 		} else if result != nil {
-			err = errors.Errorf("%+v", result)
+			err = fmt.Errorf("%+v", result)
 		}
 	}()
 
@@ -249,7 +249,7 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 		// Read websocket message.
 		res := websocketResponse{}
 		if err := wsjson.Read(ctx, c.ws, &res); err != nil {
-			errch <- errors.Wrap(err, "read json")
+			errch <- fmt.Errorf("read json: %w", err)
 			return
 		}
 
@@ -259,14 +259,14 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 			data := requestResponse{}
 			err := json.Unmarshal(res.Data, &data)
 			if err != nil {
-				errch <- errors.Wrap(err, "read request response")
+				errch <- fmt.Errorf("read request response: %w", err)
 				return
 			}
 
 			// Process the response.
 			c.mx.Lock()
 			if !data.Status.Result {
-				c.err[data.Id] <- errors.Errorf("code %d: %s", data.Status.Code, data.Status.Comment)
+				c.err[data.Id] <- fmt.Errorf("code %d: %s", data.Status.Code, data.Status.Comment)
 			} else {
 				c.rcv[data.Id] <- data.Data
 			}
@@ -278,14 +278,14 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 			data := batchResponse{}
 			err := json.Unmarshal(res.Data, &data)
 			if err != nil {
-				errch <- errors.Wrap(err, "read batch response")
+				errch <- fmt.Errorf("read batch response: %w", err)
 				return
 			}
 
 			// Check for any errors.
 			for _, result := range data.Results {
 				if !result.Status.Result {
-					err = errors.Errorf("code %d: %s", result.Status.Code, result.Status.Comment)
+					err = fmt.Errorf("code %d: %s", result.Status.Code, result.Status.Comment)
 				}
 			}
 

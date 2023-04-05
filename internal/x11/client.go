@@ -5,13 +5,14 @@ package x11
 import (
 	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
-	"github.com/pkg/errors"
 )
 
 // Atom names
@@ -149,14 +150,14 @@ func (c *Client) FocusWindow(win xproto.Window) error {
 		break
 	case nil:
 		if err = c.setCurrentDesktop(winDesktop); err != nil {
-			return errors.Wrap(err, "set current desktop")
+			return fmt.Errorf("set current desktop: %w", err)
 		}
 	default:
-		return errors.Wrap(err, "get window desktop")
+		return fmt.Errorf("get window desktop: %w", err)
 	}
 	activeWindow, err := c.atoms.Get(netActiveWindow)
 	if err != nil {
-		return errors.Wrap(err, "get _NET_ACTIVE_WINDOW atom")
+		return fmt.Errorf("get _NET_ACTIVE_WINDOW atom: %w", err)
 	}
 	data := make([]uint32, 5)
 	data[0] = 1 // Source indicator (1 = application)
@@ -422,7 +423,7 @@ func (c *Client) setCurrentDesktop(desktop uint32) error {
 	// Get the _NET_CURRENT_DESKTOP atom.
 	currentDesktop, err := c.atoms.Get(netCurrentDesktop)
 	if err != nil {
-		return errors.Wrap(err, "get _NET_CURRENT_DESKTOP atom")
+		return fmt.Errorf("get _NET_CURRENT_DESKTOP atom: %w", err)
 	}
 
 	// Send the property change event.
@@ -509,7 +510,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 func approximateOffset(c *xgb.Conn) (uint64, error) {
 	reply, err := xproto.InternAtom(c, false, uint16(len(wmName)), wmName).Reply()
 	if err != nil {
-		return 0, errors.Wrap(err, "get WM_NAME atom")
+		return 0, fmt.Errorf("get WM_NAME atom: %w", err)
 	}
 	atom := reply.Atom
 
@@ -536,11 +537,11 @@ func approximateOffset(c *xgb.Conn) (uint64, error) {
 		if rawEvt == nil && err == nil {
 			return 0, ErrConnectionDied
 		} else if err != nil {
-			return 0, errors.Wrap(err, "receive response")
+			return 0, fmt.Errorf("receive response: %w", err)
 		}
 		evt, ok := rawEvt.(xproto.PropertyNotifyEvent)
 		if !ok {
-			return 0, errors.Errorf("invalid event type (%T)", rawEvt)
+			return 0, fmt.Errorf("invalid event type (%T)", rawEvt)
 		}
 		offsetSum += uint64(send - int64(evt.Time))
 	}

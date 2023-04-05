@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -14,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
@@ -285,7 +285,7 @@ func setupCgroups(affinity string, instances []mc.InstanceInfo) error {
 		// Run the script.
 		subgroups := strings.Join(groups, " ")
 		cmd := exec.Command(suidBin, "sh", "groups.sh", subgroups)
-		return errors.Wrap(cmd.Run(), "run cgroup script")
+		return fmt.Errorf("run cgroup script: %w", cmd.Run())
 	}
 	writeCpuSet := func(cgroup string, cpus []int) error {
 		list := make([]string, 0, len(cpus))
