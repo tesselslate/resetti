@@ -26,11 +26,11 @@ type counter struct {
 // newCounter creates a new counter with the given configuration profile. If
 // the user has count_resets disabled, the counter will do nothing.
 func newCounter(conf *cfg.Profile) (counter, error) {
-	if !conf.General.CountResets {
+	if conf.ResetCount == "" {
 		return counter{}, nil
 	}
 
-	file, err := os.OpenFile(conf.General.CountPath, os.O_CREATE|os.O_RDWR, 0644)
+	file, err := os.OpenFile(conf.ResetCount, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return counter{}, fmt.Errorf("open file: %w", err)
 	}
@@ -50,7 +50,7 @@ func newCounter(conf *cfg.Profile) (counter, error) {
 		}
 	}
 
-	return counter{file, time.Now(), resets, make(chan bool, bufferSize)}, nil
+	return counter{file, time.Now(), resets, make(chan bool, 64)}, nil
 }
 
 // Increment increments the reset counter.

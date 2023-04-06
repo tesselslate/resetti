@@ -2,8 +2,31 @@ package x11
 
 import "github.com/jezek/xgb/xproto"
 
-// Key modifiers (for TOML unmarshalling)
-var keymods = map[string]Keymod{
+// Buttons is a list of buttons used for config parsing.
+var Buttons = map[string]xproto.Button{
+	"lmb":         xproto.ButtonIndex1,
+	"leftclick":   xproto.ButtonIndex1,
+	"leftmouse":   xproto.ButtonIndex1,
+	"mouse1":      xproto.ButtonIndex1,
+	"m1":          xproto.ButtonIndex1,
+	"mmb":         xproto.ButtonIndex2,
+	"middleclick": xproto.ButtonIndex2,
+	"middlemouse": xproto.ButtonIndex2,
+	"mouse2":      xproto.ButtonIndex2,
+	"m2":          xproto.ButtonIndex2,
+	"rmb":         xproto.ButtonIndex3,
+	"rightclick":  xproto.ButtonIndex3,
+	"rightmouse":  xproto.ButtonIndex3,
+	"mouse3":      xproto.ButtonIndex3,
+	"m3":          xproto.ButtonIndex3,
+	"mouse4":      xproto.ButtonIndex4,
+	"m4":          xproto.ButtonIndex4,
+	"mouse5":      xproto.ButtonIndex5,
+	"m5":          xproto.ButtonIndex5,
+}
+
+// Keymods is a list of key modifiers used for config parsing.
+var Keymods = map[string]Keymod{
 	"ctrl":    ModCtrl,
 	"control": ModCtrl,
 	"shift":   ModShift,
@@ -16,8 +39,8 @@ var keymods = map[string]Keymod{
 	"modlock": ModLock,
 }
 
-// Key codes (for TOML unmarshalling)
-var keycodesToml = map[string]xproto.Keycode{
+// Keycodes is a list of keycodes used for config parsing.
+var Keycodes = map[string]xproto.Keycode{
 	"0":            19,
 	"1":            10,
 	"2":            11,
@@ -96,7 +119,7 @@ var keycodesToml = map[string]xproto.Keycode{
 	"print.screen": 107,
 }
 
-// Key codes (options.txt)
+// KeycodesMc is a list of keycodes used for parsing Minecraft options.
 var KeycodesMc = map[string]xproto.Keycode{
 	"0":               19,
 	"1":               10,

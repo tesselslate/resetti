@@ -1,11 +1,6 @@
 package x11
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/jezek/xgb/xproto"
 )
 
@@ -111,52 +106,4 @@ func (e KeyEvent) Time() uint32 {
 // Time implements Event.
 func (e MoveEvent) Time() uint32 {
 	return e.Timestamp
-}
-
-func (k *Key) UnmarshalTOML(value any) error {
-	str, ok := value.(string)
-	if !ok {
-		return errors.New("value not a string")
-	}
-	components := strings.Split(str, "-")
-	for _, component := range components {
-		component = strings.ToLower(component)
-		if key, ok := keycodesToml[component]; ok {
-			k.Code = key
-		} else if mod, ok := keymods[component]; ok {
-			k.Mod |= mod
-		} else if strings.HasPrefix(component, "code") {
-			code, err := strconv.Atoi(component[4:])
-			if err != nil {
-				return fmt.Errorf("convert key code: %w", err)
-			}
-			if code > 255 || code < 0 {
-				return errors.New("key code out of bounds (0 <= N <= 255)")
-			}
-			k.Code = xproto.Keycode(code)
-		} else {
-			return fmt.Errorf("invalid key component %s", component)
-		}
-	}
-	return nil
-}
-
-func (m *Keymod) UnmarshalTOML(value any) error {
-	str, ok := value.(string)
-	if !ok {
-		return errors.New("value not a string")
-	}
-	if str == "" {
-		return nil
-	}
-	components := strings.Split(str, "-")
-	for _, component := range components {
-		component = strings.ToLower(component)
-		if mod, ok := keymods[component]; ok {
-			*m |= mod
-		} else {
-			return fmt.Errorf("invalid key component %s", component)
-		}
-	}
-	return nil
 }

@@ -63,6 +63,37 @@ var suidBinaries = [...]string{
 	"pkexec",
 }
 
+// cpuManager controls how much CPU time is given to each instance based on its
+// state. Currently, this is done via the use of cgroups and CPU affinity.
+//
+// Each instance can be in one of several affinity groups and is moved between
+// groups when updates to its state are received. See the documentation for the
+// affinity group constants for more information on each group.
+type cpuManager struct {
+	anyActive bool // Whether there is an active instance
+	pids      []int
+	states    []cpuState
+
+	conf        *cfg.Profile
+	priority    chan priorityUpdate
+	removeBurst chan int
+	updates     chan mc.Update
+}
+
+// cpuState contains the state of a given instance as well as its affinity
+// properties.
+type cpuState struct {
+	mc.State
+	group    int  // Affinity group
+	priority bool // Move to high priority when appropriate
+}
+
+// priorityUpdate contains an update to the priority of a single instance.
+type priorityUpdate struct {
+	id    int
+	state bool
+}
+
 // newCpuManager creates a new cpuManager for the given instances and config
 // profile. If necessary, it prompts the user for root permission and runs the
 // cgroup creation script.
@@ -83,7 +114,7 @@ func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 		pids,
 		cpuStates,
 		conf,
-		make(chan int, bufferSize*len(instances)),
+		make(chan priorityUpdate, bufferSize*len(instances)),
 		make(chan int, bufferSize*len(instances)),
 		make(chan mc.Update, bufferSize*len(instances)),
 	}
@@ -95,7 +126,7 @@ func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 func prepareCgroups(conf *cfg.Profile) error {
 	// Check if the cgroup setup script needs to be run.
 	var shouldExist []string
-	if conf.AdvancedWall.CcxSplit {
+	if conf.Wall.Performance.CcxSplit {
 		for _, name := range baseNames {
 			shouldExist = append(shouldExist, name+"0", name+"1")
 		}
@@ -115,9 +146,9 @@ func prepareCgroups(conf *cfg.Profile) error {
 	if shouldRun {
 		// TODO: Allow for modifying the script (or at least don't rewrite it
 		// every time even when it has not been modified)
-		path, err := cfg.GetFolder()
+		path, err := cfg.GetDirectory()
 		if err != nil {
-			return fmt.Errorf("get config folder: %w", err)
+			return fmt.Errorf("get config directory: %w", err)
 		}
 		path += "/cgroup_setup.sh"
 		if err := os.WriteFile(path, cgroupScript, 0644); err != nil {
@@ -142,11 +173,11 @@ func prepareCgroups(conf *cfg.Profile) error {
 
 	// Assign the correct CPU sets to each cgroup.
 	cpus := [...]int{
-		conf.AdvancedWall.CpusIdle,
-		conf.AdvancedWall.CpusLow,
-		conf.AdvancedWall.CpusMid,
-		conf.AdvancedWall.CpusHigh,
-		conf.AdvancedWall.CpusActive,
+		conf.Wall.Performance.CpusIdle,
+		conf.Wall.Performance.CpusLow,
+		conf.Wall.Performance.CpusMid,
+		conf.Wall.Performance.CpusHigh,
+		conf.Wall.Performance.CpusActive,
 	}
 	for idx, group := range baseNames {
 		// If CCX splitting is disabled, assign 0, 1, ..., N-1
@@ -157,7 +188,7 @@ func prepareCgroups(conf *cfg.Profile) error {
 		for cpu := 0; cpu < cpus[idx]; cpu += 1 {
 			set = append(set, cpu)
 		}
-		if conf.AdvancedWall.CcxSplit {
+		if conf.Wall.Performance.CcxSplit {
 			for idx := range set {
 				set[idx] *= 2
 			}
@@ -192,42 +223,15 @@ func writeCpuSet(group string, cpus []int) error {
 	)
 }
 
-// cpuManager controls how much CPU time is given to each instance based on its
-// state. Currently, this is done via the use of cgroups and CPU affinity.
-//
-// Each instance can be in one of several affinity groups and is moved between
-// groups when updates to its state are received. See the documentation for the
-// affinity group constants for more information on each group.
-type cpuManager struct {
-	anyActive bool // Whether there is an active instance
-	pids      []int
-	states    []cpuState
-
-	conf        *cfg.Profile
-	priority    chan int
-	removeBurst chan int
-	updates     chan mc.Update
-}
-
-// cpuState contains the state of a given instance as well as its affinity
-// properties.
-type cpuState struct {
-	mc.State
-	group    int  // Affinity group
-	priority bool // Move to high priority when appropriate
-}
-
 // Update updates the affinity group of the given instance as needed based on
 // the state change.
 func (c *cpuManager) Update(update mc.Update) {
 	c.updates <- update
 }
 
-// SwapPriority moves the instance to a high priority state if it is not
-// already in one. Otherwise, it moves the instance back to a low priority
-// state.
-func (c *cpuManager) SwapPriority(id int) {
-	c.priority <- id
+// SetPriority sets the priority state of the given instance.
+func (c *cpuManager) SetPriority(id int, state bool) {
+	c.priority <- priorityUpdate{id, state}
 }
 
 // handleUpdate handles a single instance state update and moves the instance
@@ -237,7 +241,7 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 
 	switch update.State.Type {
 	case mc.StIdle:
-		if c.conf.AdvancedWall.BurstLength == 0 {
+		if c.conf.Wall.Performance.BurstLength == 0 {
 			c.moveInstance(update.Id, affIdle)
 			return
 		}
@@ -252,8 +256,8 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 			c.moveInstance(update.Id, affHigh)
 		}
 	case mc.StPreview:
-		nowOver := update.State.Progress > c.conf.AdvancedWall.LowThreshold
-		wasUnder := c.states[update.Id].Progress <= c.conf.AdvancedWall.LowThreshold
+		nowOver := update.State.Progress > c.conf.Wall.Performance.LowThreshold
+		wasUnder := c.states[update.Id].Progress <= c.conf.Wall.Performance.LowThreshold
 		if wasUnder && nowOver {
 			c.moveInstance(update.Id, affLow)
 		} else {
@@ -292,6 +296,9 @@ func (c *cpuManager) moveInstance(id int, group int) {
 // setPriority sets the priority of an instance. If the instance is not already
 // in the high cgroup, it is moved there.
 func (c *cpuManager) setPriority(id int, priority bool) {
+	if priority == c.states[id].priority {
+		log.Println("cpuManager (debug): pointless priority update")
+	}
 	c.states[id].priority = priority
 	if c.states[id].group != affHigh {
 		c.updateAffinity(id)
@@ -309,7 +316,7 @@ func (c *cpuManager) updateAffinity(id int) {
 		group = c.states[id].group
 	}
 	name := baseNames[group]
-	if c.conf.AdvancedWall.CcxSplit {
+	if c.conf.Wall.Performance.CcxSplit {
 		if id < len(c.pids)/2 {
 			name += "0"
 		} else {
@@ -336,8 +343,8 @@ func (c *cpuManager) Run(ctx context.Context) {
 			return
 		case update := <-c.updates:
 			c.handleUpdate(update)
-		case id := <-c.priority:
-			c.setPriority(id, !c.states[id].priority)
+		case prio := <-c.priority:
+			c.setPriority(prio.id, prio.state)
 		case id := <-c.removeBurst:
 			if c.states[id].Type == mc.StIdle {
 				c.moveInstance(id, affIdle)

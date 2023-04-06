@@ -96,6 +96,17 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 	return &m, nil
 }
 
+// GetStates returns a list of all instance states.
+func (m *Manager) GetStates() []State {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []State
+	for _, inst := range m.instances {
+		out = append(out, inst.state)
+	}
+	return out
+}
+
 // Run starts managing instances in the background. Any non-fatal errors are
 // logged, any fatal errors are returned via the provided error channel.
 func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- error) {
@@ -243,22 +254,16 @@ func (m *Manager) Reset(id int) bool {
 
 // sendKeyDown sends a key down event to the given instance.
 func (m *Manager) sendKeyDown(id int, key x11.Key) {
-	// XXX: 20 ms offset to block out any user inputs at the same time.
-	// Refer to (*x11.Client).SendKeyDown for more information.
 	m.x.SendKeyDown(key.Code, m.instances[id].info.Wid)
 }
 
 // sendKeyPress sends a key down and key up event to the given instance.
 func (m *Manager) sendKeyPress(id int, key x11.Key) {
-	// XXX: 20 ms offset to block out any user inputs at the same time.
-	// Refer to (*x11.Client).SendKeyDown for more information.
 	m.x.SendKeyPress(key.Code, m.instances[id].info.Wid)
 }
 
 // sendKeyUp sends a key up event to the given instance.
 func (m *Manager) sendKeyUp(id int, key x11.Key) {
-	// XXX: 20 ms offset to block out any user inputs at the same time.
-	// Refer to (*x11.Client).SendKeyDown for more information.
 	m.x.SendKeyUp(key.Code, m.instances[id].info.Wid)
 }
 
