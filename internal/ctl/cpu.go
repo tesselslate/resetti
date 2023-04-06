@@ -329,6 +329,7 @@ func (c *cpuManager) updateAffinity(id int) {
 
 // Run handles state updates and moves instances between affinity groups.
 func (c *cpuManager) Run(ctx context.Context) {
+	// TODO: Move instances to a consistent state when starting and stopping
 	for {
 		select {
 		case <-ctx.Done():

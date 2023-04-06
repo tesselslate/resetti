@@ -59,6 +59,12 @@ type State struct {
 	// Whether or not the instance is in a menu (e.g. pause, inventory).
 	// Requires WorldPreview state reader to detect.
 	Menu bool
+
+	// The last time the instance reached the world preview screen.
+	LastPreview time.Time
+
+	// The last time the instance was reset.
+	LastReset time.Time
 }
 
 // The stateReader interface provides a method for obtaining the state of an

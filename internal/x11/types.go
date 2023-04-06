@@ -28,13 +28,12 @@ const (
 	StateUp
 )
 
-// Important key codes
-const (
-	KeyEsc = 9
-	KeyF1  = 67
-	KeyF3  = 69
-	KeyF6  = 72
-	KeyH   = 43
+// Important keys
+var (
+	KeyEsc = Key{Code: 9}
+	KeyF1  = Key{Code: 67}
+	KeyF3  = Key{Code: 69}
+	KeyF6  = Key{Code: 72}
 )
 
 // InputState represents the state of a button or key (up or down.)

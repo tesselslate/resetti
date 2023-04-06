@@ -55,7 +55,6 @@ func newCounter(conf *cfg.Profile) (counter, error) {
 
 // Increment increments the reset counter.
 func (c *counter) Increment() {
-	c.lastWrite = time.Now()
 	if c.inc != nil {
 		c.inc <- true
 	}
@@ -65,6 +64,7 @@ func (c *counter) Increment() {
 func (c *counter) increment() {
 	c.count += 1
 	// TODO: Use lastWrite to batch writes.
+	c.lastWrite = time.Now()
 	buf := []byte(strconv.Itoa(c.count))
 	_, err := c.file.Seek(0, 0)
 	if err != nil {

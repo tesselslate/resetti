@@ -1,171 +1,99 @@
+// Package cfg allows for reading the user's configuration.
 package cfg
 
-import (
-	_ "embed"
-	"errors"
-	"fmt"
-	"os"
+import "github.com/woofdoggo/resetti/internal/x11"
 
-	"github.com/BurntSushi/toml"
-	"github.com/woofdoggo/resetti/internal/x11"
-)
-
-//go:embed default.toml
-var defaultConfig string
-
-type Box struct {
-	X      int
-	Y      int
-	Width  int
-	Height int
+// Hooks contains various commands to run whenever the user performs certain
+// actions.
+type Hooks struct {
+	Reset      string `toml:"reset"`       // Command to run on ingame reset
+	WallLock   string `toml:"wall_lock"`   // Command to run on wall reset
+	WallUnlock string `toml:"wall_unlock"` // Command to run on wall unlock
+	WallPlay   string `toml:"wall_play"`   // Command to run on wall play
+	WallReset  string `toml:"wall_reset"`  // Command to run on wall reset
 }
 
+// Keybinds contains the user's keybindings.
+type Keybinds struct {
+	Focus           x11.Key    `toml:"focus"`             // Focus instance/projector
+	Reset           x11.Key    `toml:"reset"`             // Reset all / reset current
+	WallLock        x11.Keymod `toml:"wall_lock"`         // (Un)lock instance
+	WallPlay        x11.Keymod `toml:"wall_play"`         // Play insatnce
+	WallReset       x11.Keymod `toml:"wall_reset"`        // Reset from wall
+	WallResetOthers x11.Keymod `toml:"wall_reset_others"` // Focus reset from wall
+}
+
+// Obs contains the user's OBS websocket connection information.
+type Obs struct {
+	Enabled  bool   `toml:"enabled"`  // Mandatory for wall
+	Port     uint16 `toml:"port"`     // Connection port
+	Password string `toml:"password"` // Password, can be left blank if unused
+}
+
+// Wall contains the user's wall settings.
+type Wall struct {
+	Enabled     bool `toml:"enabled"`      // Whether to use multi or wall
+	GotoLocked  bool `toml:"goto_locked"`  // Also known as wall bypass
+	GracePeriod int  `toml:"grace_period"` // Milliseconds to wait after preview before a reset can occur
+
+	StretchRes   *Rectangle `toml:"stretch_res"`   // Inactive resolution
+	UnstretchRes *Rectangle `toml:"unstretch_res"` // Active resolution
+	UseF1        bool       `toml:"use_f1"`
+
+	// Instance hiding (dirt cover) settings.
+	Hiding struct {
+		// What criteria to use when determining when to show the instance.
+		// Only valid options are "percentage" and "delay".
+		ShowMethod string `toml:"show_method"`
+
+		// When to show the instances (either milliseconds for delay or
+		// generation percentage for percentage.)
+		ShowAt int `toml:"show_at"`
+	} `toml:"hiding"`
+
+	// Performance settings.
+	Performance struct {
+		// Optional. Overrides the default sleepbg.lock path ($HOME)
+		SleepbgPath string `toml:"sleepbg_path"`
+
+		// Whether or not to use affinity.
+		Affinity bool `toml:"affinity"`
+
+		// If enabled, halves the amount of CPU cores available to affinity
+		// groups and instead creates double the amount of groups (half for
+		// each CCX.)
+		CcxSplit bool `toml:"ccx_split"`
+
+		CpusIdle   uint `toml:"affinity_idle"`   // CPUs for idle group
+		CpusLow    uint `toml:"affinity_low"`    // CPUs for low group
+		CpusMid    uint `toml:"affinity_mid"`    // CPUs for mid group
+		CpusHigh   uint `toml:"affinity_high"`   // CPUs for high group
+		CpusActive uint `toml:"affinity_active"` // CPUs for active group
+
+		// The number of milliseconds to wait after an instance finishes
+		// generating to move it from the mid group to the idle group.
+		// A value of 0 disables this functionality.
+		BurstLength uint `toml:"burst_length"`
+
+		// The world generation percentage at which instances are moved from
+		// the high group to the low group.
+		LowThreshold uint `toml:"low_threshold"`
+	} `toml:"performance"`
+}
+
+// Profile contains an entire configuration profile.
 type Profile struct {
-	General struct {
-		ResetType   string `toml:"type"`
-		CountResets bool   `toml:"count_resets"`
-		CountPath   string `toml:"resets_file"`
-	} `toml:"general"`
-	Hooks struct {
-		WallReset string `toml:"wall_reset"`
-		Reset     string `toml:"reset"`
-		Lock      string `toml:"lock"`
-		Unlock    string `toml:"unlock"`
-	} `toml:"hooks"`
-	Obs struct {
-		Enabled  bool   `toml:"enabled"`
-		Port     uint16 `toml:"port"`
-		Password string `toml:"password"`
-	} `toml:"obs"`
-	Reset struct {
-		Delay        int  `toml:"delay"`
-		PauseDelay   int  `toml:"pause_delay"`
-		UnpauseFocus bool `toml:"unpause_on_focus"`
-	} `toml:"reset"`
-	Keys struct {
-		Focus           x11.Key    `toml:"focus"`
-		Reset           x11.Key    `toml:"reset"`
-		WallReset       x11.Keymod `toml:"wall_reset"`
-		WallResetOthers x11.Keymod `toml:"wall_reset_others"`
-		WallPlay        x11.Keymod `toml:"wall_play"`
-		WallLock        x11.Keymod `toml:"wall_lock"`
-	} `toml:"keybinds"`
-	Wall struct {
-		HideGui         bool   `toml:"hide_gui"`
-		StretchWindows  bool   `toml:"stretch_windows"`
-		StretchRes      Box    `toml:"stretch_res"`
-		UnstretchRes    Box    `toml:"unstretch_res"`
-		UseMouse        bool   `toml:"use_mouse"`
-		GoToLocked      bool   `toml:"goto_locked"`
-		SleepBgLock     bool   `toml:"sleepbg_lock"`
-		SleepBgLockPath string `toml:"sleepbg_lock_path"`
-		GracePeriod     int    `toml:"grace_period"`
-		InstanceHiding  bool   `toml:"hide_instances"`
-		ShowDelay       int    `toml:"show_delay"`
-	} `toml:"wall"`
-	Moving struct {
-		Enabled        bool   `toml:"enabled"`
-		FocusSize      string `toml:"focus_size"`
-		LockAreaCount  int    `toml:"lock_count"`
-		LockAreaHeight int    `toml:"lock_area_height"`
-	} `toml:"moving"`
-	AdvancedWall struct {
-		Affinity     bool `toml:"affinity"`
-		CcxSplit     bool `toml:"ccx_split"`
-		CpusIdle     int  `toml:"affinity_idle"`
-		CpusLow      int  `toml:"affinity_low"`
-		CpusMid      int  `toml:"affinity_mid"`
-		CpusHigh     int  `toml:"affinity_high"`
-		CpusActive   int  `toml:"affinity_active"`
-		BurstLength  int  `toml:"burst_length"`
-		LowThreshold int  `toml:"low_threshold"`
-	} `toml:"advanced_wall"`
+	Delay        int    `toml:"delay"`       // Delay between certain actions
+	ResetCount   string `toml:"reset_count"` // Reset counter path
+	UnpauseFocus bool   `toml:"unpause_focus"`
+
+	Hooks    Hooks    `toml:"hooks"`
+	Keybinds Keybinds `toml:"keybinds"`
+	Obs      Obs      `toml:"obs"`
+	Wall     Wall     `toml:"wall"`
 }
 
-// GetFolder returns the path to the user's configuration folder.
-func GetFolder() (string, error) {
-	cfgDir, err := os.UserConfigDir()
-	if err != nil {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		cfgDir = home + "/.config"
-	}
-	cfgPath := cfgDir + "/resetti/"
-	return cfgPath, nil
-}
-
-// GetProfile returns a specific configuration profile.
-func GetProfile(name string) (Profile, error) {
-	dir, err := GetFolder()
-	if err != nil {
-		return Profile{}, err
-	}
-	file, err := os.ReadFile(dir + name + ".toml")
-	if err != nil {
-		return Profile{}, err
-	}
-	conf := Profile{}
-	err = toml.Unmarshal(file, &conf)
-	if err != nil {
-		return Profile{}, err
-	}
-
-	// TODO: validate config
-
-	// Set SleepBackground lock path.
-	if conf.Wall.SleepBgLock && conf.Wall.SleepBgLockPath == "" {
-		userDir, err := os.UserHomeDir()
-		if err != nil {
-			return Profile{}, fmt.Errorf("failed to get user dir for sleepbg lock: %s", err)
-		}
-		conf.Wall.SleepBgLockPath = userDir
-	}
-	conf.Wall.SleepBgLockPath += "/sleepbg.lock"
-
-	// Update grace period.
-	if conf.Wall.InstanceHiding {
-		conf.Wall.GracePeriod += conf.Wall.ShowDelay
-	}
-
-	return conf, nil
-}
-
-// MakeProfile makes a new profile with the default configuration.
-func MakeProfile(name string) error {
-	dir, err := GetFolder()
-	if err != nil {
-		return err
-	}
-	if stat, err := os.Stat(dir); err != nil {
-		if os.IsNotExist(err) {
-			err := os.Mkdir(dir, 0644)
-			if err != nil {
-				return fmt.Errorf("failed to create config dir: %s", err)
-			}
-		} else if !stat.IsDir() {
-			return errors.New("config path is not a directory")
-		}
-	}
-	return os.WriteFile(
-		dir+name+".toml",
-		[]byte(defaultConfig),
-		0644,
-	)
-}
-
-func (b *Box) UnmarshalTOML(value any) error {
-	str, ok := value.(string)
-	if !ok {
-		return errors.New("value not a string")
-	}
-	n, err := fmt.Sscanf(str, "%dx%d+%d,%d", &b.Width, &b.Height, &b.X, &b.Y)
-	if err != nil {
-		return err
-	}
-	if n != 4 {
-		return errors.New("missing value")
-	}
-	return nil
+// Rectangle is a rectangle. That's it.
+type Rectangle struct {
+	X, Y, W, H uint32
 }
