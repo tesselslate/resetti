@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jezek/xgb"
@@ -76,11 +77,22 @@ type Client struct {
 
 	// The offset between the system clock and X server time, in milliseconds.
 	timeOffset uint64
+
+	// Information about the last key events sent for each window. This is used
+	// to ensure that resetti's inputs don't get dropped by GLFW.
+	lastKeyState map[xproto.Window]keyState
+	mu           sync.Mutex
 }
 
-// event represents an event which is to be sent to another
-// window.
-type event interface {
+// keyState contains state about the last key event sent to a given window.
+// This is used to ensure that resetti's inputs don't get dropped by GLFW.
+type keyState struct {
+	time uint32
+	code xproto.Keycode
+}
+
+// rawEvent represents an event which is to be sent to another window.
+type rawEvent interface {
 	Bytes() []byte
 }
 
@@ -112,11 +124,19 @@ func NewClient() (Client, error) {
 		conn,
 		root,
 		offset,
+		make(map[xproto.Window]keyState),
+		sync.Mutex{},
 	}, nil
 }
 
 // Click clicks the top left corner (0, 0) of the given window.
 func (c *Client) Click(win xproto.Window) error {
+	// Send an EnterNotify event to get GLFW to update the cursor position.
+	// Then send a LeaveNotify to stop tracking cursor movement.
+	// Then send a ButtonPress to click the window.
+	//
+	// Reference:
+	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1465
 	evt := xproto.EnterNotifyEvent{
 		Root:  win,
 		Event: win,
@@ -202,17 +222,10 @@ func (c *Client) GetWindowList() ([]xproto.Window, error) {
 // GetWindowChildren returns a list of all child windows (and their children,
 // and so on) for the given window.
 func (c *Client) GetWindowChildren(win xproto.Window) ([]xproto.Window, error) {
-	// Traverse the window tree in an iterative fashion. Keep a list of
-	// visited windows in case windows are moved around in a way which
-	// causes an infinite loop.
+	// Traverse the window tree in an iterative fashion.
 	queue := []xproto.Window{win}
-	seen := map[xproto.Window]bool{}
 	for ptr := 0; ptr < len(queue); ptr += 1 {
 		next := queue[ptr]
-		if seen[next] {
-			continue
-		}
-		seen[next] = true
 		tree, err := xproto.QueryTree(c.conn, next).Reply()
 
 		// Windows may be closed while we traverse the tree. Ignore any errors
@@ -311,20 +324,20 @@ func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
 }
 
 // SendKeyDown sends a key down event to the given window with the given key.
-func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, time uint32) {
-	c.sendKeyEvent(code, StateDown, win, time)
+func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window) {
+	c.sendKeyEvent(code, StateDown, win)
 }
 
 // SendKeyPress sends a key press (key down and key up event) to the given
 // window with the given key.
-func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, time uint32) {
-	c.sendKeyEvent(code, StateDown, win, time)
-	c.sendKeyEvent(code, StateUp, win, time+1)
+func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window) {
+	c.sendKeyEvent(code, StateDown, win)
+	c.sendKeyEvent(code, StateUp, win)
 }
 
 // SendKeyUp sends a key up event to the given window with the given key.
-func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, time uint32) {
-	c.sendKeyEvent(code, StateUp, win, time)
+func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window) {
+	c.sendKeyEvent(code, StateUp, win)
 }
 
 // UngrabKey releases a grabbed key and returns it back to the X server.
@@ -386,7 +399,7 @@ func (c *Client) getPropertyString(win xproto.Window, name string) (string, erro
 }
 
 // sendEvent sends an event to another window.
-func (c *Client) sendEvent(evt event, mask uint32, win xproto.Window) error {
+func (c *Client) sendEvent(evt rawEvent, mask uint32, win xproto.Window) error {
 	return xproto.SendEventChecked(
 		c.conn,
 		true,
@@ -397,7 +410,42 @@ func (c *Client) sendEvent(evt event, mask uint32, win xproto.Window) error {
 }
 
 // sendKeyEvent sends a key event to the given window.
-func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.Window, time uint32) {
+func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.Window) {
+	// Here, we have to deal with two hackfixes in GLFW.
+	// The first is that key events must always have a timestamp greater than
+	// the last event with the same keycode. So, we always increment, regardless
+	// of keycode, just to keep things simpler.
+	// The second is that a key release and key press event with the same code
+	// can not occur directly after each other unless they have a timestamp
+	// difference of >=20ms.
+	//
+	// So, we always ensure the timestamp we are sending will not cause the
+	// event to get dropped by GLFW. Additionally, we always ensure that the
+	// timestamp is a few (15, this is arbitrary) milliseconds ahead of the
+	// *actual* X server time, so that inputs from the user never cause
+	// resetti's inputs to get dropped.
+	//
+	// Reference:
+	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1260
+	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1359
+
+	// XXX: Can lock contention be a problem here? Come back to this after
+	// ctl package is implemented and either remove the mutex or figure out if
+	// contention is a performance issue.
+	c.mu.Lock()
+	lastState, ok := c.lastKeyState[win]
+	time := c.GetCurrentTime() + 15
+	if ok {
+		if lastState.time >= time {
+			time = lastState.time + 1
+		}
+		if lastState.code == key {
+			time = lastState.time + 20
+		}
+	}
+	c.lastKeyState[win] = keyState{time, key}
+	c.mu.Unlock()
+
 	evt := xproto.KeyPressEvent{
 		Detail:     key,
 		Time:       xproto.Timestamp(time),

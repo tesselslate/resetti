@@ -245,21 +245,21 @@ func (m *Manager) Reset(id int) bool {
 func (m *Manager) sendKeyDown(id int, key x11.Key) {
 	// XXX: 20 ms offset to block out any user inputs at the same time.
 	// Refer to (*x11.Client).SendKeyDown for more information.
-	m.x.SendKeyDown(key.Code, m.instances[id].info.Wid, m.x.GetCurrentTime()+20)
+	m.x.SendKeyDown(key.Code, m.instances[id].info.Wid)
 }
 
 // sendKeyPress sends a key down and key up event to the given instance.
 func (m *Manager) sendKeyPress(id int, key x11.Key) {
 	// XXX: 20 ms offset to block out any user inputs at the same time.
 	// Refer to (*x11.Client).SendKeyDown for more information.
-	m.x.SendKeyPress(key.Code, m.instances[id].info.Wid, m.x.GetCurrentTime()+20)
+	m.x.SendKeyPress(key.Code, m.instances[id].info.Wid)
 }
 
 // sendKeyUp sends a key up event to the given instance.
 func (m *Manager) sendKeyUp(id int, key x11.Key) {
 	// XXX: 20 ms offset to block out any user inputs at the same time.
 	// Refer to (*x11.Client).SendKeyDown for more information.
-	m.x.SendKeyUp(key.Code, m.instances[id].info.Wid, m.x.GetCurrentTime()+20)
+	m.x.SendKeyUp(key.Code, m.instances[id].info.Wid)
 }
 
 // setResolution sets the window geometry of an instance.
