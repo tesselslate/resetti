@@ -1,0 +1,165 @@
+# This is the default configuration profile for resetti.
+# You can delete or ignore any sections which are not applicable.
+
+# The number of milliseconds to wait in between certain actions (e.g.
+# pausing and unpausing.)
+delay = 20
+
+# The path to the file to count your resets in. Leave blank to disable
+# reset counting.
+reset_count = ""
+
+# Whether or not instances should automatically unpause when you tab in.
+unpause_focus = true
+
+# The hooks section allows you to specify various commands which are run
+# upon certain actions. Any blank hooks will be ignored.
+[hooks]
+# Run when a reset occurs from ingame.
+reset = ""
+
+# Run when an instance is locked on the wall.
+wall_lock = ""
+
+# Run when an instance is unlocked on the wall.
+wall_unlock = ""
+
+# Run when an instance is played on the wall.
+wall_play = ""
+
+# Run when an instance is reset on the wall.
+wall_reset = ""
+
+# The keybinds section lets you specify keybindings for various actions you
+# may want to perform. Many of these keys will do nothing unless you have
+# enabled their functionality in the wall section.
+[keybinds]
+# If on the wall, pressing this will bring you back to the projector.
+# If ingame, pressing this will bring you back to the active instance.
+focus = "Ctrl-Shift-F"
+
+# If on the wall, pressing this will reset all of your instances.
+# If ingame, pressing this will reset the active instance.
+reset = "Ctrl-Shift-D"
+
+# Pressing this will lock the instance your mouse is hovering over.
+wall_lock = ""
+
+# Pressing this will play the instance your mouse is hovering over.
+wall_play = ""
+
+# Pressing this will reset the instance your mouse is hovering over.
+wall_reset = ""
+
+# Pressing this will play the instance your mouse is hovering over and reset
+# all other instances.
+wall_reset_others = ""
+
+# The obs section lets you specify connection information for OBS websocket.
+# This can be disabled if you are not using wall and are not recording;
+# otherwise, you must provide connection information.
+#
+# The password field can be left blank if you have authentication off.
+[obs]
+enabled = true
+port = 4440
+password = ""
+
+# The wall section lets you configure your wall experience. If you only want
+# the classic multi experience, you can delete everything from this point on.
+[wall]
+enabled = false
+
+# Also known as "wall bypass" on other macros. If enabled, resetting from
+# ingame will immediately bring you to the next locked instance which has
+# finished generating a world (if any.)
+goto_locked = false
+
+# The number of milliseconds to prevent you from resetting an instance after it
+# starts previewing. Set to 0 to disable.
+grace_period = 250
+
+# The resolution to set your instances to while they are on the wall, in
+# the format "W,H+X,Y" (e.g. 960x360+0,0). Delete or comment out to disable
+# instance stretching.
+stretch_res = "960x360+0,0"
+
+# The resolution to set your instances to while they are being played, in the
+# format "W,H+X,Y" (e.g. 1920x1080+0,0). Delete or comment out to disable
+# instance stretching.
+play_res = "1920x1080+0,0"
+
+# Whether or not to hide the hotbar and hand while on the wall scene. If
+# enabled, make sure to set "f1:true" in your StandardSettings configuration.
+use_f1 = false
+
+# Instance hiding makes instances invisible on the wall while they are on the
+# dirt screen, which can be used to get rid of the chunk map in the center of
+# the screen and give a cleaner look.
+[wall.hiding]
+# What criteria to use to determine when to make an instance visible again.
+# Options:
+# - percentage      Show the instance when it reaches the given worldgen
+#                   percentage and is previewing
+#
+# - delay           Show the instance a given number of milliseconds after it
+#                   starts previewing
+show_method = "percentage"
+
+# When to show the instances. Refer to the above option for information on what
+# this does.
+show_at = 20
+
+# This section contains settings for optimizing CPU utilization while resetting.
+# TODO: better docs
+[wall.performance]
+# The path to write sleepbg.lock to. If left blank, it will default to the
+# usual ($HOME.) Only use this if you change the sleepbg.lock path of your
+# instances with Java's USER.HOME property.
+sleepbg_path = ""
+
+# Whether or not to use advanced CPU affinity. TODO: better docs
+affinity = false
+
+# Whether or not to evenly divide instances between CCXs (core complexes).
+# - You should only use this if you have an AMD CPU with 2 CCXs.
+# - If enabled, the number of CPU cores available to each affinity group
+#   is halved. One affinity group is created per CCX with the given number
+#   of cores.
+# - Verify that your CPU cores follow the below pattern by using `lstopo`.
+#   This example is for a 12 core (e.g. 5900X), so adjust for your CPU.
+#   Core0 Core1 .... Core5      Core6 Core7 .... Core11
+#   PU0   PU2        PU10       PU12  PU14       PU22
+#   P0    P1         P5         P6    P7         P11
+#   PU1   PU3        PU11       PU13  PU15       PU23
+#   P12   P13        P17        P18   P19        P23
+#
+#   If your CPU does have 2 CCXs but does not have the same topology, please
+#   open an issue so we can figure out how to make the core pinning code more
+#   robust.
+ccx_split = false
+
+# The number of CPUs (cores, or threads if you have SMT) to allocate to each
+# affinity group.
+#
+# - Idle        Instances which have finished generating a world.
+# - Low         Instances which are on preview and have crossed low_threshold.
+# - Mid         Instances which have not crossed low_threshold and while the
+#               user is not on the wall.
+# - High        Instances which have not crossed low_threshold and while the
+#               user is on the wall.
+# - Active      The instance being played by the user.
+affinity_idle = 2
+affinity_low = 4
+affinity_mid = 8
+affinity_high = 12
+affinity_active = 12
+
+# If enabled (n > 0), instances will remain in the mid affinity group for this
+# many milliseconds after finishing generating. This gives extra CPU time to
+# allow for chunks to load in faster.
+burst_length = 0
+
+# The world generation percentage at which instances are moved from the high
+# group to the low group.
+low_threshold = 20
