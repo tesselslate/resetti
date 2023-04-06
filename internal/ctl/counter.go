@@ -81,6 +81,10 @@ func (c *counter) increment() {
 
 // Run starts processing resets in the background.
 func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
+	// Return immediately if this is a noop counter.
+	if c.inc == nil {
+		return
+	}
 	wg.Add(1)
 	defer func() {
 		if err := c.file.Close(); err != nil {

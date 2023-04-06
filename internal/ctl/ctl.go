@@ -89,12 +89,13 @@ type frontendDependencies struct {
 // Run creates a new controller with the given configuration profile and runs it.
 func Run(conf *cfg.Profile) error {
 	wg := sync.WaitGroup{}
-	defer wg.Done()
+	defer wg.Wait()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	c := Controller{}
 	c.conf = conf
+	c.binds = make(map[int]cfg.Bind)
 	c.hooks = map[int]string{
 		HookReset:     c.conf.Hooks.Reset,
 		HookLock:      c.conf.Hooks.WallLock,
@@ -167,8 +168,16 @@ func Run(conf *cfg.Profile) error {
 	c.mgrEvents = evtch
 	c.mgrErrors = errch
 	go c.manager.Run(ctx, evtch, errch)
+	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
+	if err != nil {
+		return fmt.Errorf("(init) X poll: %w", err)
+	}
 
-	return c.run(ctx)
+	err = c.run(ctx)
+	if err != nil {
+		fmt.Println("Failed to run:", err)
+	}
+	return nil
 }
 
 // Bind adds the given keybind.
@@ -220,10 +229,12 @@ func (c *Controller) GetBindFor(evt x11.Event) (bind int, ok bool) {
 // instance, and starts playing it.
 func (c *Controller) PlayInstance(id int) {
 	c.manager.Play(id)
-	c.cpu.Update(mc.Update{
-		State: mc.State{Type: mc.StIngame},
-		Id:    id,
-	})
+	if c.useAffinity {
+		c.cpu.Update(mc.Update{
+			State: mc.State{Type: mc.StIngame},
+			Id:    id,
+		})
+	}
 }
 
 // ResetInstance attempts to reset the given instance and returns whether or
@@ -253,7 +264,9 @@ func (c *Controller) RunHook(hook int) {
 
 // SetPriority sets the priority of the instance in the CPU manager.
 func (c *Controller) SetPriority(id int, prio bool) {
-	c.cpu.SetPriority(id, prio)
+	if c.useAffinity {
+		c.cpu.SetPriority(id, prio)
+	}
 }
 
 // Unbind removes the given bind.
@@ -288,7 +301,9 @@ func (c *Controller) run(ctx context.Context) error {
 			log.Printf("X error: %s\n", err)
 		case evt := <-c.mgrEvents:
 			c.frontend.Update(evt)
-			c.cpu.Update(evt)
+			if c.useAffinity {
+				c.cpu.Update(evt)
+			}
 		case evt := <-c.x11Events:
 			// TODO: Proper input handling that allows for holding key with
 			// mousemove, just like mouse button with mouse move right now.

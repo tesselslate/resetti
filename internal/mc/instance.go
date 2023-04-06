@@ -137,13 +137,18 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 						m.instances[id].state.Type = StIngame
 					} else {
 						m.instances[id].state.Type = StIdle
-						m.sendKeyDown(id, x11.KeyF3)
-						m.sendKeyPress(id, x11.KeyEsc)
-						m.sendKeyUp(id, x11.KeyF3)
+						if lastType != StIdle {
+							m.sendKeyDown(id, x11.KeyF3)
+							m.sendKeyPress(id, x11.KeyEsc)
+							m.sendKeyUp(id, x11.KeyF3)
+						}
 					}
 				case StPreview:
 					if lastType != StPreview {
 						m.instances[id].state.LastPreview = time.Now()
+						m.sendKeyDown(id, x11.KeyF3)
+						m.sendKeyPress(id, x11.KeyEsc)
+						m.sendKeyUp(id, x11.KeyF3)
 					}
 				}
 				evtch <- Update{m.instances[id].state, id}
@@ -254,6 +259,9 @@ func (m *Manager) sendKeyUp(id int, key x11.Key) {
 
 // setResolution sets the window geometry of an instance.
 func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
+	if rect == nil {
+		return
+	}
 	err := m.x.MoveWindow(
 		m.instances[id].info.Wid,
 		rect.X, rect.Y, rect.W, rect.H,

@@ -130,7 +130,7 @@ func GetDirectory() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return xdgDir + "/resetti", nil
+	return xdgDir + "/resetti/", nil
 }
 
 // GetProfile returns a parsed configuration profile.
@@ -228,6 +228,9 @@ func (b *Bind) UnmarshalTOML(value any) error {
 	if !ok {
 		return errors.New("bind value was not a string")
 	}
+	if str == "" {
+		return nil
+	}
 	keyCount := 0
 	buttonCount := 0
 	for _, split := range strings.Split(str, "-") {
@@ -244,7 +247,9 @@ func (b *Bind) UnmarshalTOML(value any) error {
 			return fmt.Errorf("unrecognized keybind element %q", split)
 		}
 	}
-	if keyCount+buttonCount != 1 {
+	if keyCount+buttonCount == 0 {
+		return errors.New("no key or button")
+	} else if keyCount+buttonCount > 1 {
 		return errors.New("more than one key or button")
 	}
 	return nil
