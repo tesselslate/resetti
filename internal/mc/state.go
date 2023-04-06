@@ -263,6 +263,10 @@ func (r *wpstateReader) Path() string {
 // Process implements StateReader.
 func (r *wpstateReader) Process() (State, bool, error) {
 	buf := make([]byte, 32)
+	_, err := r.file.Seek(0, 0)
+	if err != nil {
+		return r.state, false, err
+	}
 	n, err := r.file.Read(buf)
 	if err != nil && err != io.EOF {
 		return r.state, false, err

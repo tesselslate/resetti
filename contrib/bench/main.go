@@ -255,7 +255,9 @@ func run(opts Options) int {
 // readStates begins reading the states of each instance.
 // TODO: just unduplicate this whole thing. make some sort of state reader manager
 // in the mc package and use that in the instance manager
-func readStates(readers []mc.StateReader, watcher *fsnotify.Watcher, states []mc.State, evtch chan<- mc.Update, errch chan<- error) {
+func readStates(readers []mc.StateReader, watcher *fsnotify.Watcher, statesOrig []mc.State, evtch chan<- mc.Update, errch chan<- error) {
+	states := make([]mc.State, len(statesOrig))
+	copy(states, statesOrig)
 	paths := make(map[string]int)
 	for idx, reader := range readers {
 		paths[reader.Path()] = idx
@@ -346,7 +348,8 @@ func setupCgroups(affinity string, instances []mc.InstanceInfo) error {
 		// Run the script.
 		subgroups := strings.Join(groups, " ")
 		cmd := exec.Command(suidBin, "sh", "groups.sh", subgroups)
-		return fmt.Errorf("run cgroup script: %w", cmd.Run())
+		err := cmd.Run()
+		return fmt.Errorf("run cgroup script: %w", err)
 	}
 	writeCpuSet := func(cgroup string, cpus []int) error {
 		list := make([]string, 0, len(cpus))
