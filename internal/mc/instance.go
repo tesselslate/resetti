@@ -50,6 +50,7 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 	for idx, info := range infos {
 		var inst instance
 		// TODO: Better state detection heuristic (WorldPreview jar version?)
+		// TODO: Move out into separate function (for bench util)
 		_, err := os.Stat(inst.info.Dir + "/wpstateout.txt")
 		if err == nil {
 			reader, state, err := newWpstateReader(info)
@@ -134,7 +135,8 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 				// The stWorld state should only ever be handled internally.
 				// Update it to the appropriate public state before notifying
 				// the frontend.
-				if state.Type == stWorld {
+				switch state.Type {
+				case stWorld:
 					if m.active == id {
 						m.instances[id].state.Type = StIngame
 					} else {
@@ -143,7 +145,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 						m.sendKeyPress(id, x11.KeyEsc)
 						m.sendKeyUp(id, x11.KeyF3)
 					}
-				} else if state.Type == StPreview {
+				case StPreview:
 					if lastType != StPreview {
 						m.instances[id].state.LastPreview = time.Now()
 					}
@@ -170,7 +172,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 // be logged.
 func (m *Manager) Focus(id int) {
 	if err := m.x.FocusWindow(m.instances[id].info.Wid); err != nil {
-		log.Printf("Focus %d failed: %s\n", err)
+		log.Printf("Focus %d failed: %s\n", id, err)
 	}
 }
 
@@ -267,6 +269,6 @@ func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
 		rect.X, rect.Y, rect.W, rect.H,
 	)
 	if err != nil {
-		log.Printf("setResolution %d failed: %s\n", err)
+		log.Printf("setResolution %d failed: %s\n", id, err)
 	}
 }

@@ -103,8 +103,8 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 	if err != nil {
 		return InstanceInfo{}, err
 	}
-	resetKey := x11.Key{Code: x11.KeyF6}
-	previewKey := x11.Key{Code: x11.KeyH}
+	resetKey := x11.KeyF6
+	previewKey := x11.KeyH
 	for _, line := range strings.Split(string(options), "\n") {
 		// Only parse this keybind if it is the reset or leave preview key.
 		isResetKey := strings.Contains(line, "key_Create New World")

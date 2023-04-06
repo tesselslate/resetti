@@ -34,6 +34,7 @@ var (
 	KeyF1  = Key{Code: 67}
 	KeyF3  = Key{Code: 69}
 	KeyF6  = Key{Code: 72}
+	KeyH   = Key{Code: 43}
 )
 
 // InputState represents the state of a button or key (up or down.)
@@ -92,18 +93,22 @@ type MoveEvent struct {
 	Window    xproto.Window
 }
 
+// Time implements Event.
 func (e ButtonEvent) Time() uint32 {
 	return e.Timestamp
 }
 
+// Time implements Event.
 func (e FocusEvent) Time() uint32 {
 	return e.Timestamp
 }
 
+// Time implements Event.
 func (e KeyEvent) Time() uint32 {
 	return e.Timestamp
 }
 
+// Time implements Event.
 func (e MoveEvent) Time() uint32 {
 	return e.Timestamp
 }
