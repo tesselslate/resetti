@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -22,7 +21,7 @@ import (
 // as its game directory and current state.
 type instance struct {
 	info   InstanceInfo
-	reader stateReader
+	reader StateReader
 	state  State
 }
 
@@ -47,27 +46,13 @@ type Manager struct {
 func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manager, error) {
 	// Create instances.
 	instances := make([]instance, 0, len(infos))
-	for idx, info := range infos {
-		var inst instance
-		// TODO: Better state detection heuristic (WorldPreview jar version?)
-		// TODO: Move out into separate function (for bench util)
-		_, err := os.Stat(inst.info.Dir + "/wpstateout.txt")
-		if err == nil {
-			reader, state, err := newWpstateReader(info)
-			if err != nil {
-				return nil, fmt.Errorf("create wpstateReader %d: %w", idx, err)
-			}
-			inst = instance{info, &reader, state}
-		} else if os.IsNotExist(err) {
-			reader, state, err := newLogReader(info)
-			if err != nil {
-				return nil, fmt.Errorf("create logReader %d: %w", idx, err)
-			}
-			inst = instance{info, &reader, state}
-		} else {
-			return nil, fmt.Errorf("stat %d/wpstateout.txt: %w", idx, err)
+	for _, info := range infos {
+		reader, state, err := CreateStateReader(info)
+		if err != nil {
+			return nil, err
 		}
-		instances = append(instances, inst)
+		instance := instance{info, reader, state}
+		instances = append(instances, instance)
 	}
 
 	// Setup state watcher.

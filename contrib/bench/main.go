@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
@@ -81,44 +82,52 @@ func run(opts Options) int {
 	// Setup
 	x, err := x11.NewClient()
 	if err != nil {
-		fmt.Println(err)
-		return 1
+		log.Fatalln(err)
 	}
 	instances, err := mc.FindInstances(&x)
 	if err != nil {
-		fmt.Println(err)
-		return 1
+		log.Fatalln(err)
 	}
 	if opts.InstanceCount != 0 && len(instances) < opts.InstanceCount {
 		if len(instances) < opts.InstanceCount {
-			fmt.Printf("Found %d of %d instances\n", len(instances), opts.InstanceCount)
-			return 1
+			log.Fatalf("Found %d of %d instances\n", len(instances), opts.InstanceCount)
 		}
 		instances = instances[:opts.InstanceCount]
 	}
 	if err := setupCgroups(opts.Affinity, instances); err != nil {
-		fmt.Println(err)
-		return 1
+		log.Fatalln(err)
 	}
 	evtch := make(chan mc.Update, 16*len(instances))
 	errch := make(chan error, len(instances))
-	reader, states, err := mc.NewLogReader(instances)
-	if err != nil {
-		fmt.Println(err)
-		return 1
+	readers := make([]mc.StateReader, 0, len(instances))
+	states := make([]mc.State, 0, len(instances))
+	for _, inst := range instances {
+		reader, state, err := mc.CreateStateReader(inst)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		readers = append(readers, reader)
+		states = append(states, state)
 	}
-	go reader.Run(errch, evtch)
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	for _, reader := range readers {
+		if err := watcher.Add(reader.Path()); err != nil {
+			log.Fatalln(err)
+		}
+	}
+	go readStates(readers, watcher, states, evtch, errch)
 
 	// Profiling
 	if opts.Pprof {
 		profile, err := os.OpenFile(fmt.Sprintf("/tmp/resetti-prof-%d", rand.Uint64()), os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
-			fmt.Println(err)
-			return 1
+			log.Fatalln(err)
 		}
 		if err = pprof.StartCPUProfile(profile); err != nil {
-			fmt.Println(err)
-			return 1
+			log.Fatalln(err)
 		}
 		defer func() {
 			pprof.StopCPUProfile()
@@ -131,8 +140,7 @@ func run(opts Options) int {
 	if opts.Fancy {
 		fh, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Println(err)
-			return 1
+			log.Fatalln(err)
 		}
 		log.SetOutput(fh)
 		defer func() {
@@ -147,13 +155,12 @@ func run(opts Options) int {
 	// Warmup instances
 	for _, instance := range instances {
 		if err := x.Click(instance.Wid); err != nil {
-			fmt.Println(err)
-			return 1
+			log.Fatalln(err)
 		}
 	}
 	time.Sleep(100 * time.Millisecond)
 	for _, instance := range instances {
-		x.SendKeyPress(instance.ResetKey.Code, instance.Wid, x.GetCurrentTime())
+		x.SendKeyPress(instance.ResetKey.Code, instance.Wid)
 	}
 
 	resets := 0
@@ -185,40 +192,37 @@ func run(opts Options) int {
 			last := states[update.Id]
 			next := update.State
 			states[update.Id] = update.State
-			if opts.ResetAt == 100 {
+			switch opts.ResetAt {
+			case 100:
 				if last.Type != mc.StIdle && next.Type == mc.StIdle {
 					x.SendKeyPress(
 						instances[update.Id].ResetKey.Code,
 						instances[update.Id].Wid,
-						x.GetCurrentTime(),
 					)
 					resets += 1
 					printProgress(update.Id)
 				}
-			} else if opts.ResetAt == 0 {
+			case 0:
 				if last.Type != mc.StPreview && next.Type == mc.StPreview {
 					x.SendKeyPress(
 						instances[update.Id].PreviewKey.Code,
 						instances[update.Id].Wid,
-						x.GetCurrentTime(),
 					)
 					resets += 1
 					printProgress(update.Id)
 				}
-			} else {
+			default:
 				if next.Type != mc.StDirt && next.Progress >= opts.ResetAt && last.Progress < opts.ResetAt {
 					x.SendKeyPress(
 						instances[update.Id].ResetKey.Code,
 						instances[update.Id].Wid,
-						x.GetCurrentTime(),
 					)
 					resets += 1
 					printProgress(update.Id)
 				}
 			}
 		case err := <-errch:
-			fmt.Println(err)
-			return 1
+			log.Fatalln(err)
 		}
 	}
 	if !opts.PauseAfter {
@@ -236,25 +240,82 @@ func run(opts Options) int {
 			if last != mc.StIdle && next == mc.StIdle {
 				time.Sleep(50 * time.Millisecond)
 				x.SendKeyPress(
-					x11.KeyEsc,
+					x11.KeyEsc.Code,
 					instances[update.Id].Wid,
-					x.GetCurrentTime(),
 				)
 				paused += 1
 			}
 		case err := <-errch:
-			fmt.Println(err)
-			return 1
+			log.Fatalln(err)
 		}
 	}
 	return 0
 }
 
+// readStates begins reading the states of each instance.
+// TODO: just unduplicate this whole thing. make some sort of state reader manager
+// in the mc package and use that in the instance manager
+func readStates(readers []mc.StateReader, watcher *fsnotify.Watcher, states []mc.State, evtch chan<- mc.Update, errch chan<- error) {
+	paths := make(map[string]int)
+	for idx, reader := range readers {
+		paths[reader.Path()] = idx
+	}
+	for {
+		select {
+		case evt, ok := <-watcher.Events:
+			if !ok {
+				errch <- errors.New("watcher events closed")
+				return
+			}
+			id := paths[evt.Name]
+			switch evt.Op {
+			case fsnotify.Write:
+				// Process any updates to the state file.
+				state, updated, err := readers[id].Process()
+				if err != nil {
+					log.Printf("process log (%d) failed: %s", id, err)
+					continue
+				}
+				if !updated {
+					continue
+				}
+
+				// Only modify the fields that the state reader knows about.
+				states[id].Type = state.Type
+				states[id].Progress = state.Progress
+				states[id].Menu = state.Menu
+
+				// The stWorld state should only ever be handled internally.
+				// Update it to the appropriate public state before notifying
+				// the frontend.
+				if state.Type == 5 {
+					// TODO: find a way to make stWorld public more nicely. see above TODO
+					states[id].Type = mc.StIdle
+				}
+				evtch <- mc.Update{State: states[id], Id: id}
+			default:
+				err := readers[id].ProcessEvent(evt.Op)
+				if err != nil {
+					errch <- fmt.Errorf("process event (%d) failed: %w", id, err)
+					return
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				errch <- fmt.Errorf("watcher died: %w", err)
+				return
+			}
+			log.Printf("Non-fatal watcher error: %s\n", err)
+		}
+	}
+}
+
+// setupCgroups performs any necessary setup for the affinity cgroups.
 func setupCgroups(affinity string, instances []mc.InstanceInfo) error {
 	makeGroups := func(groups ...string) error {
 		needsRun := false
-		for _, folder := range groups {
-			stat, err := os.Stat("/sys/fs/cgroup/resetti/" + folder)
+		for _, dir := range groups {
+			stat, err := os.Stat("/sys/fs/cgroup/resetti/" + dir)
 			if err != nil || !stat.IsDir() {
 				needsRun = true
 				break

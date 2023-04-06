@@ -42,7 +42,7 @@ const (
 
 	// In the world.
 	//
-	// This is an internal state. It can be returned by stateReader.Process(),
+	// This is an internal state. It can be returned by StateReader.Process(),
 	// but should be converted to the appropriate state (either StIdle or
 	// StIngame) by the Manager.
 	stWorld
@@ -67,14 +67,14 @@ type State struct {
 	LastReset time.Time
 }
 
-// The stateReader interface provides a method for obtaining the state of an
+// The StateReader interface provides a method for obtaining the state of an
 // instance (e.g. generating, previewing, ingame.)
 //
 // There are currently two implementations: the traditional log reader, and the
 // newer wpstateout.txt reader. The wpstateout.txt reader is preferred and
 // should be used whenever possible, as it is simpler, faster, and more
 // featureful.
-type stateReader interface {
+type StateReader interface {
 	// Path returns the path of the file being read.
 	Path() string
 
@@ -109,6 +109,29 @@ type wpstateReader struct {
 	file  *os.File
 }
 
+// CreateStateReader attempts to create the best StateReader for the given
+// instance.
+func CreateStateReader(inst InstanceInfo) (StateReader, State, error) {
+	// TODO: Better state detection heuristic (WorldPreview jar version?)
+	// TODO: Move out into separate function (for bench util)
+	_, err := os.Stat(inst.Dir + "/wpstateout.txt")
+	if err == nil {
+		reader, state, err := newWpstateReader(inst)
+		if err != nil {
+			return nil, State{}, fmt.Errorf("create wpstateReader %d: %w", inst.Id, err)
+		}
+		return &reader, state, nil
+	} else if os.IsNotExist(err) {
+		reader, state, err := newLogReader(inst)
+		if err != nil {
+			return nil, State{}, fmt.Errorf("create logReader %d: %w", inst.Id, err)
+		}
+		return &reader, state, nil
+	} else {
+		return nil, State{}, fmt.Errorf("stat %d/wpstateout.txt: %w", inst.Id, err)
+	}
+}
+
 // newLogReader creates a new logReader for the given instance.
 func newLogReader(inst InstanceInfo) (logReader, State, error) {
 	path := inst.Dir + "/logs/latest.log"
@@ -141,12 +164,12 @@ func newWpstateReader(inst InstanceInfo) (wpstateReader, State, error) {
 	return reader, state, nil
 }
 
-// Path implements stateReader.
+// Path implements StateReader.
 func (r *logReader) Path() string {
 	return r.path
 }
 
-// Process implements stateReader.
+// Process implements StateReader.
 func (r *logReader) Process() (State, bool, error) {
 	updated := false
 	for {
@@ -188,7 +211,7 @@ func (r *logReader) Process() (State, bool, error) {
 	}
 }
 
-// ProcessEvent implements stateReader.
+// ProcessEvent implements StateReader.
 func (r *logReader) ProcessEvent(op fsnotify.Op) error {
 	// TODO: Recovery (e.g. midnight bug)
 	return nil
@@ -232,12 +255,12 @@ func (r *logReader) readLine() (string, error) {
 	}
 }
 
-// Path implements stateReader.
+// Path implements StateReader.
 func (r *wpstateReader) Path() string {
 	return r.path
 }
 
-// Process implements stateReader.
+// Process implements StateReader.
 func (r *wpstateReader) Process() (State, bool, error) {
 	buf := make([]byte, 32)
 	n, err := r.file.Read(buf)
@@ -293,7 +316,7 @@ func (r *wpstateReader) Process() (State, bool, error) {
 	return r.state, true, nil
 }
 
-// ProcessEvent implements stateReader.
+// ProcessEvent implements StateReader.
 func (r *wpstateReader) ProcessEvent(op fsnotify.Op) error {
 	// TODO: Recovery
 	return nil
