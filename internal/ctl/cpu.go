@@ -66,13 +66,13 @@ var suidBinaries = [...]string{
 	"pkexec",
 }
 
-// cpuManager controls how much CPU time is given to each instance based on its
+// CpuManager controls how much CPU time is given to each instance based on its
 // state. Currently, this is done via the use of cgroups and CPU affinity.
 //
 // Each instance can be in one of several affinity groups and is moved between
 // groups when updates to its state are received. See the documentation for the
 // affinity group constants for more information on each group.
-type cpuManager struct {
+type CpuManager struct {
 	anyActive bool // Whether there is an active instance
 	pids      []int
 	states    []cpuState
@@ -97,12 +97,12 @@ type priorityUpdate struct {
 	state bool
 }
 
-// newCpuManager creates a new cpuManager for the given instances and config
+// NewCpuManager creates a new cpuManager for the given instances and config
 // profile. If necessary, it prompts the user for root permission and runs the
 // cgroup creation script.
-func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Profile) (cpuManager, error) {
+func NewCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Profile) (CpuManager, error) {
 	if err := prepareCgroups(conf, len(instances)); err != nil {
-		return cpuManager{}, err
+		return CpuManager{}, err
 	}
 	pids := make([]int, 0, len(instances))
 	for _, instance := range instances {
@@ -112,7 +112,7 @@ func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 	for _, state := range states {
 		cpuStates = append(cpuStates, cpuState{state, affIdle, false})
 	}
-	manager := cpuManager{
+	manager := CpuManager{
 		false,
 		pids,
 		cpuStates,
@@ -122,7 +122,7 @@ func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 		make(chan mc.Update, bufferSize*len(instances)),
 	}
 	if err := manager.initGroups(); err != nil {
-		return cpuManager{}, err
+		return CpuManager{}, err
 	}
 	return manager, nil
 }
@@ -247,18 +247,18 @@ func writeCpuSet(group string, cpus []int) error {
 
 // Update updates the affinity group of the given instance as needed based on
 // the state change.
-func (c *cpuManager) Update(update mc.Update) {
+func (c *CpuManager) Update(update mc.Update) {
 	c.updates <- update
 }
 
 // SetPriority sets the priority state of the given instance.
-func (c *cpuManager) SetPriority(id int, state bool) {
+func (c *CpuManager) SetPriority(id int, state bool) {
 	c.priority <- priorityUpdate{id, state}
 }
 
 // handleUpdate handles a single instance state update and moves the instance
 // between groups as needed.
-func (c *cpuManager) handleUpdate(update mc.Update) {
+func (c *CpuManager) handleUpdate(update mc.Update) {
 	changed := c.states[update.Id].Type != update.State.Type
 
 	switch update.State.Type {
@@ -300,7 +300,7 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 
 // initGroups moves each instance to a consistent state for starting or
 // stopping the cpuManager.
-func (c *cpuManager) initGroups() error {
+func (c *CpuManager) initGroups() error {
 	switch c.conf.Wall.Performance.Affinity {
 	case "advanced":
 		for i := range c.states {
@@ -328,7 +328,7 @@ func (c *cpuManager) initGroups() error {
 // doing so will cause multiple instances to be in the active group, the
 // function panics. If the instance is prioritized, its group is updated
 // but it remains in the high cgroup.
-func (c *cpuManager) moveInstance(id int, group int) {
+func (c *CpuManager) moveInstance(id int, group int) {
 	if c.states[id].group == group {
 		return
 	}
@@ -356,7 +356,7 @@ func (c *cpuManager) moveInstance(id int, group int) {
 
 // setPriority sets the priority of an instance. If the instance is not already
 // in the high cgroup, it is moved there.
-func (c *cpuManager) setPriority(id int, priority bool) {
+func (c *CpuManager) setPriority(id int, priority bool) {
 	if priority == c.states[id].priority {
 		log.Println("cpuManager (debug): pointless priority update")
 	}
@@ -367,7 +367,7 @@ func (c *cpuManager) setPriority(id int, priority bool) {
 // updateAffinity updates the affinity cgroup an instance is part of. If the
 // instance is prioritized, that takes precedence over whatever group it is
 // a part of.
-func (c *cpuManager) updateAffinity(id int) {
+func (c *CpuManager) updateAffinity(id int) {
 	var group int
 	if c.states[id].priority {
 		group = affHigh
@@ -394,7 +394,7 @@ func (c *cpuManager) updateAffinity(id int) {
 }
 
 // Run handles state updates and moves instances between affinity groups.
-func (c *cpuManager) Run(ctx context.Context, wg *sync.WaitGroup) {
+func (c *CpuManager) Run(ctx context.Context, wg *sync.WaitGroup) {
 	// TODO: Move instances to a consistent state when starting and stopping
 	defer wg.Done()
 	wg.Add(1)

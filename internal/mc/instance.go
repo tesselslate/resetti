@@ -47,7 +47,7 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 	// Create instances.
 	instances := make([]instance, 0, len(infos))
 	for _, info := range infos {
-		reader, state, err := CreateStateReader(info)
+		reader, state, err := createStateReader(info)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +100,6 @@ func (m *Manager) GetStates() []State {
 func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- error) {
 	defer func() {
 		_ = m.watcher.Close()
-		println('b')
 	}()
 	for {
 		select {

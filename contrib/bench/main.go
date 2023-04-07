@@ -2,20 +2,18 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
-	"os/exec"
 	"runtime"
 	"runtime/pprof"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
+	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/ctl"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
@@ -94,31 +92,32 @@ func run(opts Options) int {
 		}
 		instances = instances[:opts.InstanceCount]
 	}
-	if err := setupCgroups(opts.Affinity, instances); err != nil {
-		log.Fatalln(err)
-	}
 	evtch := make(chan mc.Update, 16*len(instances))
 	errch := make(chan error, len(instances))
-	readers := make([]mc.StateReader, 0, len(instances))
-	states := make([]mc.State, 0, len(instances))
-	for _, inst := range instances {
-		reader, state, err := mc.CreateStateReader(inst)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		readers = append(readers, reader)
-		states = append(states, state)
-	}
-	watcher, err := fsnotify.NewWatcher()
+	mgr, err := mc.NewManager(instances, nil, &x)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	for _, reader := range readers {
-		if err := watcher.Add(reader.Path()); err != nil {
+	states := mgr.GetStates()
+	conf := &cfg.Profile{}
+	switch opts.Affinity {
+	case "sequence":
+		conf.Wall.Enabled = true
+		conf.Wall.Performance.Affinity = "sequence"
+	case "ccx":
+		conf.Wall.Enabled = true
+		conf.Wall.Performance.Affinity = "advanced"
+		conf.Wall.Performance.CcxSplit = true
+		conf.Wall.Performance.CpusHigh = runtime.NumCPU() / 2
+	default:
+		conf = nil
+	}
+	if conf != nil {
+		_, err := ctl.NewCpuManager(instances, states, conf)
+		if err != nil {
 			log.Fatalln(err)
 		}
 	}
-	go readStates(readers, watcher, states, evtch, errch)
 
 	// Profiling
 	if opts.Pprof {
@@ -185,6 +184,7 @@ func run(opts Options) int {
 	}
 
 	// Main loop
+	go mgr.Run(context.Background(), evtch, errch)
 	start = time.Now()
 	for resets != opts.ResetCount {
 		select {
@@ -238,11 +238,6 @@ func run(opts Options) int {
 			next := update.State.Type
 			states[update.Id] = update.State
 			if last != mc.StIdle && next == mc.StIdle {
-				time.Sleep(50 * time.Millisecond)
-				x.SendKeyPress(
-					x11.KeyEsc.Code,
-					instances[update.Id].Wid,
-				)
 				paused += 1
 			}
 		case err := <-errch:
@@ -250,183 +245,4 @@ func run(opts Options) int {
 		}
 	}
 	return 0
-}
-
-// readStates begins reading the states of each instance.
-// TODO: just unduplicate this whole thing. make some sort of state reader manager
-// in the mc package and use that in the instance manager
-func readStates(readers []mc.StateReader, watcher *fsnotify.Watcher, statesOrig []mc.State, evtch chan<- mc.Update, errch chan<- error) {
-	states := make([]mc.State, len(statesOrig))
-	copy(states, statesOrig)
-	paths := make(map[string]int)
-	for idx, reader := range readers {
-		paths[reader.Path()] = idx
-	}
-	for {
-		select {
-		case evt, ok := <-watcher.Events:
-			if !ok {
-				errch <- errors.New("watcher events closed")
-				return
-			}
-			id := paths[evt.Name]
-			switch evt.Op {
-			case fsnotify.Write:
-				// Process any updates to the state file.
-				state, updated, err := readers[id].Process()
-				if err != nil {
-					log.Printf("process log (%d) failed: %s", id, err)
-					continue
-				}
-				if !updated {
-					continue
-				}
-
-				// Only modify the fields that the state reader knows about.
-				states[id].Type = state.Type
-				states[id].Progress = state.Progress
-				states[id].Menu = state.Menu
-
-				// The stWorld state should only ever be handled internally.
-				// Update it to the appropriate public state before notifying
-				// the frontend.
-				if state.Type == 5 {
-					// TODO: find a way to make stWorld public more nicely. see above TODO
-					states[id].Type = mc.StIdle
-				}
-				evtch <- mc.Update{State: states[id], Id: id}
-			default:
-				err := readers[id].ProcessEvent(evt.Op)
-				if err != nil {
-					errch <- fmt.Errorf("process event (%d) failed: %w", id, err)
-					return
-				}
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				errch <- fmt.Errorf("watcher died: %w", err)
-				return
-			}
-			log.Printf("Non-fatal watcher error: %s\n", err)
-		}
-	}
-}
-
-// setupCgroups performs any necessary setup for the affinity cgroups.
-func setupCgroups(affinity string, instances []mc.InstanceInfo) error {
-	makeGroups := func(groups ...string) error {
-		needsRun := false
-		for _, dir := range groups {
-			stat, err := os.Stat("/sys/fs/cgroup/resetti/" + dir)
-			if err != nil || !stat.IsDir() {
-				needsRun = true
-				break
-			}
-		}
-		if !needsRun {
-			return nil
-		}
-
-		// Determine the user's suid binary.
-		suidBin, ok := os.LookupEnv("RESETTI_SUID_BINARY")
-		if !ok {
-			// TODO: More? pkexec, etc
-			options := []string{"sudo", "doas"}
-			for _, option := range options {
-				cmd := exec.Command(option)
-				err := cmd.Run()
-				if !errors.Is(err, exec.ErrNotFound) {
-					suidBin = option
-					break
-				}
-			}
-		}
-		if suidBin == "" {
-			return errors.New("no suid binary found")
-		}
-
-		// Run the script.
-		subgroups := strings.Join(groups, " ")
-		cmd := exec.Command(suidBin, "sh", "groups.sh", subgroups)
-		err := cmd.Run()
-		return fmt.Errorf("run cgroup script: %w", err)
-	}
-	writeCpuSet := func(cgroup string, cpus []int) error {
-		list := make([]string, 0, len(cpus))
-		for _, cpu := range cpus {
-			list = append(list, strconv.Itoa(cpu))
-		}
-		return os.WriteFile(
-			fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cpuset.cpus", cgroup),
-			[]byte(strings.Join(list, ",")),
-			0644,
-		)
-	}
-
-	switch affinity {
-	case "sequence":
-		groups := make([]string, 0)
-		if len(instances)*2 > runtime.NumCPU() {
-			return errors.New("not enough cpus")
-		}
-		for i := 0; i < len(instances); i += 1 {
-			groups = append(groups, fmt.Sprintf("inst%d", i))
-		}
-		if err := makeGroups(groups...); err != nil {
-			return err
-		}
-		for i, group := range groups {
-			if err := writeCpuSet(group, []int{i, i + runtime.NumCPU()/2}); err != nil {
-				return err
-			}
-		}
-		for i := 0; i < len(instances); i += 1 {
-			err := os.WriteFile(
-				fmt.Sprintf("/sys/fs/cgroup/resetti/inst%d/cgroup.procs", i),
-				[]byte(strconv.Itoa(int(instances[i].Pid))),
-				0644,
-			)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	case "ccx":
-		if err := makeGroups("ccx0", "ccx1"); err != nil {
-			return err
-		}
-		ccx0, ccx1 := make([]int, 0), make([]int, 0)
-		for i := 0; i < runtime.NumCPU()/2; i += 1 {
-			ccx0 = append(ccx0, i)
-			ccx1 = append(ccx1, i+runtime.NumCPU()/2)
-		}
-		if err := writeCpuSet("ccx0", ccx0); err != nil {
-			return err
-		}
-		if err := writeCpuSet("ccx1", ccx1); err != nil {
-			return err
-		}
-
-		for i := 0; i < len(instances); i += 1 {
-			var group string
-			if i < len(instances)/2 {
-				group = "ccx0"
-			} else {
-				group = "ccx1"
-			}
-			err := os.WriteFile(
-				fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", group),
-				[]byte(strconv.Itoa(int(instances[i].Pid))),
-				0644,
-			)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	case "none":
-		return nil
-	default:
-		return errors.New("invalid affinity")
-	}
 }

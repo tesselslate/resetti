@@ -39,7 +39,7 @@ type Controller struct {
 
 	counter  counter
 	manager  *mc.Manager
-	cpu      cpuManager
+	cpu      CpuManager
 	frontend Frontend
 
 	useAffinity bool
@@ -152,7 +152,7 @@ func Run(conf *cfg.Profile) error {
 	if c.conf.Wall.Enabled {
 		if c.conf.Wall.Performance.Affinity != "" {
 			states := c.manager.GetStates()
-			c.cpu, err = newCpuManager(instances, states, conf)
+			c.cpu, err = NewCpuManager(instances, states, conf)
 			if err != nil {
 				return fmt.Errorf("(init) create cpuManager: %w", err)
 			}

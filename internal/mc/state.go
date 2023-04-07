@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"golang.org/x/exp/slices"
 )
 
 // Log lines
@@ -46,6 +47,12 @@ const (
 	// but should be converted to the appropriate state (either StIdle or
 	// StIngame) by the Manager.
 	stWorld
+)
+
+// State reader choice
+var (
+	forceLog     = slices.Contains(os.Args, "--force-log")
+	forceWpstate = slices.Contains(os.Args, "--force-wpstate")
 )
 
 // State contains information about the current state of an instance.
@@ -109,26 +116,38 @@ type wpstateReader struct {
 	file  *os.File
 }
 
-// CreateStateReader attempts to create the best StateReader for the given
+// createStateReader attempts to create the best StateReader for the given
 // instance.
-func CreateStateReader(inst InstanceInfo) (StateReader, State, error) {
+func createStateReader(inst InstanceInfo) (StateReader, State, error) {
 	// TODO: Better state detection heuristic (WorldPreview jar version?)
 	// TODO: Move out into separate function (for bench util)
+
+	// Decide which state reader to create.
 	_, err := os.Stat(inst.Dir + "/wpstateout.txt")
-	if err == nil {
-		reader, state, err := newWpstateReader(inst)
-		if err != nil {
-			return nil, State{}, fmt.Errorf("create wpstateReader %d: %w", inst.Id, err)
-		}
-		return &reader, state, nil
-	} else if os.IsNotExist(err) {
+	if err != nil && !os.IsNotExist(err) {
+		return nil, State{}, fmt.Errorf("stat %d/wpstateout.txt: %w", inst.Id, err)
+	}
+	if forceLog && forceWpstate {
+		return nil, State{}, errors.New("can only force one state reader type")
+	}
+	useLogReader := forceLog || (!forceWpstate && os.IsNotExist(err))
+
+	// Create the state reader.
+	if useLogReader {
 		reader, state, err := newLogReader(inst)
 		if err != nil {
 			return nil, State{}, fmt.Errorf("create logReader %d: %w", inst.Id, err)
 		}
 		return &reader, state, nil
 	} else {
-		return nil, State{}, fmt.Errorf("stat %d/wpstateout.txt: %w", inst.Id, err)
+		if os.IsNotExist(err) {
+			return nil, State{}, errors.New("cannot force wpstate reader without wpstateout.txt")
+		}
+		reader, state, err := newWpstateReader(inst)
+		if err != nil {
+			return nil, State{}, fmt.Errorf("create wpstateReader %d: %w", inst.Id, err)
+		}
+		return &reader, state, nil
 	}
 }
 
