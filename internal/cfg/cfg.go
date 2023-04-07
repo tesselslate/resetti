@@ -69,7 +69,7 @@ type Wall struct {
 		SleepbgPath string `toml:"sleepbg_path"`
 
 		// Whether or not to use affinity.
-		Affinity bool `toml:"affinity"`
+		Affinity string `toml:"affinity"`
 
 		// If enabled, halves the amount of CPU cores available to affinity
 		// groups and instead creates double the amount of groups (half for

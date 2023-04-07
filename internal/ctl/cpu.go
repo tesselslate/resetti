@@ -99,7 +99,7 @@ type priorityUpdate struct {
 // profile. If necessary, it prompts the user for root permission and runs the
 // cgroup creation script.
 func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Profile) (cpuManager, error) {
-	if err := prepareCgroups(conf); err != nil {
+	if err := prepareCgroups(conf, len(instances)); err != nil {
 		return cpuManager{}, err
 	}
 	pids := make([]int, 0, len(instances))
@@ -119,20 +119,30 @@ func newCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 		make(chan int, bufferSize*len(instances)),
 		make(chan mc.Update, bufferSize*len(instances)),
 	}
+	if err := manager.initGroups(); err != nil {
+		return cpuManager{}, err
+	}
 	return manager, nil
 }
 
 // prepareCgroups prompts the user for root privileges and runs the cgroup
 // setup script (if necessary) and assigns the correct CPU sets to each cgroup.
-func prepareCgroups(conf *cfg.Profile) error {
+func prepareCgroups(conf *cfg.Profile, instances int) error {
 	// Check if the cgroup setup script needs to be run.
 	var shouldExist []string
-	if conf.Wall.Performance.CcxSplit {
-		for _, name := range baseNames {
-			shouldExist = append(shouldExist, name+"0", name+"1")
+	switch conf.Wall.Performance.Affinity {
+	case "advanced":
+		if conf.Wall.Performance.CcxSplit {
+			for _, name := range baseNames {
+				shouldExist = append(shouldExist, name+"0", name+"1")
+			}
+		} else {
+			shouldExist = baseNames[:]
 		}
-	} else {
-		shouldExist = baseNames[:]
+	case "sequence":
+		for i := 0; i < instances; i += 1 {
+			shouldExist = append(shouldExist, fmt.Sprintf("inst%d", i))
+		}
 	}
 	shouldRun := false
 	for _, group := range shouldExist {
@@ -173,37 +183,46 @@ func prepareCgroups(conf *cfg.Profile) error {
 	}
 
 	// Assign the correct CPU sets to each cgroup.
-	cpus := [...]int{
-		conf.Wall.Performance.CpusIdle,
-		conf.Wall.Performance.CpusLow,
-		conf.Wall.Performance.CpusMid,
-		conf.Wall.Performance.CpusHigh,
-		conf.Wall.Performance.CpusActive,
-	}
-	for idx, group := range baseNames {
-		// If CCX splitting is disabled, assign 0, 1, ..., N-1
-		// If it is enabled:
-		// base0 - assign 0, 2, ..., (N-1) * 2
-		// base1 - assign 1, 3, ..., (N*2) - 1
-		set := make([]int, cpus[idx])
-		for cpu := 0; cpu < cpus[idx]; cpu += 1 {
-			set = append(set, cpu)
+	switch conf.Wall.Performance.Affinity {
+	case "advanced":
+		cpus := [...]int{
+			conf.Wall.Performance.CpusIdle,
+			conf.Wall.Performance.CpusLow,
+			conf.Wall.Performance.CpusMid,
+			conf.Wall.Performance.CpusHigh,
+			conf.Wall.Performance.CpusActive,
 		}
-		if conf.Wall.Performance.CcxSplit {
-			for idx := range set {
-				set[idx] *= 2
+		for idx, group := range baseNames {
+			// If CCX splitting is disabled, assign 0, 1, ..., N-1
+			// If it is enabled:
+			// base0 - assign 0, 2, ..., (N-1) * 2
+			// base1 - assign 1, 3, ..., (N*2) - 1
+			set := make([]int, cpus[idx])
+			for cpu := 0; cpu < cpus[idx]; cpu += 1 {
+				set = append(set, cpu)
 			}
-			if err := writeCpuSet(group+"0", set); err != nil {
-				return err
+			if conf.Wall.Performance.CcxSplit {
+				for idx := range set {
+					set[idx] *= 2
+				}
+				if err := writeCpuSet(group+"0", set); err != nil {
+					return err
+				}
+				for idx := range set {
+					set[idx] += 1
+				}
+				if err := writeCpuSet(group+"1", set); err != nil {
+					return err
+				}
+			} else {
+				if err := writeCpuSet(group, set); err != nil {
+					return err
+				}
 			}
-			for idx := range set {
-				set[idx] += 1
-			}
-			if err := writeCpuSet(group+"1", set); err != nil {
-				return err
-			}
-		} else {
-			if err := writeCpuSet(group, set); err != nil {
+		}
+	case "sequence":
+		for i := 0; i < instances; i += 1 {
+			if err := writeCpuSet(fmt.Sprintf("inst%d", i), []int{i * 2, i*2 + 1}); err != nil {
 				return err
 			}
 		}
@@ -275,6 +294,32 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 		c.moveInstance(update.Id, affActive)
 	}
 	c.states[update.Id].State = update.State
+}
+
+// initGroups moves each instance to a consistent state for starting or
+// stopping the cpuManager.
+func (c *cpuManager) initGroups() error {
+	switch c.conf.Wall.Performance.Affinity {
+	case "advanced":
+		for i := range c.states {
+			c.moveInstance(i, affHigh)
+		}
+		return nil
+	case "sequence":
+		for id, pid := range c.pids {
+			err := os.WriteFile(
+				fmt.Sprintf("/sys/fs/cgroup/resetti/inst%d/cgroup.procs", id),
+				[]byte(strconv.Itoa(pid)),
+				0644,
+			)
+			if err != nil {
+				log.Printf("cpuManager: updateAffinity failed: %s\n", err)
+			}
+		}
+		return nil
+	default:
+		panic("invalid affinity (should have been caught in config validation)")
+	}
 }
 
 // moveInstance attempts to move the given instance to the given group. If
@@ -352,6 +397,9 @@ func (c *cpuManager) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			if err := c.initGroups(); err != nil {
+				log.Printf("cpuManager: Failed to move instances to consistent state: %s\n", err)
+			}
 			return
 		case update := <-c.updates:
 			c.handleUpdate(update)

@@ -199,7 +199,7 @@ func (w *Wall) createSleepbgLock() {
 	if err != nil {
 		log.Printf("Failed to create sleepbg.lock: %s\n", err)
 	} else {
-		file.Close()
+		_ = file.Close()
 	}
 }
 
@@ -329,7 +329,9 @@ func (w *Wall) resetIngame() {
 		}
 	}
 	w.deleteSleepbgLock(false)
-	w.focusProjector()
+	if err := w.focusProjector(); err != nil {
+		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
+	}
 	go w.host.RunHook(HookReset)
 }
 

@@ -119,25 +119,19 @@ show_at = 20
 # instances with Java's USER.HOME property.
 sleepbg_path = ""
 
-# Whether or not to use advanced CPU affinity. TODO: better docs
-affinity = false
+# The CPU affinity method to use. Leave blank to disable affinity. Options:
+# - sequence        Each instance gets one CPU core (SMT is assumed, so 2
+#                   threads.)
+# - advanced        Advanced affinity, where each instance is moved between
+#                   affinity groups. Configure below.
+affinity = ""
 
 # Whether or not to evenly divide instances between CCXs (core complexes).
 # - You should only use this if you have an AMD CPU with 2 CCXs.
 # - If enabled, the number of CPU cores available to each affinity group
 #   is halved. One affinity group is created per CCX with the given number
 #   of cores.
-# - Verify that your CPU cores follow the below pattern by using `lstopo`.
-#   This example is for a 12 core (e.g. 5900X), so adjust for your CPU.
-#   Core0 Core1 .... Core5      Core6 Core7 .... Core11
-#   PU0   PU2        PU10       PU12  PU14       PU22
-#   P0    P1         P5         P6    P7         P11
-#   PU1   PU3        PU11       PU13  PU15       PU23
-#   P12   P13        P17        P18   P19        P23
-#
-#   If your CPU does have 2 CCXs but does not have the same topology, please
-#   open an issue so we can figure out how to make the core pinning code more
-#   robust.
+# - TODO: Better CPU topology detection
 ccx_split = false
 
 # The number of CPUs (cores, or threads if you have SMT) to allocate to each

@@ -134,12 +134,16 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) create manager: %w", err)
 	}
 
-	if c.conf.Wall.Enabled && c.conf.Wall.Performance.Affinity {
-		c.useAffinity = true
-		states := c.manager.GetStates()
-		c.cpu, err = newCpuManager(instances, states, conf)
-		if err != nil {
-			return fmt.Errorf("(init) create cpuManager: %w", err)
+	if c.conf.Wall.Enabled {
+		if c.conf.Wall.Performance.Affinity != "" {
+			states := c.manager.GetStates()
+			c.cpu, err = newCpuManager(instances, states, conf)
+			if err != nil {
+				return fmt.Errorf("(init) create cpuManager: %w", err)
+			}
+		}
+		if c.conf.Wall.Performance.Affinity == "advanced" {
+			c.useAffinity = true
 		}
 	}
 
