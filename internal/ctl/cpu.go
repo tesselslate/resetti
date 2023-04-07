@@ -15,6 +15,7 @@ import (
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
+	"golang.org/x/exp/slices"
 )
 
 // Affinity groups
@@ -155,7 +156,7 @@ func prepareCgroups(conf *cfg.Profile, instances int) error {
 	}
 
 	// Run the cgroup script if necessary.
-	if shouldRun {
+	if shouldRun || slices.Contains(os.Args, "--force-cgroups") {
 		// TODO: Allow for modifying the script (or at least don't rewrite it
 		// every time even when it has not been modified)
 		path, err := cfg.GetDirectory()
