@@ -98,7 +98,7 @@ type frontendDependencies struct {
 type inputState struct {
 	cx, cy  int
 	buttons map[buttonMod]bool
-	keys    map[x11.Key]bool
+	keys    map[x11.Key]uint32
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -118,7 +118,7 @@ func Run(conf *cfg.Profile) error {
 		HookWallPlay:  c.conf.Hooks.WallPlay,
 		HookWallReset: c.conf.Hooks.WallReset,
 	}
-	c.inputs = inputState{0, 0, make(map[buttonMod]bool), make(map[x11.Key]bool)}
+	c.inputs = inputState{0, 0, make(map[buttonMod]bool), make(map[x11.Key]uint32)}
 
 	x, err := x11.NewClient()
 	if err != nil {
@@ -327,8 +327,11 @@ func (c *Controller) bind(bind cfg.Bind) error {
 }
 
 // matchBind attempts to match a given keybind based on the current input state.
-func (c *Controller) matchBind(key bool) (bind cfg.Bind, ok bool) {
-	if key && len(c.inputs.keys) == 1 {
+func (c *Controller) matchBind() (bind cfg.Bind, ok bool) {
+	if len(c.inputs.keys)+len(c.inputs.buttons) != 1 {
+		return cfg.Bind{}, false
+	}
+	if len(c.inputs.keys) == 1 {
 		// There's only one element.
 		for key := range c.inputs.keys {
 			for bind := range c.binds {
@@ -337,7 +340,7 @@ func (c *Controller) matchBind(key bool) (bind cfg.Bind, ok bool) {
 				}
 			}
 		}
-	} else if !key && len(c.inputs.buttons) == 1 {
+	} else {
 		// There's only one element.
 		for button := range c.inputs.buttons {
 			for bind := range c.binds {
@@ -388,8 +391,16 @@ func (c *Controller) run(ctx context.Context) error {
 				c.frontend.FocusChange(evt)
 			case x11.KeyEvent:
 				if evt.State == x11.StateDown {
-					c.inputs.keys[evt.Key] = true
-					bind, ok := c.matchBind(true)
+					// We have to use a GLFW hackfix here ourselves (:
+					// Ignore repeat keydown events.
+					if last, ok := c.inputs.keys[evt.Key]; ok {
+						if evt.Timestamp-last <= 20 {
+							c.inputs.keys[evt.Key] = evt.Timestamp
+							continue
+						}
+					}
+					c.inputs.keys[evt.Key] = evt.Timestamp
+					bind, ok := c.matchBind()
 					if !ok {
 						continue
 					}
@@ -405,7 +416,7 @@ func (c *Controller) run(ctx context.Context) error {
 				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
 				if evt.State == x11.StateDown {
 					c.inputs.buttons[bm] = true
-					bind, ok := c.matchBind(false)
+					bind, ok := c.matchBind()
 					if !ok {
 						continue
 					}
@@ -417,7 +428,7 @@ func (c *Controller) run(ctx context.Context) error {
 				}
 			case x11.MoveEvent:
 				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
-				bind, ok := c.matchBind(false)
+				bind, ok := c.matchBind()
 				if !ok {
 					continue
 				}

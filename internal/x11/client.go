@@ -2,6 +2,8 @@
 // things like sending input events.
 package x11
 
+// Good luck to anyone who needs to modify this file. X is a minefield. Have fun.
+
 import (
 	"context"
 	"encoding/binary"
@@ -519,6 +521,20 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 				Timestamp: uint32(evt.Time),
 			}
 		case xproto.KeyReleaseEvent:
+			// We have to use a GLFW hackfix here ourselves (:
+			// If there is a next event in the queue and it is a corresponding
+			// key press, drop the key release event.
+			evt2, err := c.conn.PollForEvent()
+			if err != nil {
+				log.Printf("X: Polled error: %s\n", err)
+				continue
+			}
+			if evt3, ok := evt2.(xproto.KeyPressEvent); ok {
+				if evt.Detail == evt3.Detail && evt.State == evt3.State {
+					continue
+				}
+			}
+
 			ch <- KeyEvent{
 				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State)},
 				State:     StateUp,
