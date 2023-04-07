@@ -91,7 +91,6 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 		return InstanceInfo{}, err
 	}
 	if version < 14 {
-		// TODO: Pre-1.14 is still unsupported.
 		return InstanceInfo{}, errors.New("only 1.14 and newer are currently supported")
 	}
 

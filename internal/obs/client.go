@@ -238,6 +238,7 @@ func (c *Client) respondHello(ctx context.Context, pw string) error {
 
 func (c *Client) run(ctx context.Context, errch chan<- error) {
 	defer c.ws.Close(websocket.StatusNormalClosure, "")
+	defer close(errch)
 	for {
 		// Check if the context has been cancelled.
 		select {

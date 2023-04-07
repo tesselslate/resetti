@@ -374,11 +374,15 @@ func (c *Controller) run(ctx context.Context) error {
 		case err := <-c.mgrErrors:
 			// All manager errors are fatal.
 			return fmt.Errorf("manager: %w", err)
-		case err := <-c.obsErrors:
-			// TODO: Make OBS differentiate fatal/non fatal errors.
+		case err, ok := <-c.obsErrors:
+			if !ok {
+				return fmt.Errorf("fatal OBS error: %w", err)
+			}
 			log.Printf("OBS error: %s\n", err)
-		case err := <-c.x11Errors:
-			// TODO: Make X differentiate fatal/non fatal errors.
+		case err, ok := <-c.x11Errors:
+			if !ok {
+				return fmt.Errorf("fatal X error: %w", err)
+			}
 			log.Printf("X error: %s\n", err)
 		case evt := <-c.mgrEvents:
 			c.frontend.Update(evt)

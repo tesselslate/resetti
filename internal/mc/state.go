@@ -120,7 +120,6 @@ type wpstateReader struct {
 // instance.
 func createStateReader(inst InstanceInfo) (StateReader, State, error) {
 	// TODO: Better state detection heuristic (WorldPreview jar version?)
-	// TODO: Move out into separate function (for bench util)
 
 	// Decide which state reader to create.
 	_, err := os.Stat(inst.Dir + "/wpstateout.txt")

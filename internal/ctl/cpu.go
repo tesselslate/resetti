@@ -395,7 +395,6 @@ func (c *CpuManager) updateAffinity(id int) {
 
 // Run handles state updates and moves instances between affinity groups.
 func (c *CpuManager) Run(ctx context.Context, wg *sync.WaitGroup) {
-	// TODO: Move instances to a consistent state when starting and stopping
 	defer wg.Done()
 	wg.Add(1)
 	for {

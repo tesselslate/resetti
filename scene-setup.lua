@@ -12,8 +12,6 @@ local locks_path = nil
 local locks_width = nil
 local locks_height = nil
 
-local moving = nil
-
 -- Script boilerplate, settings
 function script_update(settings)
     -- Update the current settings.
@@ -26,19 +24,11 @@ function script_update(settings)
     locks_path = O.obs_data_get_string(settings, "locks_path")
     locks_width = O.obs_data_get_int(settings, "locks_width")
     locks_height = O.obs_data_get_int(settings, "locks_height")
-    
-    moving = O.obs_data_get_bool(settings, "moving")
-
-    -- Validate the current settings. TODO
 end
 
 function script_description()
     return [[
         <center><h2>resetti scene setup</h2></center>
-        <center>If the scenes do not get created when you</br>
-        click Generate, check the Script Log.</center>
-
-        <br/><hr/>
     ]]
 end
 
@@ -61,7 +51,6 @@ function script_properties()
     O.obs_properties_add_int(locks, "locks_width", "Width", 1, 3840, 1)
     O.obs_properties_add_int(locks, "locks_height", "Height", 1, 2160, 1)
 
-    O.obs_properties_add_bool(wall, "moving", "Moving")
     O.obs_properties_add_group(wall, "locks", "Lock Icons", O.OBS_GROUP_CHECKABLE, locks)
 
     return settings
@@ -150,10 +139,6 @@ function create_wall_scene()
         O.obs_source_release(source)
     end
 
-    if moving then
-        -- TODO
-    end
-
     O.obs_scene_release(scene)
 end
 
@@ -186,6 +171,12 @@ function create_verification_scene(sources)
 end
 
 function generate_scenes(_, _)
+    -- Validate
+    if wall and wall_height * wall_width < instance_count then
+        error("Wall cannot fit instances.")
+        return
+    end
+
     print("Attempting to generate scenes.")
 
     local sources = {}
