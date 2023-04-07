@@ -51,6 +51,9 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 		if err != nil {
 			return nil, err
 		}
+		if state.Type == stWorld {
+			state.Type = StIdle
+		}
 		instance := instance{info, reader, state}
 		instances = append(instances, instance)
 	}
@@ -97,6 +100,7 @@ func (m *Manager) GetStates() []State {
 func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- error) {
 	defer func() {
 		_ = m.watcher.Close()
+		println('b')
 	}()
 	for {
 		select {
@@ -185,6 +189,7 @@ func (m *Manager) Focus(id int) {
 func (m *Manager) Play(id int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.Focus(id)
 	m.active = id
 	m.instances[id].state.Type = StIngame
 
@@ -196,14 +201,13 @@ func (m *Manager) Play(id int) {
 		if m.conf.UnpauseFocus && m.conf.Wall.UseF1 {
 			m.sendKeyPress(id, x11.KeyF1)
 		}
-
-		// Wait for the instance to unstretch, then pause and unpause again
-		// to update the cursor position for the next time a menu is opened.
-		// TODO: Make sure GLFW doesn't discard the extra escape presses.
-		m.sendKeyPress(id, x11.KeyEsc)
-		m.sendKeyPress(id, x11.KeyEsc)
 	}
-	m.Focus(id)
+
+	// Pause and unpause again to let the cursor position update for the next
+	// time a menu is opened.
+	time.Sleep(time.Millisecond * time.Duration(m.conf.Delay))
+	m.sendKeyPress(id, x11.KeyEsc)
+	m.sendKeyPress(id, x11.KeyEsc)
 }
 
 // Reset attempts to reset the given instance. The return value will indicate

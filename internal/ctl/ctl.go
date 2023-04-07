@@ -79,11 +79,12 @@ type Frontend interface {
 // frontendDependencies contains all of the dependencies that a Frontend might
 // need to setup and run.
 type frontendDependencies struct {
-	conf   *cfg.Profile
-	obs    *obs.Client
-	x      *x11.Client
-	states []mc.State
-	host   *Controller
+	conf      *cfg.Profile
+	obs       *obs.Client
+	x         *x11.Client
+	states    []mc.State
+	instances []mc.InstanceInfo
+	host      *Controller
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -150,11 +151,12 @@ func Run(conf *cfg.Profile) error {
 
 	// Start various components
 	err = c.frontend.Setup(frontendDependencies{
-		conf:   c.conf,
-		obs:    c.obs,
-		x:      c.x,
-		states: c.manager.GetStates(),
-		host:   &c,
+		conf:      c.conf,
+		obs:       c.obs,
+		x:         c.x,
+		states:    c.manager.GetStates(),
+		instances: instances,
+		host:      &c,
 	})
 	if err != nil {
 		return fmt.Errorf("(init) setup frontend: %w", err)
@@ -244,13 +246,16 @@ func (c *Controller) ResetInstance(id int) bool {
 	if ok {
 		c.counter.Increment()
 	}
-	go c.RunHook(HookReset)
 	return ok
 }
 
 // RunHook runs the hook of the given type if it exists.
 func (c *Controller) RunHook(hook int) {
-	bin, rawArgs, ok := strings.Cut(c.hooks[hook], " ")
+	cmdStr := c.hooks[hook]
+	if cmdStr == "" {
+		return
+	}
+	bin, rawArgs, ok := strings.Cut(cmdStr, " ")
 	var args []string
 	if ok {
 		args = strings.Split(rawArgs, " ")

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
@@ -247,7 +248,10 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 		}
 		if changed {
 			c.moveInstance(update.Id, affMid)
-			c.removeBurst <- update.Id
+			go func() {
+				<-time.After(time.Millisecond * time.Duration(c.conf.Wall.Performance.BurstLength))
+				c.removeBurst <- update.Id
+			}()
 		}
 	case mc.StDirt:
 		if c.anyActive {
@@ -260,7 +264,7 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 		wasUnder := c.states[update.Id].Progress <= c.conf.Wall.Performance.LowThreshold
 		if wasUnder && nowOver {
 			c.moveInstance(update.Id, affLow)
-		} else {
+		} else if changed {
 			if c.anyActive {
 				c.moveInstance(update.Id, affMid)
 			} else {
@@ -286,8 +290,18 @@ func (c *cpuManager) moveInstance(id int, group int) {
 			panic("multiple active instances")
 		}
 		c.anyActive = true
+		for id, state := range c.states {
+			if state.group == affHigh {
+				c.moveInstance(id, affMid)
+			}
+		}
 	} else if c.states[id].group == affActive {
 		c.anyActive = false
+		for id, state := range c.states {
+			if state.group == affMid {
+				c.moveInstance(id, affHigh)
+			}
+		}
 	}
 	c.states[id].group = group
 	c.updateAffinity(id)
@@ -300,9 +314,7 @@ func (c *cpuManager) setPriority(id int, priority bool) {
 		log.Println("cpuManager (debug): pointless priority update")
 	}
 	c.states[id].priority = priority
-	if c.states[id].group != affHigh {
-		c.updateAffinity(id)
-	}
+	c.updateAffinity(id)
 }
 
 // updateAffinity updates the affinity cgroup an instance is part of. If the

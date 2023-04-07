@@ -98,6 +98,7 @@ use_f1 = false
 # the screen and give a cleaner look.
 [wall.hiding]
 # What criteria to use to determine when to make an instance visible again.
+# Leave blank to disable.
 # Options:
 # - percentage      Show the instance when it reaches the given worldgen
 #                   percentage and is previewing

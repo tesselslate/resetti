@@ -181,7 +181,17 @@ func MakeProfile(name string) error {
 // validateProfile ensures that the user's configuration profile does not have
 // any illegal or invalid settings.
 func validateProfile(conf *Profile) error {
-	// TODO
+	// Fix up the sleepbg.lock path.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("no $HOME")
+	}
+	if conf.Wall.Performance.SleepbgPath == "" {
+		conf.Wall.Performance.SleepbgPath = home
+	}
+	conf.Wall.Performance.SleepbgPath += "/sleepbg.lock"
+
+	// Validate the config.
 	return nil
 }
 

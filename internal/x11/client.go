@@ -215,13 +215,13 @@ func (c *Client) GetRootWindow() xproto.Window {
 }
 
 // GetWindowList returns a list of all open windows.
-func (c *Client) GetWindowList() ([]xproto.Window, error) {
+func (c *Client) GetWindowList() []xproto.Window {
 	return c.GetWindowChildren(c.root)
 }
 
 // GetWindowChildren returns a list of all child windows (and their children,
 // and so on) for the given window.
-func (c *Client) GetWindowChildren(win xproto.Window) ([]xproto.Window, error) {
+func (c *Client) GetWindowChildren(win xproto.Window) []xproto.Window {
 	// Traverse the window tree in an iterative fashion.
 	queue := []xproto.Window{win}
 	for ptr := 0; ptr < len(queue); ptr += 1 {
@@ -235,7 +235,7 @@ func (c *Client) GetWindowChildren(win xproto.Window) ([]xproto.Window, error) {
 		}
 		queue = append(queue, tree.Children...)
 	}
-	return queue, nil
+	return queue
 }
 
 // GetWindowClass returns the class of the given window.

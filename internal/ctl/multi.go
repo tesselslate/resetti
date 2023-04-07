@@ -64,6 +64,7 @@ func (m *Multi) Input(raw x11.Event) {
 		m.host.PlayInstance(next)
 		m.active = next
 		m.updateObs()
+		go m.host.RunHook(HookReset)
 	}
 }
 

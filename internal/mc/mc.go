@@ -31,10 +31,7 @@ type InstanceInfo struct {
 // or an error if the running instances do not form a list.
 func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
 	instances := make([]InstanceInfo, 0)
-	windows, err := x.GetWindowList()
-	if err != nil {
-		return nil, err
-	}
+	windows := x.GetWindowList()
 
 	// Check every window to see if it is a Minecraft instance.
 	for _, win := range windows {
