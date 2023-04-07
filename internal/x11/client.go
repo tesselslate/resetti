@@ -39,7 +39,7 @@ const (
 		xproto.EventMaskKeyRelease
 
 	maskPointer uint16 = xproto.EventMaskPointerMotion |
-		xproto.EventMaskButtonPress
+		xproto.EventMaskButtonPress | xproto.EventMaskButtonRelease
 
 	maskProperty uint32 = xproto.EventMaskPropertyChange |
 		xproto.EventMaskSubstructureNotify
@@ -528,6 +528,16 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 			ch <- ButtonEvent{
 				Button:    evt.Detail,
 				Mod:       Keymod(evt.State),
+				State:     StateDown,
+				Point:     Point{evt.EventX, evt.EventY},
+				Timestamp: uint32(evt.Time),
+				Window:    evt.Child,
+			}
+		case xproto.ButtonReleaseEvent:
+			ch <- ButtonEvent{
+				Button:    evt.Detail,
+				Mod:       Keymod(evt.State),
+				State:     StateUp,
 				Point:     Point{evt.EventX, evt.EventY},
 				Timestamp: uint32(evt.Time),
 				Window:    evt.Child,

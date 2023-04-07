@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/jezek/xgb/xproto"
-	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // go:embed default.toml
@@ -26,14 +23,7 @@ type Hooks struct {
 }
 
 // Keybinds contains the user's keybindings.
-type Keybinds struct {
-	Focus           Bind `toml:"focus"`             // Focus instance/projector
-	Reset           Bind `toml:"reset"`             // Reset all / reset current
-	WallLock        Bind `toml:"wall_lock"`         // (Un)lock instance
-	WallPlay        Bind `toml:"wall_play"`         // Play instance
-	WallReset       Bind `toml:"wall_reset"`        // Reset from wall
-	WallResetOthers Bind `toml:"wall_reset_others"` // Focus reset from wall
-}
+type Keybinds map[Bind]ActionList
 
 // Obs contains the user's OBS websocket connection information.
 type Obs struct {
@@ -91,18 +81,6 @@ type Wall struct {
 		// the high group to the low group.
 		LowThreshold int `toml:"low_threshold"`
 	} `toml:"performance"`
-}
-
-// Bind represents a single keybinding.
-type Bind struct {
-	// Keyboard modifiers.
-	Mod x11.Keymod
-
-	// Keycode, if any.
-	Key *xproto.Keycode
-
-	// Mouse button, if any.
-	Mouse *xproto.Button
 }
 
 // Profile contains an entire configuration profile.
@@ -191,77 +169,7 @@ func validateProfile(conf *Profile) error {
 	}
 	conf.Wall.Performance.SleepbgPath += "/sleepbg.lock"
 
-	// Validate the config.
-	return nil
-}
-
-// MatchButton returns whether or not the given button event matches this bind.
-func (b Bind) MatchButton(evt x11.ButtonEvent) bool {
-	if b.Mouse == nil {
-		return false
-	}
-	return *b.Mouse == evt.Button && b.Mod == evt.Mod
-}
-
-// MatchKey returns whether or not the given key event matches this bind.
-func (b Bind) MatchKey(evt x11.KeyEvent) bool {
-	if b.Key == nil {
-		return false
-	}
-	return *b.Key == evt.Key.Code && b.Mod == evt.Key.Mod
-}
-
-// MatchMove returns whether or not the given move event matches this bind.
-func (b Bind) MatchMove(evt x11.MoveEvent) bool {
-	if b.Mouse == nil {
-		return false
-	}
-	var buttonMask x11.Keymod
-	switch *b.Mouse {
-	case xproto.ButtonIndex1:
-		buttonMask = xproto.ButtonMask1
-	case xproto.ButtonIndex2:
-		buttonMask = xproto.ButtonMask2
-	case xproto.ButtonIndex3:
-		buttonMask = xproto.ButtonMask3
-	case xproto.ButtonIndex4:
-		buttonMask = xproto.ButtonMask4
-	case xproto.ButtonIndex5:
-		buttonMask = xproto.ButtonMask5
-	}
-	return b.Mod|buttonMask == evt.Mod
-}
-
-// UnmarshalTOML implements toml.Unmarshaler.
-func (b *Bind) UnmarshalTOML(value any) error {
-	str, ok := value.(string)
-	if !ok {
-		return errors.New("bind value was not a string")
-	}
-	if str == "" {
-		return nil
-	}
-	keyCount := 0
-	buttonCount := 0
-	for _, split := range strings.Split(str, "-") {
-		split = strings.ToLower(split)
-		if mod, ok := x11.Keymods[split]; ok {
-			b.Mod |= mod
-		} else if key, ok := x11.Keycodes[split]; ok {
-			b.Key = &key
-			keyCount += 1
-		} else if button, ok := x11.Buttons[split]; ok {
-			b.Mouse = &button
-			buttonCount += 1
-		} else {
-			return fmt.Errorf("unrecognized keybind element %q", split)
-		}
-	}
-	if keyCount+buttonCount == 0 {
-		return errors.New("no key or button")
-	} else if keyCount+buttonCount > 1 {
-		return errors.New("more than one key or button")
-	}
+	// Validate the config. TODO
 	return nil
 }
 

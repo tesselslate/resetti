@@ -203,11 +203,13 @@ func (m *Manager) Play(id int) {
 		}
 	}
 
-	// Pause and unpause again to let the cursor position update for the next
-	// time a menu is opened.
-	time.Sleep(time.Millisecond * time.Duration(m.conf.Delay))
-	m.sendKeyPress(id, x11.KeyEsc)
-	m.sendKeyPress(id, x11.KeyEsc)
+	if m.conf.UnpauseFocus {
+		// Pause and unpause again to let the cursor position update for the next
+		// time a menu is opened.
+		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay))
+		m.sendKeyPress(id, x11.KeyEsc)
+		m.sendKeyPress(id, x11.KeyEsc)
+	}
 }
 
 // Reset attempts to reset the given instance. The return value will indicate

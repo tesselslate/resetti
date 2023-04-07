@@ -29,14 +29,13 @@ type Wall struct {
 	locks     []bool
 	active    int // Active instance. -1 is a sentinel for wall
 
-	wallWidth, wallHeight    int
-	instWidth, instHeight    int
-	projWidth, projHeight    int
-	projector                xproto.Window
-	subprojector             []xproto.Window
-	wallBinds                bool
-	lastMouseId              int
-	lastCursorX, lastCursorY int
+	wallWidth, wallHeight int
+	instWidth, instHeight int
+	projWidth, projHeight int
+	projector             xproto.Window
+	subprojector          []xproto.Window
+	wallBinds             bool
+	lastMouseId           int
 }
 
 // Setup implements Frontend.
@@ -53,13 +52,6 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	w.locks = make([]bool, len(deps.states))
 	copy(w.instances, deps.instances)
 	copy(w.states, deps.states)
-
-	if err := w.host.Bind(BindFocus, w.conf.Keybinds.Focus); err != nil {
-		return fmt.Errorf("bind focus: %w", err)
-	}
-	if err := w.host.Bind(BindReset, w.conf.Keybinds.Reset); err != nil {
-		return fmt.Errorf("bind reset: %w", err)
-	}
 
 	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
 		for i := 1; i <= len(w.instances); i += 1 {
@@ -95,61 +87,83 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	return nil
 }
 
-// Input implements Frontend.
-func (w *Wall) Input(evt x11.Event) {
-	input, ok := w.host.GetBindFor(evt)
+// FocusChange implements Frontend.
+func (w *Wall) FocusChange(evt x11.FocusEvent) {
+	if err := w.findProjector(); err != nil {
+		log.Printf("FocusChange: Failed to find projector: %s\n", err)
+		return
+	}
 
-	switch evt := evt.(type) {
-	case x11.FocusEvent:
-		w.processFocusEvent(evt)
-	case x11.KeyEvent:
-		// Discard invalid or keyup events.
-		if !ok || evt.State == x11.StateUp {
-			return
+	if evt.Window == w.projector && !w.wallBinds {
+		if err := w.bindWallKeys(); err != nil {
+			log.Printf("FocusChange: Failed to bind keys: %s\n", err)
 		}
-		switch input {
-		case BindFocus:
-			if w.active == -1 {
-				if err := w.focusProjector(); err != nil {
-					log.Printf("Failed to focus projector: %s\n", err)
-				}
-			} else {
+	} else if evt.Window != w.projector && w.wallBinds {
+		w.unbindWallKeys()
+	}
+}
+
+// Input implements Frontend.
+func (w *Wall) Input(input Input) {
+	actions := w.conf.Keybinds[input.Bind]
+	if w.active != -1 {
+		for _, action := range actions.IngameActions {
+			switch action.Type {
+			case cfg.ActionIngameReset:
+				w.resetIngame()
+			case cfg.ActionIngameFocus:
 				w.host.FocusInstance(w.active)
 			}
-		case BindReset:
-			if w.active == -1 {
+		}
+	} else {
+		for _, action := range actions.WallActions {
+			switch action.Type {
+			case cfg.ActionWallFocus:
+				if err := w.focusProjector(); err != nil {
+					log.Printf("Input: Failed to focus projector: %s\n", err)
+				}
+			case cfg.ActionWallResetAll:
+				if !w.wallBinds {
+					continue
+				}
 				w.wallResetAll()
-			} else {
-				w.resetIngame()
+			case cfg.ActionWallLock, cfg.ActionWallPlay, cfg.ActionWallReset, cfg.ActionWallResetOthers:
+				if !w.wallBinds {
+					continue
+				}
+				var id int
+				if action.Extra != nil {
+					id = *action.Extra
+				} else {
+					mouseId, ok := w.getInstanceId(input)
+					if !ok {
+						w.unbindWallKeys()
+						continue
+					}
+					if input.Held && mouseId == w.lastMouseId {
+						continue
+					}
+					id = mouseId
+					w.lastMouseId = id
+				}
+				if id < 0 || id > len(w.instances)-1 {
+					continue
+				}
+				if id == -1 {
+					continue
+				}
+				switch action.Type {
+				case cfg.ActionWallLock:
+					w.wallLock(id)
+				case cfg.ActionWallPlay:
+					w.wallPlay(id)
+				case cfg.ActionWallReset:
+					w.wallReset(id)
+				case cfg.ActionWallResetOthers:
+					w.wallResetOthers(id)
+				}
 			}
-		default:
-			// TODO: Handle keyboard per-instance inputs
 		}
-	case x11.ButtonEvent:
-		// Discard invalid or buffered events.
-		if !ok || w.active != -1 {
-			return
-		}
-		id, ok := w.getInstanceId(int(evt.Point.X), int(evt.Point.Y))
-		if !ok {
-			// TODO: Re-send button press?
-			w.unbindWallKeys()
-			return
-		}
-		w.processWallInput(id, input)
-		w.lastMouseId = id
-	case x11.MoveEvent:
-		// Discard invalid or buffered events.
-		if !ok || w.active != -1 {
-			return
-		}
-		w.lastCursorX, w.lastCursorY = int(evt.Point.X), int(evt.Point.Y)
-		id, ok := w.getInstanceId(int(evt.Point.X), int(evt.Point.Y))
-		if !ok || w.lastMouseId == id {
-			return
-		}
-		w.lastMouseId = id
-		w.processWallInput(id, input)
 	}
 }
 
@@ -161,25 +175,18 @@ func (w *Wall) Update(update mc.Update) {
 // bindWallKeys binds the keys that are only used on the wall projector.
 func (w *Wall) bindWallKeys() error {
 	if w.wallBinds {
-		log.Println("bindWallKeys (debug): already bound")
+		return nil
 	}
 	log.Println("Binding wall keys")
 	w.wallBinds = true
-	binds := map[int]cfg.Bind{
-		BindWallLock:        w.conf.Keybinds.WallLock,
-		BindWallPlay:        w.conf.Keybinds.WallPlay,
-		BindWallReset:       w.conf.Keybinds.WallReset,
-		BindWallResetOthers: w.conf.Keybinds.WallResetOthers,
-	}
-	for kind, bind := range binds {
-		if err := w.host.Bind(kind, bind); err != nil {
-			return err
-		}
+	if err := w.host.BindWallKeys(); err != nil {
+		return fmt.Errorf("host bind keys: %w", err)
 	}
 
 	// The pointer grab can fail in some scenarios. Retry with exponential
 	// backoff.
 	// TODO: Can this be made better? Listen for pointer grab release?
+	// TODO: Only grab pointer if mouse-dependent keys are in config
 	timeout := time.Millisecond
 	for tries := 1; tries <= 5; tries += 1 {
 		if err := w.x.GrabPointer(w.projector); err != nil {
@@ -247,9 +254,9 @@ func (w *Wall) focusProjector() error {
 }
 
 // getInstanceId returns the ID of the instance at the specified coordinates.
-func (w *Wall) getInstanceId(x, y int) (id int, ok bool) {
-	x = x / w.instWidth
-	y = y / w.instHeight
+func (w *Wall) getInstanceId(input Input) (id int, ok bool) {
+	x := input.X / w.instWidth
+	y := input.Y / w.instHeight
 	if x < 0 || y < 0 || x >= w.wallWidth || y >= w.wallHeight {
 		return 0, false
 	}
@@ -281,39 +288,6 @@ func (w *Wall) getWallSize() error {
 	}
 	w.wallWidth, w.wallHeight = len(xs), len(ys)
 	return nil
-}
-
-// processFocusEvent handles a window focus change. This is done to grab and
-// ungrab the user's wall keys when they tab in and out of the projector.
-func (w *Wall) processFocusEvent(evt x11.FocusEvent) {
-	if err := w.findProjector(); err != nil {
-		log.Printf("processFocusEvent: Failed to find projector: %s\n", err)
-		return
-	}
-
-	if evt.Window == w.projector && !w.wallBinds {
-		if err := w.bindWallKeys(); err != nil {
-			log.Printf("processFocusEvent: Failed to bind keys: %s\n", err)
-		}
-	} else if evt.Window != w.projector && w.wallBinds {
-		w.unbindWallKeys()
-	}
-}
-
-// processWallInput processes a single per-instance wall input.
-func (w *Wall) processWallInput(id int, input int) {
-	switch input {
-	case BindWallLock:
-		w.wallLock(id)
-	case BindWallPlay:
-		if w.states[id].Type == mc.StIdle {
-			w.wallPlay(id)
-		}
-	case BindWallReset:
-		w.wallReset(id)
-	case BindWallResetOthers:
-		w.wallResetOthers(id)
-	}
 }
 
 // resetIngame resets the active instance.
@@ -348,14 +322,11 @@ func (w *Wall) setLocked(id int, lock bool) {
 // unbindWallKeys unbinds the keys that are only used on the wall projector.
 func (w *Wall) unbindWallKeys() {
 	if !w.wallBinds {
-		log.Println("unbindWallKeys (debug): already unbound")
+		return
 	}
 	log.Println("Unbinding wall keys")
 	w.wallBinds = false
-	binds := [...]int{BindWallLock, BindWallPlay, BindWallReset, BindWallResetOthers}
-	for _, bind := range binds {
-		w.host.Unbind(bind)
-	}
+	w.host.UnbindWallKeys()
 	if err := w.x.UngrabPointer(); err != nil {
 		log.Printf("unbindWallKeys: Failed to ungrab pointer: %s\n", err)
 	}
@@ -378,6 +349,9 @@ func (w *Wall) wallPlay(id int) {
 	w.active = id
 	w.unbindWallKeys()
 	w.host.PlayInstance(id)
+	if err := w.host.BindInstanceKeys(); err != nil {
+		log.Printf("wallPlay: Failed to bind instance keys: %s\n", err)
+	}
 
 	go w.host.RunHook(HookWallPlay)
 	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
@@ -398,8 +372,9 @@ func (w *Wall) wallReset(id int) {
 	if w.locks[id] {
 		return
 	}
-	go w.host.RunHook(HookWallReset)
-	w.host.ResetInstance(id)
+	if w.states[id].Type != mc.StIngame && w.host.ResetInstance(id) {
+		go w.host.RunHook(HookWallReset)
+	}
 }
 
 // wallResetAll resets all unlocked instances.

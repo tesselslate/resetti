@@ -31,29 +31,40 @@ wall_play = ""
 wall_reset = ""
 
 # The keybinds section lets you specify keybindings for various actions you
-# may want to perform. Many of these keys will do nothing unless you have
-# enabled their functionality in the wall section.
+# may want to perform.
+#
+# The provided keybinds simply serve as examples. You can specify one or more
+# actions for each keybind. When the keybind is pressed, all of the valid
+# actions will occur (e.g. specifying both a wall and ingame action for a single
+# key will only perform one of them, depending on where you are.)
+#
+# Bind syntax:
+# - Specify either a key or mouse button and 0 or more modifiers.
+# - You can use the syntax `codeNUM` for a key with code NUM.
+# - Most common keys, buttons, and modifiers are supported by name.
+#
+# Available actions:
+# - ingame_focus            Focus active instance.
+# - ingame_reset            Reset active instance.
+# - wall_focus              Focus wall projector.
+# - wall_reset_all          Reset all unlocked instances.
+# - wall_lock               Lock hovered instance.
+# - wall_lock(n)            Lock instance N.
+# - wall_play               Play hovered instance.
+# - wall_play(n)            Play instance N.
+# - wall_reset              Reset hovered instance.
+# - wall_reset(n)           Reset instance N.
+# - wall_reset_others       Focus reset hovered instance.
+# - wall_reset_others(n)    Focus reset instance N.
 [keybinds]
-# If on the wall, pressing this will bring you back to the projector.
-# If ingame, pressing this will bring you back to the active instance.
-focus = "Ctrl-Shift-F"
-
-# If on the wall, pressing this will reset all of your instances.
-# If ingame, pressing this will reset the active instance.
-reset = "Ctrl-Shift-D"
-
-# Pressing this will lock the instance your mouse is hovering over.
-wall_lock = ""
-
-# Pressing this will play the instance your mouse is hovering over.
-wall_play = ""
-
-# Pressing this will reset the instance your mouse is hovering over.
-wall_reset = ""
-
-# Pressing this will play the instance your mouse is hovering over and reset
-# all other instances.
-wall_reset_others = ""
+"Ctrl-Shift-D"      = ["wall_reset_all",    "ingame_reset"]
+"Ctrl-Shift-F"      = ["ingame_focus",      "wall_focus"]
+"LMB"               = ["wall_reset"]
+"LMB-Shift"         = ["wall_play"]
+"LMB-Ctrl"          = ["wall_lock"]
+"LMB-Ctrl-Shift"    = ["wall_focus_reset"]
+"1"                 = ["wall_reset(1)"]
+"Shift-1"           = ["wall_play(1)"]
 
 # The obs section lets you specify connection information for OBS websocket.
 # This can be disabled if you are not using wall and are not recording;
@@ -112,7 +123,6 @@ show_method = "percentage"
 show_at = 20
 
 # This section contains settings for optimizing CPU utilization while resetting.
-# TODO: better docs
 [wall.performance]
 # The path to write sleepbg.lock to. If left blank, it will default to the
 # usual ($HOME.) Only use this if you change the sleepbg.lock path of your
@@ -131,7 +141,6 @@ affinity = ""
 # - If enabled, the number of CPU cores available to each affinity group
 #   is halved. One affinity group is created per CCX with the given number
 #   of cores.
-# - TODO: Better CPU topology detection
 ccx_split = false
 
 # The number of CPUs (cores, or threads if you have SMT) to allocate to each

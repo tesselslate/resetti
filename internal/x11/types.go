@@ -62,6 +62,7 @@ type Event interface {
 type ButtonEvent struct {
 	Button    xproto.Button
 	Mod       Keymod
+	State     InputState
 	Point     Point
 	Timestamp uint32
 	Window    xproto.Window

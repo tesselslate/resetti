@@ -26,11 +26,8 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	m.conf = deps.conf
 	m.obs = deps.obs
 
-	if err := m.host.Bind(BindFocus, m.conf.Keybinds.Focus); err != nil {
-		return fmt.Errorf("bind focus: %w", err)
-	}
-	if err := m.host.Bind(BindReset, m.conf.Keybinds.Reset); err != nil {
-		return fmt.Errorf("bind reset: %w", err)
+	if err := m.host.BindInstanceKeys(); err != nil {
+		return fmt.Errorf("bind instance keys: %w", err)
 	}
 
 	m.active = 0
@@ -39,32 +36,29 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	return nil
 }
 
-// Input implements Frontend.
-func (m *Multi) Input(raw x11.Event) {
-	// Verify that this is a key down event.
-	evt, ok := raw.(x11.KeyEvent)
-	if !ok || evt.State != x11.StateDown {
-		return
-	}
-	input, ok := m.host.GetBindFor(raw)
-	if !ok {
-		return
-	}
+// FocusChange implements Frontend.
+func (m *Multi) FocusChange(evt x11.FocusEvent) {
+	// Do nothing.
+}
 
-	// Process the input.
-	switch input {
-	case BindFocus:
-		m.host.FocusInstance(m.active)
-	case BindReset:
-		// TODO: Implement moving-wall style best instance picker
-		// TODO: Handle reset failure
-		current := m.active
-		next := (m.active + 1) % len(m.states)
-		_ = m.host.ResetInstance(current)
-		m.host.PlayInstance(next)
-		m.active = next
-		m.updateObs()
-		go m.host.RunHook(HookReset)
+// Input implements Frontend.
+func (m *Multi) Input(input Input) {
+	actions := m.conf.Keybinds[input.Bind]
+	for _, action := range actions.IngameActions {
+		switch action.Type {
+		case cfg.ActionIngameFocus:
+			m.host.FocusInstance(m.active)
+		case cfg.ActionIngameReset:
+			// TODO: Implement moving wall style best instance picker
+			// TODO: Handle reset failure
+			next := (m.active + 1) % len(m.states)
+			current := m.active
+			_ = m.host.ResetInstance(current)
+			m.host.PlayInstance(next)
+			m.active = next
+			m.updateObs()
+			go m.host.RunHook(HookReset)
+		}
 	}
 }
 

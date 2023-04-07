@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
@@ -19,16 +20,6 @@ import (
 // bufferSize is the capacity a buffered channel that processes per-instance
 // state should have for each instance.
 const bufferSize = 16
-
-// Input keybindings
-const (
-	BindFocus int = iota
-	BindReset
-	BindWallLock
-	BindWallPlay
-	BindWallReset
-	BindWallResetOthers
-)
 
 // Hook types
 const (
@@ -52,8 +43,9 @@ type Controller struct {
 	frontend Frontend
 
 	useAffinity bool
-	binds       map[int]cfg.Bind
+	binds       map[cfg.Bind]cfg.ActionList
 	hooks       map[int]string
+	inputs      inputState
 
 	obsErrors <-chan error
 	mgrErrors <-chan error
@@ -65,15 +57,31 @@ type Controller struct {
 // A Frontend handles user-facing I/O (input handling, instance actions, OBS
 // output) and communicates with a Controller.
 type Frontend interface {
+	// FocusChange processes a single window focus change.
+	FocusChange(x11.FocusEvent)
+
+	// Input processes a single user input.
+	Input(Input)
+
 	// Setup takes in all of the potentially needed dependencies and prepares
 	// the Frontend to handle user input.
 	Setup(frontendDependencies) error
 
-	// Input processes a single user input.
-	Input(x11.Event)
-
 	// Update processes a single instance state update.
 	Update(mc.Update)
+}
+
+// An Input represents a single user input.
+type Input struct {
+	Bind cfg.Bind
+	Held bool
+	X, Y int
+}
+
+// buttonMod contains a button, modifier pair.
+type buttonMod struct {
+	button xproto.Button
+	mod    x11.Keymod
 }
 
 // frontendDependencies contains all of the dependencies that a Frontend might
@@ -87,6 +95,12 @@ type frontendDependencies struct {
 	host      *Controller
 }
 
+type inputState struct {
+	cx, cy  int
+	buttons map[buttonMod]bool
+	keys    map[x11.Key]bool
+}
+
 // Run creates a new controller with the given configuration profile and runs it.
 func Run(conf *cfg.Profile) error {
 	wg := sync.WaitGroup{}
@@ -96,7 +110,7 @@ func Run(conf *cfg.Profile) error {
 
 	c := Controller{}
 	c.conf = conf
-	c.binds = make(map[int]cfg.Bind)
+	c.binds = make(map[cfg.Bind]cfg.ActionList)
 	c.hooks = map[int]string{
 		HookReset:     c.conf.Hooks.Reset,
 		HookLock:      c.conf.Hooks.WallLock,
@@ -104,6 +118,7 @@ func Run(conf *cfg.Profile) error {
 		HookWallPlay:  c.conf.Hooks.WallPlay,
 		HookWallReset: c.conf.Hooks.WallReset,
 	}
+	c.inputs = inputState{0, 0, make(map[buttonMod]bool), make(map[x11.Key]bool)}
 
 	x, err := x11.NewClient()
 	if err != nil {
@@ -167,7 +182,7 @@ func Run(conf *cfg.Profile) error {
 	}
 	go c.counter.Run(ctx, &wg)
 	if c.useAffinity {
-		go c.cpu.Run(ctx)
+		go c.cpu.Run(ctx, &wg)
 	}
 	evtch := make(chan mc.Update, bufferSize*len(instances))
 	errch := make(chan error, 1)
@@ -186,49 +201,45 @@ func Run(conf *cfg.Profile) error {
 	return nil
 }
 
-// Bind adds the given keybind.
-func (c *Controller) Bind(kind int, bind cfg.Bind) error {
-	if bind.Key != nil {
-		err := c.x.GrabKey(x11.Key{
-			Code: *bind.Key,
-			Mod:  bind.Mod,
-		}, c.x.GetRootWindow())
-		if err != nil {
-			return err
+// BindInstanceKeys ensures that all keybinds with instance actions are bound.
+func (c *Controller) BindInstanceKeys() error {
+	for bind, action := range c.conf.Keybinds {
+		if len(action.IngameActions) != 0 {
+			if _, ok := c.binds[bind]; !ok {
+				if err := c.bind(bind); err != nil {
+					return err
+				}
+			}
+		} else {
+			if _, ok := c.binds[bind]; ok {
+				c.unbind(bind)
+			}
 		}
 	}
-	c.binds[kind] = bind
+	return nil
+}
+
+// BindWallKeys ensures that all keys with wall actions are bound.
+func (c *Controller) BindWallKeys() error {
+	for bind, action := range c.conf.Keybinds {
+		if len(action.WallActions) != 0 {
+			if _, ok := c.binds[bind]; !ok {
+				if err := c.bind(bind); err != nil {
+					return err
+				}
+			}
+		} else {
+			if _, ok := c.binds[bind]; ok {
+				c.unbind(bind)
+			}
+		}
+	}
 	return nil
 }
 
 // FocusInstance switches focus to the given instance.
 func (c *Controller) FocusInstance(id int) {
 	c.manager.Focus(id)
-}
-
-// GetBindFor returns which keybind the given input is (if any.)
-func (c *Controller) GetBindFor(evt x11.Event) (bind int, ok bool) {
-	switch evt := evt.(type) {
-	case x11.KeyEvent:
-		for idx, bind := range c.binds {
-			if bind.MatchKey(evt) {
-				return idx, true
-			}
-		}
-	case x11.MoveEvent:
-		for idx, bind := range c.binds {
-			if bind.MatchMove(evt) {
-				return idx, true
-			}
-		}
-	case x11.ButtonEvent:
-		for idx, bind := range c.binds {
-			if bind.MatchButton(evt) {
-				return idx, true
-			}
-		}
-	}
-	return 0, false
 }
 
 // PlayInstance switches focus to the given instance, marks it as the active
@@ -278,19 +289,77 @@ func (c *Controller) SetPriority(id int, prio bool) {
 	}
 }
 
-// Unbind removes the given bind.
-func (c *Controller) Unbind(kind int) {
-	bind, ok := c.binds[kind]
-	if !ok {
-		panic(fmt.Sprintf("tried to unbind unbound key: %d", kind))
+// UnbindWallKeys unbinds all wall-only keys, except for focus projector.
+func (c *Controller) UnbindWallKeys() {
+	// HACK: Clear button state after pointer ungrab. This needs to be
+	// made better.
+	c.inputs.buttons = make(map[buttonMod]bool)
+	for bind := range c.binds {
+		actions := c.conf.Keybinds[bind]
+		if len(actions.IngameActions) == 0 {
+			hasFocusProjector := false
+			for _, action := range actions.WallActions {
+				if action.Type == cfg.ActionWallFocus {
+					hasFocusProjector = true
+					break
+				}
+			}
+			if !hasFocusProjector {
+				c.unbind(bind)
+			}
+		}
 	}
+}
+
+// bind binds the given key.
+func (c *Controller) bind(bind cfg.Bind) error {
+	if bind.Key != nil {
+		err := c.x.GrabKey(x11.Key{
+			Code: *bind.Key,
+			Mod:  bind.Mod,
+		}, c.x.GetRootWindow())
+		if err != nil {
+			return err
+		}
+	}
+	c.binds[bind] = c.conf.Keybinds[bind]
+	return nil
+}
+
+// matchBind attempts to match a given keybind based on the current input state.
+func (c *Controller) matchBind(key bool) (bind cfg.Bind, ok bool) {
+	if key && len(c.inputs.keys) == 1 {
+		// There's only one element.
+		for key := range c.inputs.keys {
+			for bind := range c.binds {
+				if bind.Key != nil && *bind.Key == key.Code && bind.Mod == key.Mod {
+					return bind, true
+				}
+			}
+		}
+	} else if !key && len(c.inputs.buttons) == 1 {
+		// There's only one element.
+		for button := range c.inputs.buttons {
+			for bind := range c.binds {
+				if bind.Mouse != nil && *bind.Mouse == button.button && bind.Mod == button.mod {
+					return bind, true
+				}
+			}
+		}
+	}
+	return cfg.Bind{}, false
+}
+
+// unbind removes the given bind.
+func (c *Controller) unbind(bind cfg.Bind) {
+	delete(c.binds, bind)
 	if bind.Key != nil {
 		err := c.x.UngrabKey(x11.Key{
 			Code: *bind.Key,
 			Mod:  bind.Mod,
 		}, c.x.GetRootWindow())
 		if err != nil {
-			log.Printf("Unbind (%d) failed: %s\n", kind, err)
+			log.Printf("Unbind (%v) failed: %s\n", bind, err)
 		}
 	}
 }
@@ -314,9 +383,48 @@ func (c *Controller) run(ctx context.Context) error {
 				c.cpu.Update(evt)
 			}
 		case evt := <-c.x11Events:
-			// TODO: Proper input handling that allows for holding key with
-			// mousemove, just like mouse button with mouse move right now.
-			c.frontend.Input(evt)
+			switch evt := evt.(type) {
+			case x11.FocusEvent:
+				c.frontend.FocusChange(evt)
+			case x11.KeyEvent:
+				if evt.State == x11.StateDown {
+					c.inputs.keys[evt.Key] = true
+					bind, ok := c.matchBind(true)
+					if !ok {
+						continue
+					}
+					c.frontend.Input(Input{
+						bind, false, c.inputs.cx, c.inputs.cy,
+					})
+				} else {
+					delete(c.inputs.keys, evt.Key)
+				}
+			case x11.ButtonEvent:
+				// Get rid of button modmask by discarding higher bits.
+				bm := buttonMod{evt.Button, evt.Mod & 255}
+				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
+				if evt.State == x11.StateDown {
+					c.inputs.buttons[bm] = true
+					bind, ok := c.matchBind(false)
+					if !ok {
+						continue
+					}
+					c.frontend.Input(Input{
+						bind, false, c.inputs.cx, c.inputs.cy,
+					})
+				} else {
+					delete(c.inputs.buttons, bm)
+				}
+			case x11.MoveEvent:
+				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
+				bind, ok := c.matchBind(false)
+				if !ok {
+					continue
+				}
+				c.frontend.Input(Input{
+					bind, true, c.inputs.cx, c.inputs.cy,
+				})
+			}
 		}
 	}
 }
