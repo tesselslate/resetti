@@ -262,7 +262,7 @@ func (c *cpuManager) handleUpdate(update mc.Update) {
 
 	switch update.State.Type {
 	case mc.StIdle:
-		if c.conf.Wall.Performance.BurstLength == 0 {
+		if c.conf.Wall.Performance.BurstLength <= 0 {
 			c.moveInstance(update.Id, affIdle)
 			return
 		}

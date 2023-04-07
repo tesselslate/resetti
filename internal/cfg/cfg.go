@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/BurntSushi/toml"
 )
@@ -169,13 +170,58 @@ func validateProfile(conf *Profile) error {
 	}
 	conf.Wall.Performance.SleepbgPath += "/sleepbg.lock"
 
-	// Validate the config. TODO
+	// Check resolution settings.
+	if !validateRectangle(conf.Wall.StretchRes) {
+		return errors.New("invalid stretched resolution")
+	}
+	if !validateRectangle(conf.Wall.UnstretchRes) {
+		return errors.New("invalid active resolution")
+	}
+	stretch := conf.Wall.StretchRes != nil
+	unstretch := conf.Wall.UnstretchRes != nil
+	if (stretch || unstretch) && (!stretch || !unstretch) {
+		return errors.New("need both stretched and active resolution")
+	}
+
+	// TODO: Check instance hiding settings (implement hiding first)
+
+	// Check affinity settings.
+	switch conf.Wall.Performance.Affinity {
+	case "", "sequence":
+		break
+	case "advanced":
+		maxCpu := runtime.NumCPU()
+		if conf.Wall.Performance.CcxSplit {
+			maxCpu /= 2
+		}
+		if conf.Wall.Performance.CpusIdle > maxCpu {
+			return fmt.Errorf("invalid idle cpu count (%d > %d)", conf.Wall.Performance.CpusIdle, maxCpu)
+		}
+		if conf.Wall.Performance.CpusLow > maxCpu {
+			return fmt.Errorf("invalid low cpu count (%d > %d)", conf.Wall.Performance.CpusLow, maxCpu)
+		}
+		if conf.Wall.Performance.CpusMid > maxCpu {
+			return fmt.Errorf("invalid mid cpu count (%d > %d)", conf.Wall.Performance.CpusMid, maxCpu)
+		}
+		if conf.Wall.Performance.CpusHigh > maxCpu {
+			return fmt.Errorf("invalid high cpu count (%d > %d)", conf.Wall.Performance.CpusHigh, maxCpu)
+		}
+		if conf.Wall.Performance.CpusActive > maxCpu {
+			return fmt.Errorf("invalid active cpu count (%d > %d)", conf.Wall.Performance.CpusActive, maxCpu)
+		}
+	default:
+		return fmt.Errorf("invalid affinity setting %q", conf.Wall.Performance.Affinity)
+	}
 	return nil
+}
+
+// validateRectangle ensures the rectangle has a size.
+func validateRectangle(r *Rectangle) bool {
+	return r == nil || r.W > 0 && r.H > 0
 }
 
 // UnmarshalTOML implements toml.Unmarshaler.
 func (r *Rectangle) UnmarshalTOML(value any) error {
-	// TODO: allow empty
 	str, ok := value.(string)
 	if !ok {
 		return errors.New("rectangle value was not a string")

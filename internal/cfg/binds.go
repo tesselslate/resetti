@@ -103,6 +103,8 @@ func (a *ActionList) UnmarshalTOML(value any) error {
 			if err != nil {
 				return fmt.Errorf("failed to parse number in %q", actionStr)
 			}
+			// Subtract 1 for 0-based indexing.
+			num -= 1
 			typ := actionStr[:loc[0]]
 			if typ, ok := actionNames[typ]; ok {
 				if typ >= ActionWallLock && typ <= ActionWallResetOthers {
