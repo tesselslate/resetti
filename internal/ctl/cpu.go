@@ -46,6 +46,12 @@ const (
 	affActive
 )
 
+// Affinity arguments
+var (
+	forceCgroups  = slices.Contains(os.Args, "--force-cgroups")
+	dontOverwrite = slices.Contains(os.Args, "--keep-script")
+)
+
 // Affinity group names
 var baseNames = [...]string{
 	"idle",
@@ -156,16 +162,17 @@ func prepareCgroups(conf *cfg.Profile, instances int) error {
 	}
 
 	// Run the cgroup script if necessary.
-	if shouldRun || slices.Contains(os.Args, "--force-cgroups") {
-		// TODO: Allow for modifying the script (or at least don't rewrite it
-		// every time even when it has not been modified)
+	if shouldRun || forceCgroups {
 		path, err := cfg.GetDirectory()
 		if err != nil {
 			return fmt.Errorf("get config directory: %w", err)
 		}
 		path += "/cgroup_setup.sh"
-		if err := os.WriteFile(path, cgroupScript, 0644); err != nil {
-			return fmt.Errorf("write cgroup script: %w", err)
+		_, err = os.Stat(path)
+		if !dontOverwrite || err != nil {
+			if err := os.WriteFile(path, cgroupScript, 0644); err != nil {
+				return fmt.Errorf("write cgroup script: %w", err)
+			}
 		}
 		var suidBin string
 		for _, bin := range suidBinaries {

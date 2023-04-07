@@ -86,8 +86,9 @@ func printHelp() {
     USAGE:
         resetti [PROFILE]       Run resetti with the given profile.
           --force-cgroups       Force the cgroup setup script to run.
-          --force-wpstate       Force the wpstateout.txt reader to be used.
           --force-log           Force the latest.log reader to be used.
+          --force-wpstate       Force the wpstateout.txt reader to be used.
+          --keep-script         Do not overwrite the cgroup script.
 
     SUBCOMMANDS:
         resetti new [PROFILE]   Create a new profile named PROFILE with
