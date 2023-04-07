@@ -391,7 +391,7 @@ func (c *Controller) run(ctx context.Context) error {
 				c.frontend.FocusChange(evt)
 			case x11.KeyEvent:
 				if evt.State == x11.StateDown {
-					// We have to use a GLFW hackfix here ourselves (:
+					// XXX: We have to use a GLFW hackfix here ourselves (:
 					// Ignore repeat keydown events.
 					if last, ok := c.inputs.keys[evt.Key]; ok {
 						if evt.Timestamp-last <= 20 {

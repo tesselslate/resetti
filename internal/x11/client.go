@@ -521,7 +521,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 				Timestamp: uint32(evt.Time),
 			}
 		case xproto.KeyReleaseEvent:
-			// We have to use a GLFW hackfix here ourselves (:
+			// XXX: We have to use a GLFW hackfix here ourselves (:
 			// If there is a next event in the queue and it is a corresponding
 			// key press, drop the key release event.
 			evt2, err := c.conn.PollForEvent()

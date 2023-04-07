@@ -123,7 +123,7 @@ func (w *Wall) Input(input Input) {
 					log.Printf("Input: Failed to focus projector: %s\n", err)
 				}
 			case cfg.ActionWallResetAll:
-				if !w.wallBinds {
+				if !w.wallBinds || input.Held {
 					continue
 				}
 				w.wallResetAll()
@@ -133,6 +133,9 @@ func (w *Wall) Input(input Input) {
 				}
 				var id int
 				if action.Extra != nil {
+					if input.Held {
+						continue
+					}
 					id = *action.Extra
 				} else {
 					mouseId, ok := w.getInstanceId(input)
@@ -156,7 +159,9 @@ func (w *Wall) Input(input Input) {
 				case cfg.ActionWallLock:
 					w.wallLock(id)
 				case cfg.ActionWallPlay:
-					w.wallPlay(id)
+					if w.states[id].Type == mc.StIdle {
+						w.wallPlay(id)
+					}
 				case cfg.ActionWallReset:
 					w.wallReset(id)
 				case cfg.ActionWallResetOthers:
