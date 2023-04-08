@@ -139,11 +139,26 @@ sleepbg_path = ""
 
 # The CPU affinity method to use. Leave blank to disable affinity. Options:
 # - sequence        Each instance gets one CPU core (SMT is assumed, so 2
-#                   threads.)
+#                   threads.) When instances are locked, active, or in the
+#                   background, they are given a set amount of CPUs.
 # - advanced        Advanced affinity, where each instance is moved between
 #                   affinity groups. Configure below.
 affinity = ""
 
+# Sequence affinity settings.
+[wall.performance.sequence]
+# The number of CPUs to give to the active instance. Set to 0 to disable.
+active_cpus = 12
+
+# The number of CPUs to give to instances in the background. Set to 0 to
+# disable.
+background_cpus = 8
+
+# The number of CPUs to give to locked instances. Set to 0 to disable.
+lock_cpus = 10
+
+# Advanced affinity settings.
+[wall.performance.advanced]
 # Whether or not to evenly divide instances between CCXs (core complexes).
 # - You should only use this if you have an AMD CPU with 2 CCXs.
 # - If enabled, the number of CPU cores available to each affinity group

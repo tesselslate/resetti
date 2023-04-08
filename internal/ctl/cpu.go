@@ -5,45 +5,16 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"golang.org/x/exp/slices"
-)
-
-// Affinity groups
-const (
-	// affIdle is the affinity group used for instances which have finished
-	// generating a world and are now paused.
-	affIdle int = iota
-
-	// affLow is the affinity group used for instances which have crossed the
-	// low_threshold config option.
-	affLow
-
-	// affMid is the affinity group used for instances which have not yet
-	// crossed the low_threshold config option when the user is ingame.
-	//
-	// Instances may also be temporarily moved to the mid group after they
-	// finish world generation to allow more time for chunks to render
-	// (referred to below as the "burst" period.)
-	affMid
-
-	// affHigh is the affinity group used for instances which have not yet
-	// crossed the low_threshold config option when the user is not ingame,
-	// as well as those which have been given priority.
-	affHigh
-
-	// affActive is the affinity group used for the currently focused instance
-	// (if one exists.)
-	affActive
 )
 
 // Affinity arguments
@@ -51,15 +22,6 @@ var (
 	forceCgroups  = slices.Contains(os.Args, "--force-cgroups")
 	dontOverwrite = slices.Contains(os.Args, "--keep-script")
 )
-
-// Affinity group names
-var baseNames = [...]string{
-	"idle",
-	"low",
-	"mid",
-	"high",
-	"active",
-}
 
 //go:embed cgroup_setup.sh
 var cgroupScript []byte
@@ -72,29 +34,23 @@ var suidBinaries = [...]string{
 	"pkexec",
 }
 
-// CpuManager controls how much CPU time is given to each instance based on its
-// state. Currently, this is done via the use of cgroups and CPU affinity.
-//
-// Each instance can be in one of several affinity groups and is moved between
-// groups when updates to its state are received. See the documentation for the
-// affinity group constants for more information on each group.
-type CpuManager struct {
-	anyActive bool // Whether there is an active instance
-	pids      []int
-	states    []cpuState
+// CpuManager controls how much CPU time is given to each instance bsaed on its state.
+type CpuManager interface {
+	// Run handles state updates and moves instances between affinity groups.
+	Run(context.Context, *sync.WaitGroup)
 
-	conf        *cfg.Profile
-	priority    chan priorityUpdate
-	removeBurst chan int
-	updates     chan mc.Update
+	// SetPriority sets the priority state of the given instance.
+	SetPriority(int, bool)
+	// Update updates the affinity state of the given instance as needed based on
+	// the state change.
+	Update(mc.Update)
 }
 
-// cpuState contains the state of a given instance as well as its affinity
-// properties.
-type cpuState struct {
-	mc.State
-	group    int  // Affinity group
-	priority bool // Move to high priority when appropriate
+// cpuTopology contains information about the user's CPU cache topology.
+type cpuTopology struct {
+	count int   // CPU count
+	l1    []int // Per-CPU L1 cache ID (for core detection)
+	l3    []int // Per-CPU L3 cache ID (for CCX detection)
 }
 
 // priorityUpdate contains an update to the priority of a single instance.
@@ -107,40 +63,150 @@ type priorityUpdate struct {
 // profile. If necessary, it prompts the user for root permission and runs the
 // cgroup creation script.
 func NewCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Profile) (CpuManager, error) {
-	if err := prepareCgroups(conf, len(instances)); err != nil {
-		return CpuManager{}, err
-	}
 	pids := make([]int, 0, len(instances))
 	for _, instance := range instances {
 		pids = append(pids, int(instance.Pid))
 	}
-	cpuStates := make([]cpuState, 0, len(instances))
-	for _, state := range states {
-		cpuStates = append(cpuStates, cpuState{state, affIdle, false})
+	topo, err := getCpuTopology()
+	if err != nil {
+		return nil, fmt.Errorf("get cpu topology: %w", err)
 	}
-	manager := CpuManager{
-		false,
-		pids,
-		cpuStates,
-		conf,
-		make(chan priorityUpdate, bufferSize*len(instances)),
-		make(chan int, bufferSize*len(instances)),
-		make(chan mc.Update, bufferSize*len(instances)),
+	if err := prepareCgroups(conf, &topo, len(instances)); err != nil {
+		return nil, err
 	}
-	if err := manager.initGroups(); err != nil {
-		return CpuManager{}, err
+	switch conf.Wall.Perf.Affinity {
+	case "advanced":
+		cpuStates := make([]cpuState, 0, len(instances))
+		for _, state := range states {
+			cpuStates = append(cpuStates, cpuState{state, affIdle, false})
+		}
+		manager := advancedCpuManager{
+			false,
+			pids,
+			cpuStates,
+			conf,
+			make(chan priorityUpdate, bufferSize*len(instances)),
+			make(chan int, bufferSize*len(instances)),
+			make(chan mc.Update, bufferSize*len(instances)),
+		}
+		manager.initGroups()
+		return &manager, nil
+	case "sequence":
+		mgrStates := make([]mc.State, len(states))
+		copy(mgrStates, states)
+		manager := sequenceCpuManager{
+			false,
+			pids,
+			mgrStates,
+			getCoreIds(&topo),
+			nil,
+			conf,
+			make(chan priorityUpdate, bufferSize*len(instances)),
+			make(chan mc.Update, bufferSize*len(instances)),
+		}
+		if err := manager.initGroups(); err != nil {
+			return nil, fmt.Errorf("init groups: %w", err)
+		}
+		return &manager, nil
+	default:
+		panic("invalid affinity type uncaught")
 	}
-	return manager, nil
+}
+
+// getCcxIds returns the CPU IDs for each CCX on the user's CPU.
+func getCcxIds(topo *cpuTopology) [2][]int {
+	// TODO: I don't think there are any consumer CPUs with more than 2 CCXs but
+	// that should probably get handled at some point.
+	// TODO: Sort the list to group by core as well (e.g. 0,0,1,1,..), which
+	// might help performance a bit more on groups with less CPUs allocated.
+	var ccx [2][]int
+	for id, l3 := range topo.l3 {
+		ccx[l3] = append(ccx[l3], id)
+	}
+	return ccx
+}
+
+// getCoreIds returns the CPU IDs for each core on the user's CPU.
+func getCoreIds(topo *cpuTopology) [][]int {
+	// TODO: A 128 core maximum is a safe assumption for now, but this function
+	// should just be made better.
+	// XXX: L1 cache IDs can get skipped. On my 5900X, 6-7 are skipped. It goes
+	// from 5 to 8.
+	cores := make([][]int, 128)
+	for id, l1 := range topo.l1 {
+		cores[l1] = append(cores[l1], id)
+	}
+	for i := len(cores) - 1; i >= 0; i -= 1 {
+		if len(cores[i]) == 0 {
+			cores = slices.Delete(cores, i, i+1)
+		}
+	}
+	return cores
+}
+
+// getCpuTopology returns information about the user's CPU cache topology.
+func getCpuTopology() (cpuTopology, error) {
+	topo := cpuTopology{count: runtime.NumCPU()}
+	for i := 0; i < topo.count; i += 1 {
+		cacheDir := fmt.Sprintf("/sys/devices/system/cpu/cpu%d/cache/", i)
+		l1, l3 := -1, -1
+		entries, err := os.ReadDir(cacheDir)
+		if err != nil {
+			return topo, fmt.Errorf("read %s: %w", cacheDir, err)
+		}
+		for _, entry := range entries {
+			if !strings.HasPrefix(entry.Name(), "index") {
+				continue
+			}
+			dir := cacheDir + entry.Name()
+			raw, err := os.ReadFile(dir + "/id")
+			if err != nil {
+				return topo, fmt.Errorf("read cpu%d/cache/%s/id: %w", i, entry.Name(), err)
+			}
+			id, err := strconv.Atoi(strings.TrimSuffix(string(raw), "\n"))
+			if err != nil {
+				return topo, fmt.Errorf("convert cpu%d/cache/%s/id: %w", i, entry.Name(), err)
+			}
+			raw, err = os.ReadFile(dir + "/level")
+			if err != nil {
+				return topo, fmt.Errorf("read cpu%d/cache/%s/level: %w", i, entry.Name(), err)
+			}
+			lvl, err := strconv.Atoi(strings.TrimSuffix(string(raw), "\n"))
+			if err != nil {
+				return topo, fmt.Errorf("convert cpu%d/cache/%s/id: %w", i, entry.Name(), err)
+			}
+			switch lvl {
+			case 1:
+				if l1 != -1 && l1 != id {
+					return topo, fmt.Errorf("different L1i and L1d ids on cpu %d (%d vs %d)", i, l1, id)
+				}
+				l1 = id
+			case 3:
+				l3 = id
+			default:
+				continue
+			}
+		}
+		if l1 == -1 {
+			return topo, fmt.Errorf("no L1 cache for cpu %d", i)
+		}
+		if l3 == -1 {
+			return topo, fmt.Errorf("no L3 cache for cpu %d", i)
+		}
+		topo.l1 = append(topo.l1, l1)
+		topo.l3 = append(topo.l3, l3)
+	}
+	return topo, nil
 }
 
 // prepareCgroups prompts the user for root privileges and runs the cgroup
 // setup script (if necessary) and assigns the correct CPU sets to each cgroup.
-func prepareCgroups(conf *cfg.Profile, instances int) error {
+func prepareCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 	// Check if the cgroup setup script needs to be run.
 	var shouldExist []string
-	switch conf.Wall.Performance.Affinity {
+	switch conf.Wall.Perf.Affinity {
 	case "advanced":
-		if conf.Wall.Performance.CcxSplit {
+		if conf.Wall.Perf.Adv.CcxSplit {
 			for _, name := range baseNames {
 				shouldExist = append(shouldExist, name+"0", name+"1")
 			}
@@ -192,47 +258,55 @@ func prepareCgroups(conf *cfg.Profile, instances int) error {
 	}
 
 	// Assign the correct CPU sets to each cgroup.
-	switch conf.Wall.Performance.Affinity {
+	err := writeCgroups(conf, topo, instances)
+	if err != nil {
+		return fmt.Errorf("write cgroups: %w", err)
+	}
+	return nil
+}
+
+// writeCgroups writes the correct CPU sets to each cgroup for the user's
+// affinity config.
+func writeCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
+	switch conf.Wall.Perf.Affinity {
 	case "advanced":
 		cpus := [...]int{
-			conf.Wall.Performance.CpusIdle,
-			conf.Wall.Performance.CpusLow,
-			conf.Wall.Performance.CpusMid,
-			conf.Wall.Performance.CpusHigh,
-			conf.Wall.Performance.CpusActive,
+			conf.Wall.Perf.Adv.CpusIdle,
+			conf.Wall.Perf.Adv.CpusLow,
+			conf.Wall.Perf.Adv.CpusMid,
+			conf.Wall.Perf.Adv.CpusHigh,
+			conf.Wall.Perf.Adv.CpusActive,
 		}
-		for idx, group := range baseNames {
-			// If CCX splitting is disabled, assign 0, 1, ..., N-1
-			// If it is enabled:
-			// base0 - assign 0, 2, ..., (N-1) * 2
-			// base1 - assign 1, 3, ..., (N*2) - 1
-			set := make([]int, cpus[idx])
-			for cpu := 0; cpu < cpus[idx]; cpu += 1 {
-				set = append(set, cpu)
+		if conf.Wall.Perf.Adv.CcxSplit {
+			ccx := getCcxIds(topo)
+			for id, name := range baseNames {
+				cpuCount := cpus[id]
+				if err := writeCpuSet(name+"0", ccx[0][:cpuCount]); err != nil {
+					return fmt.Errorf("write cpus for %s0: %w", name, err)
+				}
+				if err := writeCpuSet(name+"1", ccx[1][:cpuCount]); err != nil {
+					return fmt.Errorf("write cpus for %s1: %w", name, err)
+				}
 			}
-			if conf.Wall.Performance.CcxSplit {
-				for idx := range set {
-					set[idx] *= 2
-				}
-				if err := writeCpuSet(group+"0", set); err != nil {
-					return err
-				}
-				for idx := range set {
-					set[idx] += 1
-				}
-				if err := writeCpuSet(group+"1", set); err != nil {
-					return err
-				}
-			} else {
-				if err := writeCpuSet(group, set); err != nil {
-					return err
+		} else {
+			// Flatten the per-core CPU list. We want to pick CPUs on the same
+			// core one after another to improve locality.
+			var cpus []int
+			for _, core := range getCoreIds(topo) {
+				cpus = append(cpus, core...)
+			}
+			for id, name := range baseNames {
+				cpuCount := cpus[id]
+				if err := writeCpuSet(name, cpus[:cpuCount]); err != nil {
+					return fmt.Errorf("write cpus for %s: %w", name, err)
 				}
 			}
 		}
 	case "sequence":
+		cores := getCoreIds(topo)
 		for i := 0; i < instances; i += 1 {
-			if err := writeCpuSet(fmt.Sprintf("inst%d", i), []int{i * 2, i*2 + 1}); err != nil {
-				return err
+			if err := writeCpuSet(fmt.Sprintf("inst%d", i), cores[i]); err != nil {
+				return fmt.Errorf("write cpus for inst%d: %w", i, err)
 			}
 		}
 	}
@@ -250,175 +324,4 @@ func writeCpuSet(group string, cpus []int) error {
 		[]byte(strings.Join(cpusString, ",")),
 		0644,
 	)
-}
-
-// Update updates the affinity group of the given instance as needed based on
-// the state change.
-func (c *CpuManager) Update(update mc.Update) {
-	c.updates <- update
-}
-
-// SetPriority sets the priority state of the given instance.
-func (c *CpuManager) SetPriority(id int, state bool) {
-	c.priority <- priorityUpdate{id, state}
-}
-
-// handleUpdate handles a single instance state update and moves the instance
-// between groups as needed.
-func (c *CpuManager) handleUpdate(update mc.Update) {
-	changed := c.states[update.Id].Type != update.State.Type
-
-	switch update.State.Type {
-	case mc.StIdle:
-		if c.conf.Wall.Performance.BurstLength <= 0 {
-			c.moveInstance(update.Id, affIdle)
-			return
-		}
-		if changed {
-			c.moveInstance(update.Id, affMid)
-			go func() {
-				<-time.After(time.Millisecond * time.Duration(c.conf.Wall.Performance.BurstLength))
-				c.removeBurst <- update.Id
-			}()
-		}
-	case mc.StDirt:
-		if c.anyActive {
-			c.moveInstance(update.Id, affMid)
-		} else {
-			c.moveInstance(update.Id, affHigh)
-		}
-	case mc.StPreview:
-		nowOver := update.State.Progress > c.conf.Wall.Performance.LowThreshold
-		wasUnder := c.states[update.Id].Progress <= c.conf.Wall.Performance.LowThreshold
-		if wasUnder && nowOver {
-			c.moveInstance(update.Id, affLow)
-		} else if changed {
-			if c.anyActive {
-				c.moveInstance(update.Id, affMid)
-			} else {
-				c.moveInstance(update.Id, affHigh)
-			}
-		}
-	case mc.StIngame:
-		c.moveInstance(update.Id, affActive)
-	}
-	c.states[update.Id].State = update.State
-}
-
-// initGroups moves each instance to a consistent state for starting or
-// stopping the cpuManager.
-func (c *CpuManager) initGroups() error {
-	switch c.conf.Wall.Performance.Affinity {
-	case "advanced":
-		for i := range c.states {
-			c.moveInstance(i, affHigh)
-		}
-		return nil
-	case "sequence":
-		for id, pid := range c.pids {
-			err := os.WriteFile(
-				fmt.Sprintf("/sys/fs/cgroup/resetti/inst%d/cgroup.procs", id),
-				[]byte(strconv.Itoa(pid)),
-				0644,
-			)
-			if err != nil {
-				log.Printf("cpuManager: updateAffinity failed: %s\n", err)
-			}
-		}
-		return nil
-	default:
-		panic("invalid affinity (should have been caught in config validation)")
-	}
-}
-
-// moveInstance attempts to move the given instance to the given group. If
-// doing so will cause multiple instances to be in the active group, the
-// function panics. If the instance is prioritized, its group is updated
-// but it remains in the high cgroup.
-func (c *CpuManager) moveInstance(id int, group int) {
-	if c.states[id].group == group {
-		return
-	}
-	if group == affActive {
-		if c.anyActive {
-			panic("multiple active instances")
-		}
-		c.anyActive = true
-		for id, state := range c.states {
-			if state.group == affHigh {
-				c.moveInstance(id, affMid)
-			}
-		}
-	} else if c.states[id].group == affActive {
-		c.anyActive = false
-		for id, state := range c.states {
-			if state.group == affMid {
-				c.moveInstance(id, affHigh)
-			}
-		}
-	}
-	c.states[id].group = group
-	c.updateAffinity(id)
-}
-
-// setPriority sets the priority of an instance. If the instance is not already
-// in the high cgroup, it is moved there.
-func (c *CpuManager) setPriority(id int, priority bool) {
-	c.states[id].priority = priority
-	c.updateAffinity(id)
-}
-
-// updateAffinity updates the affinity cgroup an instance is part of. If the
-// instance is prioritized, that takes precedence over whatever group it is
-// a part of.
-func (c *CpuManager) updateAffinity(id int) {
-	var group int
-	if c.states[id].priority {
-		group = affHigh
-	} else {
-		group = c.states[id].group
-	}
-	name := baseNames[group]
-	if c.conf.Wall.Performance.CcxSplit {
-		if id < len(c.pids)/2 {
-			name += "0"
-		} else {
-			name += "1"
-		}
-	}
-	// These writes are usually fast (<= ~500us) but sometimes spike up to as
-	// slow as 30+ ms. Do them asynchronously.
-	go func() {
-		err := os.WriteFile(
-			fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", name),
-			[]byte(strconv.Itoa(c.pids[id])),
-			0644,
-		)
-		if err != nil {
-			log.Printf("cpuManager: updateAffinity failed: %s\n", err)
-		}
-	}()
-}
-
-// Run handles state updates and moves instances between affinity groups.
-func (c *CpuManager) Run(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-	wg.Add(1)
-	for {
-		select {
-		case <-ctx.Done():
-			if err := c.initGroups(); err != nil {
-				log.Printf("cpuManager: Failed to move instances to consistent state: %s\n", err)
-			}
-			return
-		case update := <-c.updates:
-			c.handleUpdate(update)
-		case prio := <-c.priority:
-			c.setPriority(prio.id, prio.state)
-		case id := <-c.removeBurst:
-			if c.states[id].Type == mc.StIdle {
-				c.moveInstance(id, affIdle)
-			}
-		}
-	}
 }

@@ -46,10 +46,9 @@ type Controller struct {
 	cpu      CpuManager
 	frontend Frontend
 
-	useAffinity bool
-	binds       map[cfg.Bind]cfg.ActionList
-	hooks       map[int]string
-	inputs      inputState
+	binds  map[cfg.Bind]cfg.ActionList
+	hooks  map[int]string
+	inputs inputState
 
 	obsErrors <-chan error
 	mgrErrors <-chan error
@@ -160,15 +159,12 @@ func Run(conf *cfg.Profile) error {
 	}
 
 	if c.conf.Wall.Enabled {
-		if c.conf.Wall.Performance.Affinity != "" {
+		if c.conf.Wall.Perf.Affinity != "" {
 			states := c.manager.GetStates()
 			c.cpu, err = NewCpuManager(instances, states, conf)
 			if err != nil {
 				return fmt.Errorf("(init) create cpuManager: %w", err)
 			}
-		}
-		if c.conf.Wall.Performance.Affinity == "advanced" {
-			c.useAffinity = true
 		}
 	}
 
@@ -191,7 +187,7 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) setup frontend: %w", err)
 	}
 	go c.counter.Run(ctx, &wg)
-	if c.useAffinity {
+	if c.cpu != nil {
 		go c.cpu.Run(ctx, &wg)
 	}
 	evtch := make(chan mc.Update, bufferSize*len(instances))
@@ -256,7 +252,7 @@ func (c *Controller) FocusInstance(id int) {
 // instance, and starts playing it.
 func (c *Controller) PlayInstance(id int) {
 	c.manager.Play(id)
-	if c.useAffinity {
+	if c.cpu != nil {
 		c.cpu.Update(mc.Update{
 			State: mc.State{Type: mc.StIngame},
 			Id:    id,
@@ -296,7 +292,7 @@ func (c *Controller) RunHook(hook int) {
 
 // SetPriority sets the priority of the instance in the CPU manager.
 func (c *Controller) SetPriority(id int, prio bool) {
-	if c.useAffinity {
+	if c.cpu != nil {
 		c.cpu.SetPriority(id, prio)
 	}
 }
@@ -433,7 +429,7 @@ func (c *Controller) run(ctx context.Context) error {
 			log.Printf("X error: %s\n", err)
 		case evt := <-c.mgrEvents:
 			c.frontend.Update(evt)
-			if c.useAffinity {
+			if c.cpu != nil {
 				c.cpu.Update(evt)
 			}
 		case evt := <-c.x11Events:

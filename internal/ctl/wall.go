@@ -231,7 +231,7 @@ func (w *Wall) bindWallKeys() error {
 
 // createSleepbgLock creates the sleepbg.lock file.
 func (w *Wall) createSleepbgLock() {
-	file, err := os.Create(w.conf.Wall.Performance.SleepbgPath)
+	file, err := os.Create(w.conf.Wall.Perf.SleepbgPath)
 	if err != nil {
 		log.Printf("Failed to create sleepbg.lock: %s\n", err)
 	} else {
@@ -241,7 +241,7 @@ func (w *Wall) createSleepbgLock() {
 
 // deleteSleepbgLock deletes the sleepbg.lock file.
 func (w *Wall) deleteSleepbgLock(ignoreErrors bool) {
-	err := os.Remove(w.conf.Wall.Performance.SleepbgPath)
+	err := os.Remove(w.conf.Wall.Perf.SleepbgPath)
 	if err != nil && !ignoreErrors {
 		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
 	}

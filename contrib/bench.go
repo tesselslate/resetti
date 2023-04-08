@@ -86,7 +86,7 @@ func run(opts Options) int {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if opts.InstanceCount != 0 && len(instances) < opts.InstanceCount {
+	if opts.InstanceCount != 0 {
 		if len(instances) < opts.InstanceCount {
 			log.Fatalf("Found %d of %d instances\n", len(instances), opts.InstanceCount)
 		}
@@ -94,25 +94,23 @@ func run(opts Options) int {
 	}
 	evtch := make(chan mc.Update, 16*len(instances))
 	errch := make(chan error, len(instances))
-	mgr, err := mc.NewManager(instances, nil, &x)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	states := mgr.GetStates()
 	conf := &cfg.Profile{}
 	switch opts.Affinity {
 	case "sequence":
 		conf.Wall.Enabled = true
-		conf.Wall.Performance.Affinity = "sequence"
+		conf.Wall.Perf.Affinity = "sequence"
 	case "ccx":
 		conf.Wall.Enabled = true
-		conf.Wall.Performance.Affinity = "advanced"
-		conf.Wall.Performance.CcxSplit = true
-		conf.Wall.Performance.CpusHigh = runtime.NumCPU() / 2
-	default:
-		conf = nil
+		conf.Wall.Perf.Affinity = "advanced"
+		conf.Wall.Perf.Adv.CcxSplit = true
+		conf.Wall.Perf.Adv.CpusHigh = runtime.NumCPU() / 2
 	}
-	if conf != nil {
+	mgr, err := mc.NewManager(instances, conf, &x)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	states := mgr.GetStates()
+	if opts.Affinity == "sequence" || opts.Affinity == "ccx" {
 		_, err := ctl.NewCpuManager(instances, states, conf)
 		if err != nil {
 			log.Fatalln(err)
