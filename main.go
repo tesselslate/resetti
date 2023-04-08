@@ -64,7 +64,7 @@ func Run() {
 		_ = logFile.Close()
 	}()
 	logWriter := io.MultiWriter(logFile, os.Stdout)
-	log.SetFlags(log.Ltime)
+	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.SetOutput(logWriter)
 
 	// Get configuration and run.

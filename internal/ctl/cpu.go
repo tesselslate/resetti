@@ -364,9 +364,6 @@ func (c *CpuManager) moveInstance(id int, group int) {
 // setPriority sets the priority of an instance. If the instance is not already
 // in the high cgroup, it is moved there.
 func (c *CpuManager) setPriority(id int, priority bool) {
-	if priority == c.states[id].priority {
-		log.Println("cpuManager (debug): pointless priority update")
-	}
 	c.states[id].priority = priority
 	c.updateAffinity(id)
 }

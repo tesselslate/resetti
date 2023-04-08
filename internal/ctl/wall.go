@@ -165,7 +165,9 @@ func (w *Wall) Input(input Input) {
 				case cfg.ActionWallReset:
 					w.wallReset(id)
 				case cfg.ActionWallResetOthers:
-					w.wallResetOthers(id)
+					if w.states[id].Type == mc.StIdle {
+						w.wallResetOthers(id)
+					}
 				}
 			}
 		}
@@ -308,6 +310,7 @@ func (w *Wall) resetIngame() {
 		}
 	}
 	w.deleteSleepbgLock(false)
+	w.obs.SetSceneAsync("Wall")
 	if err := w.focusProjector(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
@@ -317,7 +320,7 @@ func (w *Wall) resetIngame() {
 // setLocked sets the lock state of the given instance.
 func (w *Wall) setLocked(id int, lock bool) {
 	if w.locks[id] == lock {
-		log.Println("setLocked (debug): lock state unchanged")
+		return
 	}
 	w.locks[id] = lock
 	w.host.SetPriority(id, lock)
@@ -384,9 +387,11 @@ func (w *Wall) wallReset(id int) {
 
 // wallResetAll resets all unlocked instances.
 func (w *Wall) wallResetAll() {
+	start := time.Now()
 	for i := 0; i < len(w.instances); i += 1 {
 		w.wallReset(i)
 	}
+	log.Printf("Reset all in %.2f ms\n", float64(time.Since(start).Microseconds())/1000)
 }
 
 // wallResetOthers plays an instance and resets all others. It is the caller's
