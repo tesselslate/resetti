@@ -199,6 +199,10 @@ func (r *logReader) Path() string {
 
 // Process implements StateReader.
 func (r *logReader) Process() (State, bool, error) {
+	if r.file == nil {
+		return State{}, false, nil
+	}
+
 	updated := false
 	for {
 		line, err := r.readLine()
@@ -241,7 +245,23 @@ func (r *logReader) Process() (State, bool, error) {
 
 // ProcessEvent implements StateReader.
 func (r *logReader) ProcessEvent(op fsnotify.Op) error {
-	// TODO: Recovery (e.g. midnight bug)
+	switch op {
+	case fsnotify.Rename, fsnotify.Remove:
+		log.Println("logReader.ProcessEvent: Log file is gone.")
+		if err := r.file.Close(); err != nil {
+			log.Printf("Failed to close log: %s\n", err)
+		}
+		r.file = nil
+		r.reader = nil
+	case fsnotify.Create:
+		log.Println("logReader.ProcessEvent: Log file is back!")
+		file, err := os.Open(r.path)
+		if err != nil {
+			return fmt.Errorf("reopen log: %w", err)
+		}
+		r.file = file
+		r.reader = bufio.NewReader(r.file)
+	}
 	return nil
 }
 
@@ -350,6 +370,10 @@ func (r *wpstateReader) Process() (State, bool, error) {
 
 // ProcessEvent implements StateReader.
 func (r *wpstateReader) ProcessEvent(op fsnotify.Op) error {
-	// TODO: Recovery
-	return nil
+	switch op {
+	case fsnotify.Remove, fsnotify.Rename:
+		return errors.New("wpstateout.txt gone")
+	default:
+		return nil
+	}
 }
