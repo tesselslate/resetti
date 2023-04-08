@@ -127,6 +127,11 @@ func (w *Wall) Input(input Input) {
 					continue
 				}
 				w.wallResetAll()
+			case cfg.ActionWallPlayFirstLocked:
+				if !w.wallBinds || input.Held {
+					continue
+				}
+				w.playFirstLocked()
 			case cfg.ActionWallLock, cfg.ActionWallPlay, cfg.ActionWallReset, cfg.ActionWallResetOthers:
 				if !w.wallBinds {
 					continue
@@ -301,13 +306,8 @@ func (w *Wall) getWallSize() error {
 func (w *Wall) resetIngame() {
 	w.host.ResetInstance(w.active)
 	w.active = -1
-	if w.conf.Wall.GotoLocked {
-		for id, state := range w.states {
-			if state.Type == mc.StIdle {
-				w.wallPlay(id)
-				return
-			}
-		}
+	if w.conf.Wall.GotoLocked && w.playFirstLocked() {
+		return
 	}
 	if err := w.focusProjector(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
@@ -315,6 +315,17 @@ func (w *Wall) resetIngame() {
 	w.deleteSleepbgLock(false)
 	w.obs.SetSceneAsync("Wall")
 	w.host.RunHook(HookReset)
+}
+
+// playFirstLocked plays the first instance that is locked
+func (w *Wall) playFirstLocked() bool {
+	for id, state := range w.states {
+		if state.Type == mc.StIdle && w.locks[id] {
+			w.wallPlay(id)
+			return true
+		}
+	}
+	return false
 }
 
 // setLocked sets the lock state of the given instance.

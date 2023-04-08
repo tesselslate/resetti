@@ -21,18 +21,20 @@ const (
 	ActionWallPlay
 	ActionWallReset
 	ActionWallResetOthers
+	ActionWallPlayFirstLocked
 )
 
 // Mapping of action names -> action types
 var actionNames = map[string]int{
-	"ingame_focus":      ActionIngameFocus,
-	"ingame_reset":      ActionIngameReset,
-	"wall_focus":        ActionWallFocus,
-	"wall_reset_all":    ActionWallResetAll,
-	"wall_lock":         ActionWallLock,
-	"wall_play":         ActionWallPlay,
-	"wall_reset":        ActionWallReset,
-	"wall_reset_others": ActionWallResetOthers,
+	"ingame_focus":           ActionIngameFocus,
+	"ingame_reset":           ActionIngameReset,
+	"wall_focus":             ActionWallFocus,
+	"wall_reset_all":         ActionWallResetAll,
+	"wall_lock":              ActionWallLock,
+	"wall_play":              ActionWallPlay,
+	"wall_reset":             ActionWallReset,
+	"wall_reset_others":      ActionWallResetOthers,
+	"wall_play_first_locked": ActionWallPlayFirstLocked,
 }
 
 // Keybind parsing regexes
