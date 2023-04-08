@@ -16,7 +16,6 @@ import (
 
 // TODO: Pre 1.14 support
 // TODO: Process monitoring, handle instance death/restart
-// TODO: Warmup (click, stretch, reset, etc)
 
 // An instance contains all of the relevant information for an instance, such
 // as its game directory and current state.
@@ -73,6 +72,7 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 			return nil, fmt.Errorf("watch instance %d: %w", idx, err)
 		}
 	}
+
 	m := Manager{
 		sync.Mutex{},
 		-1,
@@ -82,6 +82,15 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 		conf,
 		x,
 	}
+
+	// Warmup instances.
+	for i, inst := range infos {
+		x.Click(inst.Wid)
+		if conf.Wall.Enabled {
+			m.setResolution(i, conf.Wall.StretchRes)
+		}
+	}
+
 	return &m, nil
 }
 
