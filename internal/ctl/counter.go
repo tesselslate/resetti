@@ -90,6 +90,8 @@ func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
 		if err := c.file.Close(); err != nil {
 			log.Printf("Reset counter: close failed: %s\n", err)
 			log.Printf("Here's your reset count! Back it up: %d\n", c.count)
+		} else {
+			log.Println("Reset counter stopped.")
 		}
 		wg.Done()
 	}()

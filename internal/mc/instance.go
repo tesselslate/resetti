@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +83,16 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 		x,
 	}
 	return &m, nil
+}
+
+// Debug returns a string containing the manager's state.
+func (m *Manager) Debug() string {
+	states := m.GetStates()
+	b := strings.Builder{}
+	for i, state := range states {
+		b.WriteString(fmt.Sprintf("%d\t%s\t%d\n", i, stateNames[state.Type], state.Progress))
+	}
+	return b.String()
 }
 
 // GetStates returns a list of all instance states.

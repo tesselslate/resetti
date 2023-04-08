@@ -6,9 +6,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
@@ -52,6 +56,7 @@ type Controller struct {
 	x11Errors <-chan error
 	mgrEvents <-chan mc.Update
 	x11Events <-chan x11.Event
+	signals   <-chan os.Signal
 }
 
 // A Frontend handles user-facing I/O (input handling, instance actions, OBS
@@ -103,6 +108,7 @@ type inputState struct {
 
 // Run creates a new controller with the given configuration profile and runs it.
 func Run(conf *cfg.Profile) error {
+	defer log.Println("Done!")
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -119,6 +125,10 @@ func Run(conf *cfg.Profile) error {
 		HookWallReset: c.conf.Hooks.WallReset,
 	}
 	c.inputs = inputState{0, 0, make(map[buttonMod]bool), make(map[x11.Key]uint32)}
+
+	signals := make(chan os.Signal, 8)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
+	c.signals = signals
 
 	x, err := x11.NewClient()
 	if err != nil {
@@ -328,6 +338,26 @@ func (c *Controller) bind(bind cfg.Bind) error {
 	return nil
 }
 
+// debug prints debug information.
+func (c *Controller) debug() {
+	mem := runtime.MemStats{}
+	runtime.ReadMemStats(&mem)
+	memStats := strings.Builder{}
+	memStats.WriteString(fmt.Sprintf("\nLive objects: %d\n", mem.HeapObjects))
+	memStats.WriteString(fmt.Sprintf("Malloc count: %d\n", mem.Mallocs))
+	memStats.WriteString(fmt.Sprintf("Total allocation: %.2f mb\n", float64(mem.TotalAlloc)/1000000))
+	memStats.WriteString(fmt.Sprintf("Current allocation: %.2f mb\n", float64(mem.HeapAlloc)/1000000))
+	memStats.WriteString(fmt.Sprintf("GC time: %.2f%%\n", mem.GCCPUFraction))
+	memStats.WriteString(fmt.Sprintf("GC cycles: %d\n", mem.NumGC))
+	memStats.WriteString(fmt.Sprintf("Total STW: %.4f ms", float64(mem.PauseTotalNs)/1000000))
+	log.Printf(
+		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInstances:\n%s",
+		runtime.NumGoroutine(),
+		memStats.String(),
+		c.manager.Debug(),
+	)
+}
+
 // matchBind attempts to match a given keybind based on the current input state.
 func (c *Controller) matchBind() (bind cfg.Bind, ok bool) {
 	if len(c.inputs.keys)+len(c.inputs.buttons) != 1 {
@@ -373,6 +403,14 @@ func (c *Controller) unbind(bind cfg.Bind) {
 func (c *Controller) run(ctx context.Context) error {
 	for {
 		select {
+		case sig := <-c.signals:
+			switch sig {
+			case syscall.SIGINT, syscall.SIGTERM:
+				log.Println("Shutting down.")
+				return nil
+			case syscall.SIGUSR1:
+				c.debug()
+			}
 		case err := <-c.mgrErrors:
 			// All manager errors are fatal.
 			return fmt.Errorf("manager: %w", err)

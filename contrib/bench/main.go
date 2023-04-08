@@ -153,9 +153,7 @@ func run(opts Options) int {
 
 	// Warmup instances
 	for _, instance := range instances {
-		if err := x.Click(instance.Wid); err != nil {
-			log.Fatalln(err)
-		}
+		x.Click(instance.Wid)
 	}
 	time.Sleep(100 * time.Millisecond)
 	for _, instance := range instances {
