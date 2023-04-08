@@ -63,6 +63,7 @@ wall_reset = ""
 # - wall_reset(n)           Reset instance N.
 # - wall_reset_others       Focus reset hovered instance.
 # - wall_reset_others(n)    Focus reset instance N.
+# - wall_play_next_locked   Plays the first locked and idle instance.
 [keybinds]
 "Ctrl-Shift-D"      = ["wall_reset_all",    "ingame_reset"]
 "Ctrl-Shift-F"      = ["ingame_focus",      "wall_focus"]
