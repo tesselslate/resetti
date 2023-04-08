@@ -350,10 +350,20 @@ func (c *Controller) debug() {
 	memStats.WriteString(fmt.Sprintf("GC time: %.2f%%\n", mem.GCCPUFraction))
 	memStats.WriteString(fmt.Sprintf("GC cycles: %d\n", mem.NumGC))
 	memStats.WriteString(fmt.Sprintf("Total STW: %.4f ms", float64(mem.PauseTotalNs)/1000000))
+	inputs := strings.Builder{}
+	inputs.WriteString(fmt.Sprintf("\nKeys, buttons: %d, %d\n", len(c.inputs.keys), len(c.inputs.buttons)))
+	inputs.WriteString(fmt.Sprintf("Last position: (%d, %d)\n", c.inputs.cx, c.inputs.cy))
+	for key, time := range c.inputs.keys {
+		inputs.WriteString(fmt.Sprintf("(%d;%d)\tkey:%d\n", key.Code, key.Mod, time))
+	}
+	for button := range c.inputs.buttons {
+		inputs.WriteString(fmt.Sprintf("(%d;%d)\tbutton\n", button.button, button.mod))
+	}
 	log.Printf(
-		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInstances:\n%s",
+		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInputs:%s\nInstances:\n%s",
 		runtime.NumGoroutine(),
 		memStats.String(),
+		inputs.String(),
 		c.manager.Debug(),
 	)
 }
@@ -455,8 +465,7 @@ func (c *Controller) run(ctx context.Context) error {
 					delete(c.inputs.keys, evt.Key)
 				}
 			case x11.ButtonEvent:
-				// Get rid of button modmask by discarding higher bits.
-				bm := buttonMod{evt.Button, evt.Mod & 255}
+				bm := buttonMod{evt.Button, evt.Mod}
 				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
 				if evt.State == x11.StateDown {
 					c.inputs.buttons[bm] = true

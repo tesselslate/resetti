@@ -55,6 +55,9 @@ const (
 		xproto.ConfigWindowWidth
 )
 
+// Keyboard-only mod mask. Discards mouse button modifiers.
+const keyboardModMask = 255
+
 // Error types
 var (
 	ErrConnectionDied = errors.New("connection with X server closed")
@@ -267,7 +270,6 @@ func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
 // GrabKey grabs a keyboard key from the given window, diverting all instances
 // of that keypress for that window to resetti.
 func (c *Client) GrabKey(key Key, win xproto.Window) error {
-	// TODO: investigate grab window behavior
 	return xproto.GrabKeyChecked(
 		c.conn,
 		true,
@@ -508,7 +510,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 		switch evt := evt.(type) {
 		case xproto.KeyPressEvent:
 			ch <- KeyEvent{
-				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State)},
+				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State & keyboardModMask)},
 				State:     StateDown,
 				Timestamp: uint32(evt.Time),
 			}
@@ -521,7 +523,9 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 				log.Printf("X: Polled error: %s\n", err)
 				continue
 			}
+			evt.State &= keyboardModMask
 			if evt3, ok := evt2.(xproto.KeyPressEvent); ok {
+				evt3.State &= keyboardModMask
 				if evt.Detail == evt3.Detail && evt.State == evt3.State {
 					continue
 				}
@@ -535,7 +539,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 		case xproto.ButtonPressEvent:
 			ch <- ButtonEvent{
 				Button:    evt.Detail,
-				Mod:       Keymod(evt.State),
+				Mod:       Keymod(evt.State & keyboardModMask),
 				State:     StateDown,
 				Point:     Point{evt.EventX, evt.EventY},
 				Timestamp: uint32(evt.Time),
@@ -544,7 +548,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 		case xproto.ButtonReleaseEvent:
 			ch <- ButtonEvent{
 				Button:    evt.Detail,
-				Mod:       Keymod(evt.State),
+				Mod:       Keymod(evt.State & keyboardModMask),
 				State:     StateUp,
 				Point:     Point{evt.EventX, evt.EventY},
 				Timestamp: uint32(evt.Time),
@@ -552,7 +556,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 			}
 		case xproto.MotionNotifyEvent:
 			ch <- MoveEvent{
-				Mod:       Keymod(evt.State),
+				Mod:       Keymod(evt.State & keyboardModMask),
 				Point:     Point{evt.EventX, evt.EventY},
 				Timestamp: uint32(evt.Time),
 				Window:    evt.Child,
