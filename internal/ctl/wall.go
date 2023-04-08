@@ -32,6 +32,8 @@ type Wall struct {
 	wallWidth, wallHeight int
 	instWidth, instHeight int
 	projWidth, projHeight int
+	baseWidth, baseHeight int
+	projSize              cfg.Rectangle
 	projector             xproto.Window
 	subprojector          []xproto.Window
 	wallBinds             bool
@@ -239,10 +241,25 @@ func (w *Wall) findProjector() error {
 			if err != nil {
 				return fmt.Errorf("get projector size: %w", err)
 			}
-			// TODO: figure out projector letterboxing?
-			w.projWidth, w.projHeight = int(width), int(height)
-			w.instWidth, w.instHeight = w.projWidth/w.wallWidth, w.projHeight/w.wallHeight
 			w.subprojector = w.x.GetWindowChildren(win)
+
+			// Calculate projector letterboxing. Reference:
+			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/display-helpers.hpp#L23
+			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/window-projector.cpp#L180
+			w.projWidth, w.projHeight = int(width), int(height)
+			baseRatio := float64(w.baseWidth) / float64(w.baseHeight)
+			projRatio := float64(w.projWidth) / float64(w.projHeight)
+			var scale float64
+			if projRatio > baseRatio {
+				scale = float64(w.projHeight) / float64(w.baseHeight)
+			} else {
+				scale = float64(w.projWidth) / float64(w.baseWidth)
+			}
+			w.projSize.X = uint32(w.projWidth/2) - (w.projSize.W / 2)
+			w.projSize.Y = uint32(w.projHeight/2) - (w.projSize.H / 2)
+			w.projSize.W = uint32(scale * float64(w.baseWidth))
+			w.projSize.H = uint32(scale * float64(w.baseHeight))
+			w.instWidth, w.instHeight = int(w.projSize.W)/w.wallWidth, int(w.projSize.H)/w.wallHeight
 			return nil
 		}
 	}
@@ -262,8 +279,8 @@ func (w *Wall) focusProjector() error {
 
 // getInstanceId returns the ID of the instance at the specified coordinates.
 func (w *Wall) getInstanceId(input Input) (id int, ok bool) {
-	x := input.X / w.instWidth
-	y := input.Y / w.instHeight
+	x := (input.X - int(w.projSize.X)) / w.instWidth
+	y := (input.Y - int(w.projSize.Y)) / w.instHeight
 	if x < 0 || y < 0 || x >= w.wallWidth || y >= w.wallHeight {
 		return 0, false
 	}
@@ -294,6 +311,11 @@ func (w *Wall) getWallSize() error {
 		ys = appendUnique(ys, y)
 	}
 	w.wallWidth, w.wallHeight = len(xs), len(ys)
+	width, height, err := w.obs.GetCanvasSize()
+	if err != nil {
+		return err
+	}
+	w.baseWidth, w.baseHeight = width, height
 	return nil
 }
 
