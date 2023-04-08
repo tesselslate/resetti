@@ -267,11 +267,8 @@ func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
 	if rect == nil {
 		return
 	}
-	err := m.x.MoveWindow(
+	m.x.MoveWindow(
 		m.instances[id].info.Wid,
 		rect.X, rect.Y, rect.W, rect.H,
 	)
-	if err != nil {
-		log.Printf("setResolution %d failed: %s\n", id, err)
-	}
 }

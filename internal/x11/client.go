@@ -132,7 +132,7 @@ func NewClient() (Client, error) {
 }
 
 // Click clicks the top left corner (0, 0) of the given window.
-func (c *Client) Click(win xproto.Window) error {
+func (c *Client) Click(win xproto.Window) {
 	// Send an EnterNotify event to get GLFW to update the cursor position.
 	// Then send a LeaveNotify to stop tracking cursor movement.
 	// Then send a ButtonPress to click the window.
@@ -144,24 +144,18 @@ func (c *Client) Click(win xproto.Window) error {
 		Event: win,
 		Child: win,
 	}
-	if err := c.sendEvent(evt, maskEnterLeave, win); err != nil {
-		return err
-	}
+	c.sendEvent(evt, maskEnterLeave, win)
 	evt2 := xproto.LeaveNotifyEvent(evt)
-	if err := c.sendEvent(evt2, maskEnterLeave, win); err != nil {
-		return err
-	}
+	c.sendEvent(evt2, maskEnterLeave, win)
 	evt3 := xproto.ButtonPressEvent{
 		Detail: 1,
 		Root:   win,
 		Event:  win,
 		Child:  win,
 	}
-	if err := c.sendEvent(evt3, maskButton, win); err != nil {
-		return err
-	}
+	c.sendEvent(evt3, maskButton, win)
 	evt4 := xproto.ButtonReleaseEvent(evt3)
-	return c.sendEvent(evt4, maskButton, win)
+	c.sendEvent(evt4, maskButton, win)
 }
 
 // FocusWindow activates the given window.
@@ -189,7 +183,8 @@ func (c *Client) FocusWindow(win xproto.Window) error {
 		Type:   activeWindow,
 		Data:   xproto.ClientMessageDataUnionData32New(data),
 	}
-	return c.sendEvent(evt, maskSubstructure, c.root)
+	c.sendEvent(evt, maskSubstructure, c.root)
+	return nil
 }
 
 // GetActiveWindow returns the currently focused window.
@@ -308,13 +303,13 @@ func (c *Client) GrabPointer(win xproto.Window) error {
 }
 
 // MoveWindow moves and resizes the given window.
-func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) error {
-	return xproto.ConfigureWindowChecked(
+func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
+	xproto.ConfigureWindow(
 		c.conn,
 		win,
 		maskWindow,
 		[]uint32{x, y, w, h},
-	).Check()
+	)
 }
 
 // Poll starts listening for user input events in the background.
@@ -401,14 +396,14 @@ func (c *Client) getPropertyString(win xproto.Window, name string) (string, erro
 }
 
 // sendEvent sends an event to another window.
-func (c *Client) sendEvent(evt rawEvent, mask uint32, win xproto.Window) error {
-	return xproto.SendEventChecked(
+func (c *Client) sendEvent(evt rawEvent, mask uint32, win xproto.Window) {
+	_ = xproto.SendEvent(
 		c.conn,
 		true,
 		win,
 		mask,
 		string(evt.Bytes()),
-	).Check()
+	)
 }
 
 // sendKeyEvent sends a key event to the given window.
@@ -456,14 +451,10 @@ func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.W
 		Child:      win,
 		SameScreen: true,
 	}
-	var err error
 	if state == StateDown {
-		err = c.sendEvent(evt, maskKeyPress, win)
+		c.sendEvent(evt, maskKeyPress, win)
 	} else {
-		err = c.sendEvent(xproto.KeyReleaseEvent(evt), maskKeyPress, win)
-	}
-	if err != nil {
-		log.Printf("Failed to send key event: %s\n", err)
+		c.sendEvent(xproto.KeyReleaseEvent(evt), maskKeyPress, win)
 	}
 }
 
@@ -485,7 +476,8 @@ func (c *Client) setCurrentDesktop(desktop uint32) error {
 		Type:   currentDesktop,
 		Data:   xproto.ClientMessageDataUnionData32New(data),
 	}
-	return c.sendEvent(evt, maskSubstructure, c.root)
+	c.sendEvent(evt, maskSubstructure, c.root)
+	return nil
 }
 
 // poll listens for user inputs in the background.

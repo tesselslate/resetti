@@ -386,15 +386,18 @@ func (c *CpuManager) updateAffinity(id int) {
 			name += "1"
 		}
 	}
-	// XXX: Synchronous IO in event loop
-	err := os.WriteFile(
-		fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", name),
-		[]byte(strconv.Itoa(c.pids[id])),
-		0644,
-	)
-	if err != nil {
-		log.Printf("cpuManager: updateAffinity failed: %s\n", err)
-	}
+	// These writes are usually fast (<= ~500us) but sometimes spike up to as
+	// slow as 30+ ms. Do them asynchronously.
+	go func() {
+		err := os.WriteFile(
+			fmt.Sprintf("/sys/fs/cgroup/resetti/%s/cgroup.procs", name),
+			[]byte(strconv.Itoa(c.pids[id])),
+			0644,
+		)
+		if err != nil {
+			log.Printf("cpuManager: updateAffinity failed: %s\n", err)
+		}
+	}()
 }
 
 // Run handles state updates and moves instances between affinity groups.
