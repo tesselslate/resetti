@@ -2,6 +2,7 @@
 package cfg
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// go:embed default.toml
+//go:embed default.toml
 var defaultProfile []byte
 
 // Delays contains various delays to make certain actions more consistent.

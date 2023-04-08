@@ -246,11 +246,15 @@ func (r *logReader) Process() (State, bool, error) {
 // ProcessEvent implements StateReader.
 func (r *logReader) ProcessEvent(op fsnotify.Op) error {
 	switch op {
-	case fsnotify.Rename, fsnotify.Remove:
+	case fsnotify.Remove:
 		log.Println("logReader.ProcessEvent: Log file is gone.")
+		if r.file == nil {
+			return nil
+		}
 		if err := r.file.Close(); err != nil {
 			log.Printf("Failed to close log: %s\n", err)
 		}
+		log.Println("logReader.ProcessEvent: Closed log. Waiting for return.")
 		r.file = nil
 		r.reader = nil
 	case fsnotify.Create:

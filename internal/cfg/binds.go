@@ -150,8 +150,8 @@ func (b *Bind) UnmarshalTOML(value any) error {
 		} else if button, ok := x11.Buttons[split]; ok {
 			b.Mouse = &button
 			buttonCount += 1
-		} else if loc := keyRegexp.FindStringIndex(split); loc != nil {
-			num, err := strconv.Atoi(split[loc[0]:loc[1]])
+		} else if keyRegexp.MatchString(split) {
+			num, err := strconv.Atoi(split[4:])
 			if err != nil {
 				return fmt.Errorf("failed to parse code in %q", split)
 			}
