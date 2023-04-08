@@ -270,16 +270,18 @@ func (c *Controller) RunHook(hook int) {
 	if cmdStr == "" {
 		return
 	}
-	bin, rawArgs, ok := strings.Cut(cmdStr, " ")
-	var args []string
-	if ok {
-		args = strings.Split(rawArgs, " ")
-	}
-	cmd := exec.Command(bin, args...)
-	err := cmd.Run()
-	if err != nil {
-		log.Printf("RunHook (%d) failed: %s\n", hook, err)
-	}
+	go func() {
+		bin, rawArgs, ok := strings.Cut(cmdStr, " ")
+		var args []string
+		if ok {
+			args = strings.Split(rawArgs, " ")
+		}
+		cmd := exec.Command(bin, args...)
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("RunHook (%d) failed: %s\n", hook, err)
+		}
+	}()
 }
 
 // SetPriority sets the priority of the instance in the CPU manager.

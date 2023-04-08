@@ -314,7 +314,7 @@ func (w *Wall) resetIngame() {
 	if err := w.focusProjector(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
-	go w.host.RunHook(HookReset)
+	w.host.RunHook(HookReset)
 }
 
 // setLocked sets the lock state of the given instance.
@@ -345,9 +345,9 @@ func (w *Wall) wallLock(id int) {
 	lock := !w.locks[id]
 	w.setLocked(id, lock)
 	if lock {
-		go w.host.RunHook(HookLock)
+		w.host.RunHook(HookLock)
 	} else {
-		go w.host.RunHook(HookUnlock)
+		w.host.RunHook(HookUnlock)
 	}
 }
 
@@ -361,7 +361,7 @@ func (w *Wall) wallPlay(id int) {
 		log.Printf("wallPlay: Failed to bind instance keys: %s\n", err)
 	}
 
-	go w.host.RunHook(HookWallPlay)
+	w.host.RunHook(HookWallPlay)
 	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
 		for i := 1; i <= len(w.instances); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
@@ -381,7 +381,7 @@ func (w *Wall) wallReset(id int) {
 		return
 	}
 	if w.states[id].Type != mc.StIngame && w.host.ResetInstance(id) {
-		go w.host.RunHook(HookWallReset)
+		w.host.RunHook(HookWallReset)
 	}
 }
 
