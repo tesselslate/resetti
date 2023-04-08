@@ -37,6 +37,7 @@ type Manager struct {
 	instances []instance        // List of instances
 	paths     map[string]int    // State file -> instance ID mapping
 	watcher   *fsnotify.Watcher // State file watcher
+	pause     chan int          // Instances to pause
 
 	conf *cfg.Profile
 	x    *x11.Client
@@ -79,6 +80,7 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 		instances,
 		paths,
 		watcher,
+		make(chan int, len(instances)*2),
 		conf,
 		x,
 	}
@@ -86,9 +88,7 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 	// Warmup instances.
 	for i, inst := range infos {
 		x.Click(inst.Wid)
-		if conf.Wall.Enabled {
-			m.setResolution(i, conf.Wall.StretchRes)
-		}
+		m.setResolution(i, conf.Wall.StretchRes)
 	}
 
 	return &m, nil
@@ -126,6 +126,13 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 		case <-ctx.Done():
 			log.Println("Manager: context cancelled")
 			return
+		case id := <-m.pause:
+			state := m.instances[id].state.Type
+			if state == StPreview || state == StIdle {
+				m.sendKeyDown(id, x11.KeyF3)
+				m.sendKeyPress(id, x11.KeyEsc)
+				m.sendKeyUp(id, x11.KeyF3)
+			}
 		case evt, ok := <-m.watcher.Events:
 			if !ok {
 				errch <- errors.New("watcher events closed")
@@ -161,17 +168,31 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 					} else {
 						m.instances[id].state.Type = StIdle
 						if lastType != StIdle {
-							m.sendKeyDown(id, x11.KeyF3)
-							m.sendKeyPress(id, x11.KeyEsc)
-							m.sendKeyUp(id, x11.KeyF3)
+							if m.conf.Delay.IdlePause > 0 {
+								go func() {
+									<-time.After(time.Millisecond * time.Duration(m.conf.Delay.IdlePause))
+									m.pause <- id
+								}()
+							} else {
+								m.sendKeyDown(id, x11.KeyF3)
+								m.sendKeyPress(id, x11.KeyEsc)
+								m.sendKeyUp(id, x11.KeyF3)
+							}
 						}
 					}
 				case StPreview:
 					if lastType != StPreview {
 						m.instances[id].state.LastPreview = time.Now()
-						m.sendKeyDown(id, x11.KeyF3)
-						m.sendKeyPress(id, x11.KeyEsc)
-						m.sendKeyUp(id, x11.KeyF3)
+						if m.conf.Delay.WpPause > 0 {
+							go func() {
+								<-time.After(time.Millisecond * time.Duration(m.conf.Delay.WpPause))
+								m.pause <- id
+							}()
+						} else {
+							m.sendKeyDown(id, x11.KeyF3)
+							m.sendKeyPress(id, x11.KeyEsc)
+							m.sendKeyUp(id, x11.KeyF3)
+						}
 					}
 				}
 				evtch <- Update{m.instances[id].state, id}
@@ -216,6 +237,9 @@ func (m *Manager) Play(id int) {
 		m.sendKeyPress(id, x11.KeyEsc)
 	}
 	if m.conf.Wall.Enabled {
+		if m.conf.Delay.Stretch > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
+		}
 		m.setResolution(id, m.conf.Wall.UnstretchRes)
 		if m.conf.UnpauseFocus && m.conf.Wall.UseF1 {
 			m.sendKeyPress(id, x11.KeyF1)
@@ -225,7 +249,9 @@ func (m *Manager) Play(id int) {
 	if m.conf.UnpauseFocus {
 		// Pause and unpause again to let the cursor position update for the next
 		// time a menu is opened.
-		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay))
+		if m.conf.Delay.Unpause > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Unpause))
+		}
 		m.sendKeyPress(id, x11.KeyEsc)
 		m.sendKeyPress(id, x11.KeyEsc)
 	}
@@ -253,9 +279,18 @@ func (m *Manager) Reset(id int) bool {
 
 	// Reset.
 	if m.active == id {
-		// TODO: Ghost pie fix
+		// Ghost pie fix.
+		m.sendKeyUp(id, x11.KeyShift)
+		m.sendKeyPress(id, x11.KeyF3)
+		if m.conf.Delay.GhostPie > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.GhostPie))
+		}
+		// Unstretch.
 		m.active = -1
 		m.setResolution(id, m.conf.Wall.StretchRes)
+		if m.conf.Delay.Stretch > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
+		}
 	}
 	var key x11.Key
 	if state.Type == StPreview {
@@ -284,7 +319,7 @@ func (m *Manager) sendKeyUp(id int, key x11.Key) {
 
 // setResolution sets the window geometry of an instance.
 func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
-	if rect == nil {
+	if rect == nil || !m.conf.Wall.Enabled {
 		return
 	}
 	m.x.MoveWindow(

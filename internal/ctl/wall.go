@@ -309,11 +309,11 @@ func (w *Wall) resetIngame() {
 			}
 		}
 	}
-	w.deleteSleepbgLock(false)
-	w.obs.SetSceneAsync("Wall")
 	if err := w.focusProjector(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
+	w.deleteSleepbgLock(false)
+	w.obs.SetSceneAsync("Wall")
 	w.host.RunHook(HookReset)
 }
 

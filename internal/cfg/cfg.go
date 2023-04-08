@@ -13,6 +13,15 @@ import (
 // go:embed default.toml
 var defaultProfile []byte
 
+// Delays contains various delays to make certain actions more consistent.
+type Delays struct {
+	WpPause   int `toml:"wp_pause"`      // WorldPreview F3+Esc
+	IdlePause int `toml:"idle_pause"`    // Idle F3+Esc
+	Unpause   int `toml:"unpause"`       // Unpause on focus
+	Stretch   int `toml:"stretch"`       // Resize
+	GhostPie  int `toml:"ghost_pie_fix"` // Ghost pie fix
+}
+
 // Hooks contains various commands to run whenever the user performs certain
 // actions.
 type Hooks struct {
@@ -86,10 +95,10 @@ type Wall struct {
 
 // Profile contains an entire configuration profile.
 type Profile struct {
-	Delay        int    `toml:"delay"`       // Delay between certain actions
 	ResetCount   string `toml:"reset_count"` // Reset counter path
 	UnpauseFocus bool   `toml:"unpause_focus"`
 
+	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`
 	Keybinds Keybinds `toml:"keybinds"`
 	Obs      Obs      `toml:"obs"`

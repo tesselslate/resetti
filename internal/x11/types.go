@@ -25,11 +25,12 @@ const (
 
 // Important keys
 var (
-	KeyEsc = Key{Code: 9}
-	KeyF1  = Key{Code: 67}
-	KeyF3  = Key{Code: 69}
-	KeyF6  = Key{Code: 72}
-	KeyH   = Key{Code: 43}
+	KeyEsc   = Key{Code: 9}
+	KeyF1    = Key{Code: 67}
+	KeyF3    = Key{Code: 69}
+	KeyF6    = Key{Code: 72}
+	KeyH     = Key{Code: 43}
+	KeyShift = Key{Code: 50}
 )
 
 // InputState represents the state of a button or key (up or down.)

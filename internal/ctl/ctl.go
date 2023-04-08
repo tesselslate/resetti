@@ -83,12 +83,6 @@ type Input struct {
 	X, Y int
 }
 
-// buttonMod contains a button, modifier pair.
-type buttonMod struct {
-	button xproto.Button
-	mod    x11.Keymod
-}
-
 // frontendDependencies contains all of the dependencies that a Frontend might
 // need to setup and run.
 type frontendDependencies struct {
@@ -102,8 +96,9 @@ type frontendDependencies struct {
 
 type inputState struct {
 	cx, cy  int
-	buttons map[buttonMod]bool
-	keys    map[x11.Key]uint32
+	buttons map[xproto.Button]bool
+	keys    map[xproto.Keycode]uint32
+	mod     x11.Keymod
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -124,7 +119,12 @@ func Run(conf *cfg.Profile) error {
 		HookWallPlay:  c.conf.Hooks.WallPlay,
 		HookWallReset: c.conf.Hooks.WallReset,
 	}
-	c.inputs = inputState{0, 0, make(map[buttonMod]bool), make(map[x11.Key]uint32)}
+	c.inputs = inputState{
+		0, 0,
+		make(map[xproto.Button]bool),
+		make(map[xproto.Keycode]uint32),
+		x11.ModNone,
+	}
 
 	signals := make(chan os.Signal, 8)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
@@ -303,9 +303,6 @@ func (c *Controller) SetPriority(id int, prio bool) {
 
 // UnbindWallKeys unbinds all wall-only keys, except for focus projector.
 func (c *Controller) UnbindWallKeys() {
-	// HACK: Clear button state after pointer ungrab. This needs to be
-	// made better.
-	c.inputs.buttons = make(map[buttonMod]bool)
 	for bind := range c.binds {
 		actions := c.conf.Keybinds[bind]
 		if len(actions.IngameActions) == 0 {
@@ -354,10 +351,10 @@ func (c *Controller) debug() {
 	inputs.WriteString(fmt.Sprintf("\nKeys, buttons: %d, %d\n", len(c.inputs.keys), len(c.inputs.buttons)))
 	inputs.WriteString(fmt.Sprintf("Last position: (%d, %d)\n", c.inputs.cx, c.inputs.cy))
 	for key, time := range c.inputs.keys {
-		inputs.WriteString(fmt.Sprintf("(%d;%d)\tkey:%d\n", key.Code, key.Mod, time))
+		inputs.WriteString(fmt.Sprintf("%d (key)\t:%d\n", key, time))
 	}
 	for button := range c.inputs.buttons {
-		inputs.WriteString(fmt.Sprintf("(%d;%d)\tbutton\n", button.button, button.mod))
+		inputs.WriteString(fmt.Sprintf("%d (button)\n", button))
 	}
 	log.Printf(
 		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInputs:%s\nInstances:\n%s",
@@ -377,7 +374,7 @@ func (c *Controller) matchBind() (bind cfg.Bind, ok bool) {
 		// There's only one element.
 		for key := range c.inputs.keys {
 			for bind := range c.binds {
-				if bind.Key != nil && *bind.Key == key.Code && bind.Mod == key.Mod {
+				if bind.Key != nil && *bind.Key == key && bind.Mod == c.inputs.mod {
 					return bind, true
 				}
 			}
@@ -386,7 +383,7 @@ func (c *Controller) matchBind() (bind cfg.Bind, ok bool) {
 		// There's only one element.
 		for button := range c.inputs.buttons {
 			for bind := range c.binds {
-				if bind.Mouse != nil && *bind.Mouse == button.button && bind.Mod == button.mod {
+				if bind.Mouse != nil && *bind.Mouse == button && bind.Mod == c.inputs.mod {
 					return bind, true
 				}
 			}
@@ -443,17 +440,23 @@ func (c *Controller) run(ctx context.Context) error {
 			switch evt := evt.(type) {
 			case x11.FocusEvent:
 				c.frontend.FocusChange(evt)
+
+				// HACK: Clear input state whenever focus changes, since
+				// the keybinds might have changed.
+				c.inputs.buttons = make(map[xproto.Button]bool)
+				c.inputs.keys = make(map[xproto.Keycode]uint32)
 			case x11.KeyEvent:
+				c.inputs.mod = evt.Key.Mod
 				if evt.State == x11.StateDown {
 					// XXX: We have to use a GLFW hackfix here ourselves (:
 					// Ignore repeat keydown events.
-					if last, ok := c.inputs.keys[evt.Key]; ok {
+					if last, ok := c.inputs.keys[evt.Key.Code]; ok {
 						if evt.Timestamp-last <= 20 {
-							c.inputs.keys[evt.Key] = evt.Timestamp
+							c.inputs.keys[evt.Key.Code] = evt.Timestamp
 							continue
 						}
 					}
-					c.inputs.keys[evt.Key] = evt.Timestamp
+					c.inputs.keys[evt.Key.Code] = evt.Timestamp
 					bind, ok := c.matchBind()
 					if !ok {
 						continue
@@ -462,13 +465,13 @@ func (c *Controller) run(ctx context.Context) error {
 						bind, false, c.inputs.cx, c.inputs.cy,
 					})
 				} else {
-					delete(c.inputs.keys, evt.Key)
+					delete(c.inputs.keys, evt.Key.Code)
 				}
 			case x11.ButtonEvent:
-				bm := buttonMod{evt.Button, evt.Mod}
 				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
+				c.inputs.mod = evt.Mod
 				if evt.State == x11.StateDown {
-					c.inputs.buttons[bm] = true
+					c.inputs.buttons[evt.Button] = true
 					bind, ok := c.matchBind()
 					if !ok {
 						continue
@@ -477,10 +480,11 @@ func (c *Controller) run(ctx context.Context) error {
 						bind, false, c.inputs.cx, c.inputs.cy,
 					})
 				} else {
-					delete(c.inputs.buttons, bm)
+					delete(c.inputs.buttons, evt.Button)
 				}
 			case x11.MoveEvent:
 				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
+				c.inputs.mod = evt.Mod
 				bind, ok := c.matchBind()
 				if !ok {
 					continue

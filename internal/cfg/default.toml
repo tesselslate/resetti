@@ -1,16 +1,23 @@
 # This is the default configuration profile for resetti.
 # You can delete or ignore any sections which are not applicable.
 
-# The number of milliseconds to wait in between certain actions (e.g.
-# pausing and unpausing.)
-delay = 20
-
 # The path to the file to count your resets in. Leave blank to disable
 # reset counting.
 reset_count = ""
 
 # Whether or not instances should automatically unpause when you tab in.
 unpause_focus = true
+
+# The delay section contains delays (in milliseconds) before performing various
+# actions. These defaults are completely arbitrary. Increase relevant delays if
+# you have issues, decrease for lower latency. Depending on your setup, you may
+# be able to set all of these (except for unpause) to 0.
+[delay]
+wp_pause = 20
+idle_pause = 20
+unpause = 20
+stretch = 20
+ghost_pie_fix = 20
 
 # The hooks section allows you to specify various commands which are run
 # upon certain actions. Any blank hooks will be ignored.
