@@ -70,7 +70,7 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	copy(w.instances, deps.instances)
 	copy(w.states, deps.states)
 
-	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(w.instances); i += 1 {
 			settings := obs.StringMap{
 				"show_cursor":    false,
@@ -81,7 +81,6 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
 		}
-		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("obs setup: %w", err)
@@ -410,11 +409,10 @@ func (w *Wall) wallPlay(id int) {
 	}
 
 	w.host.RunHook(HookWallPlay)
-	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(w.instances); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
 		}
-		return nil
 	})
 	w.obs.SetSceneAsync("Instance")
 	if w.locks[id] {

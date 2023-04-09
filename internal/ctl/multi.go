@@ -72,10 +72,9 @@ func (m *Multi) updateObs() {
 	if !m.conf.Obs.Enabled {
 		return
 	}
-	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(m.states); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == m.active)
 		}
-		return nil
 	})
 }
