@@ -339,16 +339,25 @@ func (r *wpstateReader) Process() (State, bool, error) {
 		r.state.Progress = 0
 		r.state.Menu = false
 	case "generating":
-		r.state.Type = StDirt
-		if !split {
-			return r.state, false, errors.New("no generating split")
-		}
+		// XXX: WorldPreview sometimes reports itself as on dirt for one
+		// state update near the end of world generation. If this occurs,
+		// do not update the state to dirt.
 		progress, err := strconv.Atoi(b)
 		if err != nil {
 			return r.state, false, err
 		}
-		r.state.Progress = progress
-		r.state.Menu = false
+
+		if progress >= r.state.Progress && r.state.Type == StPreview {
+			r.state.Progress = progress
+			r.state.Menu = false
+		} else {
+			r.state.Type = StDirt
+			if !split {
+				return r.state, false, errors.New("no generating split")
+			}
+			r.state.Progress = progress
+			r.state.Menu = false
+		}
 	case "previewing":
 		r.state.Type = StPreview
 		if !split {
