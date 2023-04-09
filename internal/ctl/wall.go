@@ -29,7 +29,8 @@ type Wall struct {
 	locks     []bool
 	active    int // Active instance. -1 is a sentinel for wall
 
-	proj projectorState
+	proj  projectorState
+	hider hider
 
 	wallBinds   bool
 	lastMouseId int
@@ -93,6 +94,10 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	}
 	if err = w.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
+	}
+	if w.conf.Wall.Hiding.ShowMethod != "" {
+		w.hider = newHider(deps.conf, deps.obs, deps.states)
+		go w.hider.Run()
 	}
 
 	if err = w.bindWallKeys(); err != nil {
@@ -198,6 +203,7 @@ func (w *Wall) Input(input Input) {
 // Update implements Frontend.
 func (w *Wall) Update(update mc.Update) {
 	w.states[update.Id] = update.State
+	w.hider.Update(update)
 }
 
 // bindWallKeys binds the keys that are only used on the wall projector.

@@ -208,7 +208,16 @@ func validateProfile(conf *Profile) error {
 		return errors.New("need both stretched and active resolution")
 	}
 
-	// TODO: Check instance hiding settings (implement hiding first)
+	switch conf.Wall.Hiding.ShowMethod {
+	case "":
+		break
+	case "delay", "percentage":
+		if conf.Wall.Hiding.ShowAt < 0 {
+			return fmt.Errorf("invalid instance hiding show_at value of %d", conf.Wall.Hiding.ShowAt)
+		}
+	default:
+		return fmt.Errorf("invalid instance hiding method %q", conf.Wall.Hiding.ShowMethod)
+	}
 
 	// Check affinity settings.
 	switch conf.Wall.Perf.Affinity {
