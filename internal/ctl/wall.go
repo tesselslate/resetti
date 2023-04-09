@@ -80,6 +80,7 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
 			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
 			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
+			settings["show_cursor"] = true
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
 		}
 	})
