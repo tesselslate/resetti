@@ -65,32 +65,47 @@ type Wall struct {
 	} `toml:"hiding"`
 
 	// Performance settings.
-	Performance struct {
+	Perf struct {
 		// Optional. Overrides the default sleepbg.lock path ($HOME)
 		SleepbgPath string `toml:"sleepbg_path"`
 
 		// Whether or not to use affinity.
 		Affinity string `toml:"affinity"`
 
-		// If enabled, halves the amount of CPU cores available to affinity
-		// groups and instead creates double the amount of groups (half for
-		// each CCX.)
-		CcxSplit bool `toml:"ccx_split"`
+		// Seq affinity settings.
+		Seq struct {
+			// The number of CPUs to give to the active instance.
+			ActiveCpus int `toml:"active_cpus"`
 
-		CpusIdle   int `toml:"affinity_idle"`   // CPUs for idle group
-		CpusLow    int `toml:"affinity_low"`    // CPUs for low group
-		CpusMid    int `toml:"affinity_mid"`    // CPUs for mid group
-		CpusHigh   int `toml:"affinity_high"`   // CPUs for high group
-		CpusActive int `toml:"affinity_active"` // CPUs for active group
+			// The number of CPUs to give to background instances.
+			BackgroundCpus int `toml:"background_cpus"`
 
-		// The number of milliseconds to wait after an instance finishes
-		// generating to move it from the mid group to the idle group.
-		// A value of 0 disables this functionality.
-		BurstLength int `toml:"burst_length"`
+			// The number of CPUs to give to locked instances.
+			LockCpus int `toml:"lock_cpus"`
+		} `toml:"sequence"`
 
-		// The world generation percentage at which instances are moved from
-		// the high group to the low group.
-		LowThreshold int `toml:"low_threshold"`
+		// Adv affinity settings.
+		Adv struct {
+			// If enabled, halves the amount of CPU cores available to affinity
+			// groups and instead creates double the amount of groups (half for
+			// each CCX.)
+			CcxSplit bool `toml:"ccx_split"`
+
+			CpusIdle   int `toml:"affinity_idle"`   // CPUs for idle group
+			CpusLow    int `toml:"affinity_low"`    // CPUs for low group
+			CpusMid    int `toml:"affinity_mid"`    // CPUs for mid group
+			CpusHigh   int `toml:"affinity_high"`   // CPUs for high group
+			CpusActive int `toml:"affinity_active"` // CPUs for active group
+
+			// The number of milliseconds to wait after an instance finishes
+			// generating to move it from the mid group to the idle group.
+			// A value of 0 disables this functionality.
+			BurstLength int `toml:"burst_length"`
+
+			// The world generation percentage at which instances are moved from
+			// the high group to the low group.
+			LowThreshold int `toml:"low_threshold"`
+		} `toml:"advanced"`
 	} `toml:"performance"`
 }
 
@@ -175,10 +190,10 @@ func validateProfile(conf *Profile) error {
 	if err != nil {
 		return fmt.Errorf("no $HOME")
 	}
-	if conf.Wall.Performance.SleepbgPath == "" {
-		conf.Wall.Performance.SleepbgPath = home
+	if conf.Wall.Perf.SleepbgPath == "" {
+		conf.Wall.Perf.SleepbgPath = home
 	}
-	conf.Wall.Performance.SleepbgPath += "/sleepbg.lock"
+	conf.Wall.Perf.SleepbgPath += "/sleepbg.lock"
 
 	// Check resolution settings.
 	if !validateRectangle(conf.Wall.StretchRes) {
@@ -193,34 +208,56 @@ func validateProfile(conf *Profile) error {
 		return errors.New("need both stretched and active resolution")
 	}
 
-	// TODO: Check instance hiding settings (implement hiding first)
-
-	// Check affinity settings.
-	switch conf.Wall.Performance.Affinity {
-	case "", "sequence":
+	switch conf.Wall.Hiding.ShowMethod {
+	case "":
 		break
-	case "advanced":
-		maxCpu := runtime.NumCPU()
-		if conf.Wall.Performance.CcxSplit {
-			maxCpu /= 2
-		}
-		if conf.Wall.Performance.CpusIdle > maxCpu {
-			return fmt.Errorf("invalid idle cpu count (%d > %d)", conf.Wall.Performance.CpusIdle, maxCpu)
-		}
-		if conf.Wall.Performance.CpusLow > maxCpu {
-			return fmt.Errorf("invalid low cpu count (%d > %d)", conf.Wall.Performance.CpusLow, maxCpu)
-		}
-		if conf.Wall.Performance.CpusMid > maxCpu {
-			return fmt.Errorf("invalid mid cpu count (%d > %d)", conf.Wall.Performance.CpusMid, maxCpu)
-		}
-		if conf.Wall.Performance.CpusHigh > maxCpu {
-			return fmt.Errorf("invalid high cpu count (%d > %d)", conf.Wall.Performance.CpusHigh, maxCpu)
-		}
-		if conf.Wall.Performance.CpusActive > maxCpu {
-			return fmt.Errorf("invalid active cpu count (%d > %d)", conf.Wall.Performance.CpusActive, maxCpu)
+	case "delay", "percentage":
+		if conf.Wall.Hiding.ShowAt < 0 {
+			return fmt.Errorf("invalid instance hiding show_at value of %d", conf.Wall.Hiding.ShowAt)
 		}
 	default:
-		return fmt.Errorf("invalid affinity setting %q", conf.Wall.Performance.Affinity)
+		return fmt.Errorf("invalid instance hiding method %q", conf.Wall.Hiding.ShowMethod)
+	}
+
+	// Check affinity settings.
+	switch conf.Wall.Perf.Affinity {
+	case "":
+		break
+	case "sequence":
+		maxCpu := runtime.NumCPU()
+		seq := conf.Wall.Perf.Seq
+		if seq.ActiveCpus > maxCpu {
+			return fmt.Errorf("invalid active cpu count %d", seq.ActiveCpus)
+		}
+		if seq.BackgroundCpus > maxCpu {
+			return fmt.Errorf("invalid background cpu count %d", seq.BackgroundCpus)
+		}
+		if seq.LockCpus > maxCpu {
+			return fmt.Errorf("invalid lock cpu count %d", seq.LockCpus)
+		}
+	case "advanced":
+		maxCpu := runtime.NumCPU()
+		adv := conf.Wall.Perf.Adv
+		if adv.CcxSplit {
+			maxCpu /= 2
+		}
+		if adv.CpusIdle > maxCpu {
+			return fmt.Errorf("invalid idle cpu count (%d > %d)", adv.CpusIdle, maxCpu)
+		}
+		if adv.CpusLow > maxCpu {
+			return fmt.Errorf("invalid low cpu count (%d > %d)", adv.CpusLow, maxCpu)
+		}
+		if adv.CpusMid > maxCpu {
+			return fmt.Errorf("invalid mid cpu count (%d > %d)", adv.CpusMid, maxCpu)
+		}
+		if adv.CpusHigh > maxCpu {
+			return fmt.Errorf("invalid high cpu count (%d > %d)", adv.CpusHigh, maxCpu)
+		}
+		if adv.CpusActive > maxCpu {
+			return fmt.Errorf("invalid active cpu count (%d > %d)", adv.CpusActive, maxCpu)
+		}
+	default:
+		return fmt.Errorf("invalid affinity setting %q", conf.Wall.Perf.Affinity)
 	}
 	return nil
 }

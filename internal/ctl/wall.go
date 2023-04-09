@@ -29,13 +29,31 @@ type Wall struct {
 	locks     []bool
 	active    int // Active instance. -1 is a sentinel for wall
 
+	proj  projectorState
+	hider hider
+
+	wallBinds   bool
+	lastMouseId int
+}
+
+// projectorState contains information about the state of the projector.
+type projectorState struct {
+	// Wall size (in instances)
 	wallWidth, wallHeight int
+
+	// Instance size (in pixels)
 	instWidth, instHeight int
-	projWidth, projHeight int
-	projector             xproto.Window
-	subprojector          []xproto.Window
-	wallBinds             bool
-	lastMouseId           int
+
+	// Projector window size
+	winWidth, winHeight int
+
+	// OBS canvas size
+	baseWidth, baseHeight int
+
+	// Section of the projector window that contains the wall
+	size     cfg.Rectangle
+	window   xproto.Window
+	children []xproto.Window
 }
 
 // Setup implements Frontend.
@@ -53,7 +71,7 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	copy(w.instances, deps.instances)
 	copy(w.states, deps.states)
 
-	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) error {
+	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(w.instances); i += 1 {
 			settings := obs.StringMap{
 				"show_cursor":    false,
@@ -64,7 +82,6 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
 		}
-		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("obs setup: %w", err)
@@ -77,6 +94,10 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	}
 	if err = w.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
+	}
+	if w.conf.Wall.Hiding.ShowMethod != "" {
+		w.hider = newHider(deps.conf, deps.obs, deps.states)
+		go w.hider.Run()
 	}
 
 	if err = w.bindWallKeys(); err != nil {
@@ -94,11 +115,11 @@ func (w *Wall) FocusChange(evt x11.FocusEvent) {
 		return
 	}
 
-	if evt.Window == w.projector && !w.wallBinds {
+	if evt.Window == w.proj.window && !w.wallBinds {
 		if err := w.bindWallKeys(); err != nil {
 			log.Printf("FocusChange: Failed to bind keys: %s\n", err)
 		}
-	} else if evt.Window != w.projector && w.wallBinds {
+	} else if evt.Window != w.proj.window && w.wallBinds {
 		w.unbindWallKeys()
 	}
 }
@@ -182,6 +203,7 @@ func (w *Wall) Input(input Input) {
 // Update implements Frontend.
 func (w *Wall) Update(update mc.Update) {
 	w.states[update.Id] = update.State
+	w.hider.Update(update)
 }
 
 // bindWallKeys binds the keys that are only used on the wall projector.
@@ -201,7 +223,7 @@ func (w *Wall) bindWallKeys() error {
 	// TODO: Only grab pointer if mouse-dependent keys are in config
 	timeout := time.Millisecond
 	for tries := 1; tries <= 5; tries += 1 {
-		if err := w.x.GrabPointer(w.projector); err != nil {
+		if err := w.x.GrabPointer(w.proj.window); err != nil {
 			log.Printf("Pointer grab failed (%d/5): %s\n", tries, err)
 		} else {
 			return nil
@@ -214,7 +236,7 @@ func (w *Wall) bindWallKeys() error {
 
 // createSleepbgLock creates the sleepbg.lock file.
 func (w *Wall) createSleepbgLock() {
-	file, err := os.Create(w.conf.Wall.Performance.SleepbgPath)
+	file, err := os.Create(w.conf.Wall.Perf.SleepbgPath)
 	if err != nil {
 		log.Printf("Failed to create sleepbg.lock: %s\n", err)
 	} else {
@@ -224,7 +246,7 @@ func (w *Wall) createSleepbgLock() {
 
 // deleteSleepbgLock deletes the sleepbg.lock file.
 func (w *Wall) deleteSleepbgLock(ignoreErrors bool) {
-	err := os.Remove(w.conf.Wall.Performance.SleepbgPath)
+	err := os.Remove(w.conf.Wall.Perf.SleepbgPath)
 	if err != nil && !ignoreErrors {
 		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
 	}
@@ -239,15 +261,30 @@ func (w *Wall) findProjector() error {
 			continue
 		}
 		if strings.Contains(title, "Projector (Scene) - Wall") {
-			w.projector = win
+			w.proj.window = win
 			width, height, err := w.x.GetWindowSize(win)
 			if err != nil {
 				return fmt.Errorf("get projector size: %w", err)
 			}
-			// TODO: figure out projector letterboxing?
-			w.projWidth, w.projHeight = int(width), int(height)
-			w.instWidth, w.instHeight = w.projWidth/w.wallWidth, w.projHeight/w.wallHeight
-			w.subprojector = w.x.GetWindowChildren(win)
+			w.proj.children = w.x.GetWindowChildren(win)
+
+			// Calculate projector letterboxing. Reference:
+			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/display-helpers.hpp#L23
+			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/window-projector.cpp#L180
+			w.proj.winWidth, w.proj.winHeight = int(width), int(height)
+			baseRatio := float64(w.proj.baseWidth) / float64(w.proj.baseHeight)
+			projRatio := float64(w.proj.winWidth) / float64(w.proj.winHeight)
+			var scale float64
+			if projRatio > baseRatio {
+				scale = float64(w.proj.winHeight) / float64(w.proj.baseHeight)
+			} else {
+				scale = float64(w.proj.winWidth) / float64(w.proj.baseWidth)
+			}
+			w.proj.size.X = uint32(w.proj.winWidth/2) - (w.proj.size.W / 2)
+			w.proj.size.Y = uint32(w.proj.winHeight/2) - (w.proj.size.H / 2)
+			w.proj.size.W = uint32(scale * float64(w.proj.baseWidth))
+			w.proj.size.H = uint32(scale * float64(w.proj.baseHeight))
+			w.proj.instWidth, w.proj.instHeight = int(w.proj.size.W)/w.proj.wallWidth, int(w.proj.size.H)/w.proj.wallHeight
 			return nil
 		}
 	}
@@ -259,7 +296,7 @@ func (w *Wall) focusProjector() error {
 	if err := w.findProjector(); err != nil {
 		return fmt.Errorf("find projector: %w", err)
 	}
-	if err := w.x.FocusWindow(w.projector); err != nil {
+	if err := w.x.FocusWindow(w.proj.window); err != nil {
 		return fmt.Errorf("focus projector: %w", err)
 	}
 	return nil
@@ -267,12 +304,12 @@ func (w *Wall) focusProjector() error {
 
 // getInstanceId returns the ID of the instance at the specified coordinates.
 func (w *Wall) getInstanceId(input Input) (id int, ok bool) {
-	x := input.X / w.instWidth
-	y := input.Y / w.instHeight
-	if x < 0 || y < 0 || x >= w.wallWidth || y >= w.wallHeight {
+	x := (input.X - int(w.proj.size.X)) / w.proj.instWidth
+	y := (input.Y - int(w.proj.size.Y)) / w.proj.instHeight
+	if x < 0 || y < 0 || x >= w.proj.wallWidth || y >= w.proj.wallHeight {
 		return 0, false
 	}
-	id = y*w.wallWidth + x
+	id = y*w.proj.wallWidth + x
 	return id, id < len(w.instances)
 }
 
@@ -298,7 +335,12 @@ func (w *Wall) getWallSize() error {
 		xs = appendUnique(xs, x)
 		ys = appendUnique(ys, y)
 	}
-	w.wallWidth, w.wallHeight = len(xs), len(ys)
+	w.proj.wallWidth, w.proj.wallHeight = len(xs), len(ys)
+	width, height, err := w.obs.GetCanvasSize()
+	if err != nil {
+		return err
+	}
+	w.proj.baseWidth, w.proj.baseHeight = width, height
 	return nil
 }
 
@@ -373,11 +415,10 @@ func (w *Wall) wallPlay(id int) {
 	}
 
 	w.host.RunHook(HookWallPlay)
-	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) error {
+	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(w.instances); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
 		}
-		return nil
 	})
 	w.obs.SetSceneAsync("Instance")
 	if w.locks[id] {

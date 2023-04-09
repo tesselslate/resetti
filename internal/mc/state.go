@@ -246,7 +246,7 @@ func (r *logReader) Process() (State, bool, error) {
 // ProcessEvent implements StateReader.
 func (r *logReader) ProcessEvent(op fsnotify.Op) error {
 	switch op {
-	case fsnotify.Remove:
+	case fsnotify.Rename:
 		log.Println("logReader.ProcessEvent: Log file is gone.")
 		if r.file == nil {
 			return nil
@@ -254,17 +254,13 @@ func (r *logReader) ProcessEvent(op fsnotify.Op) error {
 		if err := r.file.Close(); err != nil {
 			log.Printf("Failed to close log: %s\n", err)
 		}
-		log.Println("logReader.ProcessEvent: Closed log. Waiting for return.")
-		r.file = nil
-		r.reader = nil
-	case fsnotify.Create:
-		log.Println("logReader.ProcessEvent: Log file is back!")
+		time.Sleep(50 * time.Millisecond)
 		file, err := os.Open(r.path)
 		if err != nil {
 			return fmt.Errorf("reopen log: %w", err)
 		}
 		r.file = file
-		r.reader = bufio.NewReader(r.file)
+		r.reader = bufio.NewReader(file)
 	}
 	return nil
 }
@@ -339,16 +335,25 @@ func (r *wpstateReader) Process() (State, bool, error) {
 		r.state.Progress = 0
 		r.state.Menu = false
 	case "generating":
-		r.state.Type = StDirt
-		if !split {
-			return r.state, false, errors.New("no generating split")
-		}
+		// XXX: WorldPreview sometimes reports itself as on dirt for one
+		// state update near the end of world generation. If this occurs,
+		// do not update the state to dirt.
 		progress, err := strconv.Atoi(b)
 		if err != nil {
 			return r.state, false, err
 		}
-		r.state.Progress = progress
-		r.state.Menu = false
+
+		if progress >= r.state.Progress && r.state.Type == StPreview {
+			r.state.Progress = progress
+			r.state.Menu = false
+		} else {
+			r.state.Type = StDirt
+			if !split {
+				return r.state, false, errors.New("no generating split")
+			}
+			r.state.Progress = progress
+			r.state.Menu = false
+		}
 	case "previewing":
 		r.state.Type = StPreview
 		if !split {

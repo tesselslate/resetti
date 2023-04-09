@@ -60,7 +60,7 @@ type websocketResponse struct {
 
 // BatchAsync creates and submits a new request batch in another goroutine. If
 // the batch errors, the error will be logged.
-func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch) error) {
+func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch)) {
 	batch, err := c.batchCreate(fn)
 	if err != nil {
 		log.Printf("BatchAsync creation failed: %s\n", err)
@@ -76,7 +76,7 @@ func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch) error) {
 // Batch creates and *synchronously* submits a new request batch. The provided
 // closure can be used to add requests to the batch. If the closure returns an
 // error or panics, the batch will not be submitted.
-func (c *Client) Batch(mode BatchMode, fn func(*Batch) error) error {
+func (c *Client) Batch(mode BatchMode, fn func(*Batch)) error {
 	batch, err := c.batchCreate(fn)
 	if err != nil {
 		return err
@@ -116,7 +116,7 @@ func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan er
 	return errch, nil
 }
 
-func (c *Client) batchCreate(fn func(*Batch) error) (b Batch, err error) {
+func (c *Client) batchCreate(fn func(*Batch)) (b Batch, err error) {
 	batch := newBatch(c)
 
 	// Some of Batch's methods will panic when a scene item ID can not be
@@ -124,18 +124,15 @@ func (c *Client) batchCreate(fn func(*Batch) error) (b Batch, err error) {
 	// panics must be handled here.
 	defer func() {
 		result := recover()
-		if res, ok := result.(error); ok {
+		if res, ok := result.(batchError); ok {
 			err = res
 		} else if result != nil {
-			err = fmt.Errorf("%+v", result)
+			panic(result)
 		}
 	}()
 
 	// Run the closure to fill the batch with requests.
-	err = fn(&batch)
-	if err != nil {
-		return batch, err
-	}
+	fn(&batch)
 	if len(batch.requests) == 0 {
 		return batch, errors.New("batch has no requests")
 	}
