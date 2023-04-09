@@ -51,6 +51,7 @@ type Wall struct {
 
 	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution
 	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution
+	ThinRes      *Rectangle `toml:"thin_res"`    // Thin resolution
 	UseF1        bool       `toml:"use_f1"`
 
 	// Instance hiding (dirt cover) settings.
@@ -201,6 +202,9 @@ func validateProfile(conf *Profile) error {
 	}
 	if !validateRectangle(conf.Wall.UnstretchRes) {
 		return errors.New("invalid active resolution")
+	}
+	if !validateRectangle(conf.Wall.ThinRes) {
+		return errors.New("invalid thin resolution")
 	}
 	stretch := conf.Wall.StretchRes != nil
 	unstretch := conf.Wall.UnstretchRes != nil

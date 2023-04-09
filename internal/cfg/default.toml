@@ -53,6 +53,7 @@ wall_reset = ""
 # Available actions:
 # - ingame_focus            Focus active instance.
 # - ingame_reset            Reset active instance.
+# - ingame_toggle_thin      Toggle thin resolution of active instance.
 # - wall_focus              Focus wall projector.
 # - wall_reset_all          Reset all unlocked instances.
 # - wall_lock               Lock hovered instance.
