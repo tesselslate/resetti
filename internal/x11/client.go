@@ -313,7 +313,11 @@ func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
 }
 
 // GrabPointer grabs the mouse pointer, diverting all mouse events to resetti.
-func (c *Client) GrabPointer(win xproto.Window) error {
+func (c *Client) GrabPointer(win xproto.Window, confine bool) error {
+	confineTo := c.root
+	if confine {
+		confineTo = win
+	}
 	reply, err := xproto.GrabPointer(
 		c.conn,
 		true,
@@ -321,7 +325,7 @@ func (c *Client) GrabPointer(win xproto.Window) error {
 		maskPointer,
 		xproto.GrabModeAsync,
 		xproto.GrabModeAsync,
-		c.root,
+		confineTo,
 		xproto.CursorNone,
 		xproto.TimeCurrentTime,
 	).Reply()

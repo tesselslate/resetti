@@ -130,7 +130,7 @@ func (w *Wall) FocusChange(win xproto.Window) {
 		// OBS can still be grabbing the pointer, so retry with backoff.
 		timeout := time.Millisecond
 		for tries := 1; tries <= 5; tries += 1 {
-			if err := w.x.GrabPointer(w.proj.window); err != nil {
+			if err := w.x.GrabPointer(w.proj.window, w.conf.Wall.ConfinePointer); err != nil {
 				log.Printf("Pointer grab failed: (%d/5): %s\n", tries, err)
 			} else {
 				log.Println("Grabbed pointer.")

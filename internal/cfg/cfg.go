@@ -46,9 +46,10 @@ type Obs struct {
 
 // Wall contains the user's wall settings.
 type Wall struct {
-	Enabled     bool `toml:"enabled"`      // Whether to use multi or wall
-	GotoLocked  bool `toml:"goto_locked"`  // Also known as wall bypass
-	GracePeriod int  `toml:"grace_period"` // Milliseconds to wait after preview before a reset can occur
+	Enabled        bool `toml:"enabled"`         // Whether to use multi or wall
+	ConfinePointer bool `toml:"confine_pointer"` // Whether or not to confine the pointer to the projector
+	GotoLocked     bool `toml:"goto_locked"`     // Also known as wall bypass
+	GracePeriod    int  `toml:"grace_period"`    // Milliseconds to wait after preview before a reset can occur
 
 	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution
 	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution

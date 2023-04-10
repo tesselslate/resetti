@@ -92,6 +92,10 @@ password = ""
 [wall]
 enabled = false
 
+# Whether or not to confine the mouse pointer to the OBS projector when on the
+# wall.
+confine_pointer = false
+
 # Also known as "wall bypass" on other macros. If enabled, resetting from
 # ingame will immediately bring you to the next locked instance which has
 # finished generating a world (if any.)
