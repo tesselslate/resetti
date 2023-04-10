@@ -340,12 +340,15 @@ func (i *inputManager) Run(inputs chan<- Input) {
 		// Lock the input manager to get the query window (which can be modified
 		// by the Controller.)
 		i.mu.Lock()
-		pointer, err := i.x.QueryPointer(i.queryWindow)
-		i.mu.Unlock()
-		if err != nil {
-			log.Printf("inputManager: Query pointer failed: %s\n", err)
-			continue
+		var pointer x11.Pointer
+		if i.queryWindow != 0 {
+			pointer, err = i.x.QueryPointer(i.queryWindow)
+			if err != nil {
+				log.Printf("inputManager: Query pointer failed: %s\n", err)
+				continue
+			}
 		}
+		i.mu.Unlock()
 
 		// PERF: This is kind of bad and can probably be optimized
 		var pressed []cfg.Bind
