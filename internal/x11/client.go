@@ -45,6 +45,9 @@ const (
 	maskKeyPress uint32 = xproto.EventMaskKeyPress |
 		xproto.EventMaskKeyRelease
 
+	maskPointer uint16 = xproto.EventMaskPointerMotion |
+		xproto.EventMaskButtonPress | xproto.EventMaskButtonRelease
+
 	maskProperty uint32 = xproto.EventMaskPropertyChange |
 		xproto.EventMaskSubstructureNotify
 
@@ -80,6 +83,15 @@ var masks = map[xproto.Button]uint16{
 	xproto.ButtonIndex3: xproto.ButtonMask3,
 	xproto.ButtonIndex4: xproto.ButtonMask4,
 	xproto.ButtonIndex5: xproto.ButtonMask5,
+}
+
+// Pointer grab error names
+var pointerGrabErrors = []string{
+	"Success",
+	"Already grabbed",
+	"Invalid time",
+	"Not viewable",
+	"Frozen",
 }
 
 // Client maintains a connection with the X server and performs tasks like
@@ -300,6 +312,29 @@ func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
 	return c.getPropertyString(win, wmName)
 }
 
+// GrabPointer grabs the mouse pointer, diverting all mouse events to resetti.
+func (c *Client) GrabPointer(win xproto.Window) error {
+	reply, err := xproto.GrabPointer(
+		c.conn,
+		true,
+		win,
+		maskPointer,
+		xproto.GrabModeAsync,
+		xproto.GrabModeAsync,
+		c.root,
+		xproto.CursorNone,
+		xproto.TimeCurrentTime,
+	).Reply()
+	if err != nil {
+		return err
+	}
+	if reply.Status == xproto.GrabStatusSuccess {
+		return nil
+	} else {
+		return errors.New(pointerGrabErrors[reply.Status])
+	}
+}
+
 // MoveWindow moves and resizes the given window.
 func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
 	xproto.ConfigureWindow(
@@ -360,6 +395,11 @@ func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window) {
 // SendKeyUp sends a key up event to the given window with the given key.
 func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window) {
 	c.sendKeyEvent(code, StateUp, win)
+}
+
+// UngrabPointer ungrabs the mouse pointer.
+func (c *Client) UngrabPointer() error {
+	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
 }
 
 // getProperty retrieves a raw window property.

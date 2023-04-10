@@ -150,9 +150,6 @@ func run(opts Options) int {
 	}
 
 	// Warmup instances
-	for _, instance := range instances {
-		x.Click(instance.Wid)
-	}
 	time.Sleep(100 * time.Millisecond)
 	for _, instance := range instances {
 		x.SendKeyPress(instance.ResetKey, instance.Wid)

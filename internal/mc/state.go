@@ -79,9 +79,6 @@ type State struct {
 
 	// The last time the instance reached the world preview screen.
 	LastPreview time.Time
-
-	// The last time the instance was reset.
-	LastReset time.Time
 }
 
 // The StateReader interface provides a method for obtaining the state of an

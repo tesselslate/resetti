@@ -31,6 +31,7 @@ type Wall struct {
 	active    int // Active instance. -1 is a sentinel for wall
 
 	proj  projectorState
+	grab  bool
 	hider hider
 
 	lastMouseId int
@@ -116,7 +117,31 @@ func (w *Wall) FocusChange(win xproto.Window) {
 		log.Printf("FocusChange: Failed to find projector: %s\n", err)
 		return
 	}
+
+	// HACK: We don't actually need the pointer grab here, but if we don't grab
+	// it then OBS decides to for some reason. This prevents the game from being
+	// able to grab the pointer quickly. There's no code in OBS for grabbing the
+	// pointer, so it's likely somewhere in Qt and I'm not interested in digging
+	// into more C(++) code at the moment.
 	w.proj.active = slices.Contains(w.proj.children, win)
+	if w.grab && !w.proj.active {
+		w.ungrabPointer()
+	} else if !w.grab && w.proj.active {
+		// OBS can still be grabbing the pointer, so retry with backoff.
+		timeout := time.Millisecond
+		for tries := 1; tries <= 5; tries += 1 {
+			if err := w.x.GrabPointer(w.proj.window); err != nil {
+				log.Printf("Pointer grab failed: (%d/5): %s\n", tries, err)
+			} else {
+				log.Println("Grabbed pointer.")
+				w.grab = true
+				return
+			}
+			time.Sleep(timeout)
+			timeout *= 4
+		}
+		log.Printf("Pointer grab failed.")
+	}
 }
 
 // Input implements Frontend.
@@ -169,8 +194,17 @@ func (w *Wall) Input(input Input) {
 					}
 					id = *action.Extra
 				} else {
+					// Only accept mouse-based inputs if the projector is focused.
+					if !w.proj.active {
+						continue
+					}
 					mouseId, ok := w.getInstanceId(input)
 					if !ok {
+						// Ungrab the pointer if the user clicks outside of
+						// the projector.
+						if w.grab {
+							w.ungrabPointer()
+						}
 						continue
 					}
 					if input.Held && mouseId == w.lastMouseId {
@@ -180,9 +214,6 @@ func (w *Wall) Input(input Input) {
 					w.lastMouseId = id
 				}
 				if id < 0 || id > len(w.instances)-1 {
-					continue
-				}
-				if id == -1 {
 					continue
 				}
 				switch action.Type {
@@ -356,6 +387,16 @@ func (w *Wall) setLocked(id int, lock bool) {
 	w.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), lock)
 }
 
+// ungrabPointer ungrabs the pointer.
+func (w *Wall) ungrabPointer() {
+	if err := w.x.UngrabPointer(); err != nil {
+		log.Printf("Failed to ungrab pointer: %s\n", err)
+	} else {
+		log.Println("Ungrabbed pointer.")
+		w.grab = false
+	}
+}
+
 // wallLock toggles the lock state of the given instance.
 func (w *Wall) wallLock(id int) {
 	lock := !w.locks[id]
@@ -371,6 +412,9 @@ func (w *Wall) wallLock(id int) {
 // if the instance is in a valid state for playing.
 func (w *Wall) wallPlay(id int) {
 	w.active = id
+	if w.grab {
+		w.ungrabPointer()
+	}
 	w.host.PlayInstance(id)
 
 	w.host.RunHook(HookWallPlay)
