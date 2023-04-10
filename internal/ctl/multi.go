@@ -3,10 +3,10 @@ package ctl
 import (
 	"fmt"
 
+	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
-	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // Multi implements a traditional Multi-instance interface, where the user
@@ -26,10 +26,6 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	m.conf = deps.conf
 	m.obs = deps.obs
 
-	if err := m.host.BindInstanceKeys(); err != nil {
-		return fmt.Errorf("bind instance keys: %w", err)
-	}
-
 	m.active = 0
 	m.states = make([]mc.State, len(deps.states))
 	copy(m.states, deps.states)
@@ -37,7 +33,7 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 }
 
 // FocusChange implements Frontend.
-func (m *Multi) FocusChange(evt x11.FocusEvent) {
+func (m *Multi) FocusChange(win xproto.Window) {
 	// Do nothing.
 }
 

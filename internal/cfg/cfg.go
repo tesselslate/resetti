@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 
@@ -113,6 +114,7 @@ type Wall struct {
 type Profile struct {
 	ResetCount   string `toml:"reset_count"` // Reset counter path
 	UnpauseFocus bool   `toml:"unpause_focus"`
+	PollRate     int    `toml:"poll_rate"`
 
 	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`
@@ -185,6 +187,14 @@ func MakeProfile(name string) error {
 // validateProfile ensures that the user's configuration profile does not have
 // any illegal or invalid settings.
 func validateProfile(conf *Profile) error {
+	// Make sure polling rate is fine.
+	if conf.PollRate <= 0 {
+		return errors.New("invalid polling rate")
+	}
+	if conf.PollRate <= 10 {
+		log.Println("Warning: Very low poll rate in config. Consider increasing.")
+	}
+
 	// Fix up the sleepbg.lock path.
 	home, err := os.UserHomeDir()
 	if err != nil {

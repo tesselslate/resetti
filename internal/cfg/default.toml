@@ -8,6 +8,9 @@ reset_count = ""
 # Whether or not instances should automatically unpause when you tab in.
 unpause_focus = true
 
+# The rate (in Hz) to poll for hotkey inputs.
+poll_rate = 100
+
 # The delay section contains delays (in milliseconds) before performing various
 # actions. These defaults are completely arbitrary. Increase relevant delays if
 # you have issues, decrease for lower latency. Depending on your setup, you may

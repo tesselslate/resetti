@@ -58,14 +58,13 @@ type ActionList struct {
 
 // Bind represents a single keybinding.
 type Bind struct {
-	// Keyboard modifiers.
-	Mod x11.Keymod
+	// Any keys for this keybind.
+	Keys     [4]xproto.Keycode
+	KeyCount int
 
-	// Keycode, if any.
-	Key *xproto.Keycode
-
-	// Mouse button, if any.
-	Mouse *xproto.Button
+	// Any buttons for this keybind.
+	Buttons     [4]xproto.Button
+	ButtonCount int
 
 	// String representation.
 	str string
@@ -140,34 +139,34 @@ func (b *Bind) UnmarshalTOML(value any) error {
 	if str == "" {
 		return nil
 	}
-	keyCount := 0
-	buttonCount := 0
 	for _, split := range strings.Split(str, "-") {
 		split = strings.ToLower(split)
-		if mod, ok := x11.Keymods[split]; ok {
-			b.Mod |= mod
-		} else if key, ok := x11.Keycodes[split]; ok {
-			b.Key = &key
-			keyCount += 1
+		if key, ok := x11.Keycodes[split]; ok {
+			if b.KeyCount == 4 {
+				return errors.New("too many keys")
+			}
+			b.Keys[b.KeyCount] = key
+			b.KeyCount += 1
 		} else if button, ok := x11.Buttons[split]; ok {
-			b.Mouse = &button
-			buttonCount += 1
+			if b.ButtonCount == 4 {
+				return errors.New("too many buttons")
+			}
+			b.Buttons[b.ButtonCount] = button
+			b.ButtonCount += 1
 		} else if keyRegexp.MatchString(split) {
 			num, err := strconv.Atoi(split[4:])
 			if err != nil {
 				return fmt.Errorf("failed to parse code in %q", split)
 			}
+			if b.KeyCount == 4 {
+				return errors.New("too many keys")
+			}
 			keycode := xproto.Keycode(num)
-			b.Key = &keycode
-			keyCount += 1
+			b.Keys[b.KeyCount] = keycode
+			b.KeyCount += 1
 		} else {
 			return fmt.Errorf("unrecognized keybind element %q", split)
 		}
-	}
-	if keyCount+buttonCount == 0 {
-		return errors.New("no key or button")
-	} else if keyCount+buttonCount > 1 {
-		return errors.New("more than one key or button")
 	}
 	b.str = str
 	return nil

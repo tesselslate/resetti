@@ -13,12 +13,14 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/exp/slices"
 )
 
 // bufferSize is the capacity a buffered channel that processes per-instance
@@ -46,23 +48,24 @@ type Controller struct {
 	cpu      CpuManager
 	frontend Frontend
 
-	binds  map[cfg.Bind]cfg.ActionList
-	hooks  map[int]string
-	inputs inputState
+	binds    map[cfg.Bind]cfg.ActionList
+	inputMgr inputManager
+	inputs   <-chan Input
+	hooks    map[int]string
 
-	obsErrors <-chan error
-	mgrErrors <-chan error
-	x11Errors <-chan error
-	mgrEvents <-chan mc.Update
-	x11Events <-chan x11.Event
-	signals   <-chan os.Signal
+	obsErrors    <-chan error
+	mgrErrors    <-chan error
+	x11Errors    <-chan error
+	mgrEvents    <-chan mc.Update
+	signals      <-chan os.Signal
+	focusChanges <-chan xproto.Window
 }
 
 // A Frontend handles user-facing I/O (input handling, instance actions, OBS
 // output) and communicates with a Controller.
 type Frontend interface {
 	// FocusChange processes a single window focus change.
-	FocusChange(x11.FocusEvent)
+	FocusChange(xproto.Window)
 
 	// Input processes a single user input.
 	Input(Input)
@@ -93,11 +96,13 @@ type frontendDependencies struct {
 	host      *Controller
 }
 
-type inputState struct {
-	cx, cy  int
-	buttons map[xproto.Button]bool
-	keys    map[xproto.Keycode]uint32
-	mod     x11.Keymod
+// inputManager checks the state of the user's input devices to determine if
+// they are pressing any hotkeys.
+type inputManager struct {
+	conf *cfg.Profile
+	x    *x11.Client
+
+	lastBinds []cfg.Bind
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -117,12 +122,6 @@ func Run(conf *cfg.Profile) error {
 		HookUnlock:    c.conf.Hooks.WallUnlock,
 		HookWallPlay:  c.conf.Hooks.WallPlay,
 		HookWallReset: c.conf.Hooks.WallReset,
-	}
-	c.inputs = inputState{
-		0, 0,
-		make(map[xproto.Button]bool),
-		make(map[xproto.Keycode]uint32),
-		x11.ModNone,
 	}
 
 	signals := make(chan os.Signal, 8)
@@ -195,50 +194,20 @@ func Run(conf *cfg.Profile) error {
 	c.mgrEvents = evtch
 	c.mgrErrors = errch
 	go c.manager.Run(ctx, evtch, errch)
-	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
+	if c.conf.Wall.Enabled {
+		c.focusChanges, c.x11Errors, err = c.x.Poll(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
+	inputs := make(chan Input, 256)
+	c.inputMgr = inputManager{c.conf, c.x, nil}
+	c.inputs = inputs
+	go c.inputMgr.Run(inputs)
 
 	err = c.run(ctx)
 	if err != nil {
 		fmt.Println("Failed to run:", err)
-	}
-	return nil
-}
-
-// BindInstanceKeys ensures that all keybinds with instance actions are bound.
-func (c *Controller) BindInstanceKeys() error {
-	for bind, action := range c.conf.Keybinds {
-		if len(action.IngameActions) != 0 {
-			if _, ok := c.binds[bind]; !ok {
-				if err := c.bind(bind); err != nil {
-					return err
-				}
-			}
-		} else {
-			if _, ok := c.binds[bind]; ok {
-				c.unbind(bind)
-			}
-		}
-	}
-	return nil
-}
-
-// BindWallKeys ensures that all keys with wall actions are bound.
-func (c *Controller) BindWallKeys() error {
-	for bind, action := range c.conf.Keybinds {
-		if len(action.WallActions) != 0 {
-			if _, ok := c.binds[bind]; !ok {
-				if err := c.bind(bind); err != nil {
-					return err
-				}
-			}
-		} else {
-			if _, ok := c.binds[bind]; ok {
-				c.unbind(bind)
-			}
-		}
 	}
 	return nil
 }
@@ -297,40 +266,6 @@ func (c *Controller) SetPriority(id int, prio bool) {
 	}
 }
 
-// UnbindWallKeys unbinds all wall-only keys, except for focus projector.
-func (c *Controller) UnbindWallKeys() {
-	for bind := range c.binds {
-		actions := c.conf.Keybinds[bind]
-		if len(actions.IngameActions) == 0 {
-			hasFocusProjector := false
-			for _, action := range actions.WallActions {
-				if action.Type == cfg.ActionWallFocus {
-					hasFocusProjector = true
-					break
-				}
-			}
-			if !hasFocusProjector {
-				c.unbind(bind)
-			}
-		}
-	}
-}
-
-// bind binds the given key.
-func (c *Controller) bind(bind cfg.Bind) error {
-	if bind.Key != nil {
-		err := c.x.GrabKey(x11.Key{
-			Code: *bind.Key,
-			Mod:  bind.Mod,
-		}, c.x.GetRootWindow())
-		if err != nil {
-			return err
-		}
-	}
-	c.binds[bind] = c.conf.Keybinds[bind]
-	return nil
-}
-
 // debug prints debug information.
 func (c *Controller) debug() {
 	mem := runtime.MemStats{}
@@ -343,63 +278,12 @@ func (c *Controller) debug() {
 	memStats.WriteString(fmt.Sprintf("GC time: %.2f%%\n", mem.GCCPUFraction))
 	memStats.WriteString(fmt.Sprintf("GC cycles: %d\n", mem.NumGC))
 	memStats.WriteString(fmt.Sprintf("Total STW: %.4f ms", float64(mem.PauseTotalNs)/1000000))
-	inputs := strings.Builder{}
-	inputs.WriteString(fmt.Sprintf("\nKeys, buttons: %d, %d\n", len(c.inputs.keys), len(c.inputs.buttons)))
-	inputs.WriteString(fmt.Sprintf("Last position: (%d, %d)\n", c.inputs.cx, c.inputs.cy))
-	for key, time := range c.inputs.keys {
-		inputs.WriteString(fmt.Sprintf("%d (key)\t:%d\n", key, time))
-	}
-	for button := range c.inputs.buttons {
-		inputs.WriteString(fmt.Sprintf("%d (button)\n", button))
-	}
 	log.Printf(
-		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInputs:%s\nInstances:\n%s",
+		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInstances:\n%s",
 		runtime.NumGoroutine(),
 		memStats.String(),
-		inputs.String(),
 		c.manager.Debug(),
 	)
-}
-
-// matchBind attempts to match a given keybind based on the current input state.
-func (c *Controller) matchBind() (bind cfg.Bind, ok bool) {
-	if len(c.inputs.keys)+len(c.inputs.buttons) != 1 {
-		return cfg.Bind{}, false
-	}
-	if len(c.inputs.keys) == 1 {
-		// There's only one element.
-		for key := range c.inputs.keys {
-			for bind := range c.binds {
-				if bind.Key != nil && *bind.Key == key && bind.Mod == c.inputs.mod {
-					return bind, true
-				}
-			}
-		}
-	} else {
-		// There's only one element.
-		for button := range c.inputs.buttons {
-			for bind := range c.binds {
-				if bind.Mouse != nil && *bind.Mouse == button && bind.Mod == c.inputs.mod {
-					return bind, true
-				}
-			}
-		}
-	}
-	return cfg.Bind{}, false
-}
-
-// unbind removes the given bind.
-func (c *Controller) unbind(bind cfg.Bind) {
-	delete(c.binds, bind)
-	if bind.Key != nil {
-		err := c.x.UngrabKey(x11.Key{
-			Code: *bind.Key,
-			Mod:  bind.Mod,
-		}, c.x.GetRootWindow())
-		if err != nil {
-			log.Printf("Unbind (%v) failed: %s\n", bind, err)
-		}
-	}
 }
 
 // run runs the main loop for the controller.
@@ -432,63 +316,58 @@ func (c *Controller) run(ctx context.Context) error {
 			if c.cpu != nil {
 				c.cpu.Update(evt)
 			}
-		case evt := <-c.x11Events:
-			switch evt := evt.(type) {
-			case x11.FocusEvent:
-				c.frontend.FocusChange(evt)
+		case win := <-c.focusChanges:
+			c.frontend.FocusChange(win)
+		case input := <-c.inputs:
+			c.frontend.Input(input)
+		}
+	}
+}
 
-				// HACK: Clear input state whenever focus changes, since
-				// the keybinds might have changed.
-				c.inputs.buttons = make(map[xproto.Button]bool)
-				c.inputs.keys = make(map[xproto.Keycode]uint32)
-			case x11.KeyEvent:
-				c.inputs.mod = evt.Key.Mod
-				if evt.State == x11.StateDown {
-					// XXX: We have to use a GLFW hackfix here ourselves (:
-					// Ignore repeat keydown events.
-					if last, ok := c.inputs.keys[evt.Key.Code]; ok {
-						if evt.Timestamp-last <= 20 {
-							c.inputs.keys[evt.Key.Code] = evt.Timestamp
-							continue
-						}
-					}
-					c.inputs.keys[evt.Key.Code] = evt.Timestamp
-					bind, ok := c.matchBind()
-					if !ok {
-						continue
-					}
-					c.frontend.Input(Input{
-						bind, false, c.inputs.cx, c.inputs.cy,
-					})
-				} else {
-					delete(c.inputs.keys, evt.Key.Code)
-				}
-			case x11.ButtonEvent:
-				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
-				c.inputs.mod = evt.Mod
-				if evt.State == x11.StateDown {
-					c.inputs.buttons[evt.Button] = true
-					bind, ok := c.matchBind()
-					if !ok {
-						continue
-					}
-					c.frontend.Input(Input{
-						bind, false, c.inputs.cx, c.inputs.cy,
-					})
-				} else {
-					delete(c.inputs.buttons, evt.Button)
-				}
-			case x11.MoveEvent:
-				c.inputs.cx, c.inputs.cy = int(evt.Point.X), int(evt.Point.Y)
-				c.inputs.mod = evt.Mod
-				bind, ok := c.matchBind()
-				if !ok {
-					continue
-				}
-				c.frontend.Input(Input{
-					bind, true, c.inputs.cx, c.inputs.cy,
-				})
+func (i *inputManager) Run(inputs chan<- Input) {
+	for {
+		// Sleep for this polling iteration and query the input devices' state.
+		time.Sleep(time.Second / time.Duration(i.conf.PollRate))
+		keymap, err := i.x.QueryKeymap()
+		if err != nil {
+			log.Printf("inputManager: Query keymap failed: %s\n", err)
+			continue
+		}
+		pointer, err := i.x.QueryPointer()
+		if err != nil {
+			log.Printf("inputManager: Query pointer failed: %s\n", err)
+			continue
+		}
+
+		// XXX: This is kind of bad and can probably be optimized
+		var pressed []cfg.Bind
+		for bind := range i.conf.Keybinds {
+			var mask [32]byte
+			for _, key := range bind.Keys[:bind.KeyCount] {
+				mask[key/8] |= (1 << (key % 8))
+			}
+			if keymap.HasPressed(mask) && pointer.HasPressed(bind.Buttons[:bind.ButtonCount]) {
+				pressed = append(pressed, bind)
 			}
 		}
+		if len(pressed) == 0 {
+			i.lastBinds = pressed
+			continue
+		}
+
+		// XXX: This is kinda jank but it works (thanks boyenn)
+		slices.SortFunc(pressed, func(a, b cfg.Bind) bool {
+			if a.KeyCount >= b.KeyCount {
+				return true
+			}
+			return a.ButtonCount >= b.ButtonCount
+		})
+		bind := pressed[0]
+		inputs <- Input{
+			bind,
+			slices.Contains(i.lastBinds, bind),
+			pointer.EventX, pointer.EventY,
+		}
+		i.lastBinds = pressed
 	}
 }

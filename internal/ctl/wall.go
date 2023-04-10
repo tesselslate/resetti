@@ -32,7 +32,6 @@ type Wall struct {
 	proj  projectorState
 	hider hider
 
-	wallBinds   bool
 	lastMouseId int
 }
 
@@ -104,28 +103,18 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 		go w.hider.Run()
 	}
 
-	if err = w.bindWallKeys(); err != nil {
-		return fmt.Errorf("bind keys: %w", err)
-	}
 	w.deleteSleepbgLock(true)
 
 	return nil
 }
 
 // FocusChange implements Frontend.
-func (w *Wall) FocusChange(evt x11.FocusEvent) {
+func (w *Wall) FocusChange(win xproto.Window) {
 	if err := w.findProjector(); err != nil {
 		log.Printf("FocusChange: Failed to find projector: %s\n", err)
 		return
 	}
-
-	if evt.Window == w.proj.window && !w.wallBinds {
-		if err := w.bindWallKeys(); err != nil {
-			log.Printf("FocusChange: Failed to bind keys: %s\n", err)
-		}
-	} else if evt.Window != w.proj.window && w.wallBinds {
-		w.unbindWallKeys()
-	}
+	// TODO
 }
 
 // Input implements Frontend.
@@ -148,17 +137,17 @@ func (w *Wall) Input(input Input) {
 					log.Printf("Input: Failed to focus projector: %s\n", err)
 				}
 			case cfg.ActionWallResetAll:
-				if !w.wallBinds || input.Held {
+				if w.active != -1 || input.Held {
 					continue
 				}
 				w.wallResetAll()
 			case cfg.ActionWallPlayFirstLocked:
-				if !w.wallBinds || input.Held {
+				if w.active != -1 || input.Held {
 					continue
 				}
 				w.playFirstLocked()
 			case cfg.ActionWallLock, cfg.ActionWallPlay, cfg.ActionWallReset, cfg.ActionWallResetOthers:
-				if !w.wallBinds {
+				if w.active != -1 {
 					continue
 				}
 				var id int
@@ -170,7 +159,6 @@ func (w *Wall) Input(input Input) {
 				} else {
 					mouseId, ok := w.getInstanceId(input)
 					if !ok {
-						w.unbindWallKeys()
 						continue
 					}
 					if input.Held && mouseId == w.lastMouseId {
@@ -208,34 +196,6 @@ func (w *Wall) Input(input Input) {
 func (w *Wall) Update(update mc.Update) {
 	w.states[update.Id] = update.State
 	w.hider.Update(update)
-}
-
-// bindWallKeys binds the keys that are only used on the wall projector.
-func (w *Wall) bindWallKeys() error {
-	if w.wallBinds {
-		return nil
-	}
-	log.Println("Binding wall keys")
-	w.wallBinds = true
-	if err := w.host.BindWallKeys(); err != nil {
-		return fmt.Errorf("host bind keys: %w", err)
-	}
-
-	// The pointer grab can fail in some scenarios. Retry with exponential
-	// backoff.
-	// TODO: Can this be made better? Listen for pointer grab release?
-	// TODO: Only grab pointer if mouse-dependent keys are in config
-	timeout := time.Millisecond
-	for tries := 1; tries <= 5; tries += 1 {
-		if err := w.x.GrabPointer(w.proj.window); err != nil {
-			log.Printf("Pointer grab failed (%d/5): %s\n", tries, err)
-		} else {
-			return nil
-		}
-		time.Sleep(timeout)
-		timeout *= 4
-	}
-	return errors.New("pointer grab failed after 5 tries")
 }
 
 // createSleepbgLock creates the sleepbg.lock file.
@@ -384,19 +344,6 @@ func (w *Wall) setLocked(id int, lock bool) {
 	w.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), lock)
 }
 
-// unbindWallKeys unbinds the keys that are only used on the wall projector.
-func (w *Wall) unbindWallKeys() {
-	if !w.wallBinds {
-		return
-	}
-	log.Println("Unbinding wall keys")
-	w.wallBinds = false
-	w.host.UnbindWallKeys()
-	if err := w.x.UngrabPointer(); err != nil {
-		log.Printf("unbindWallKeys: Failed to ungrab pointer: %s\n", err)
-	}
-}
-
 // wallLock toggles the lock state of the given instance.
 func (w *Wall) wallLock(id int) {
 	lock := !w.locks[id]
@@ -412,11 +359,7 @@ func (w *Wall) wallLock(id int) {
 // if the instance is in a valid state for playing.
 func (w *Wall) wallPlay(id int) {
 	w.active = id
-	w.unbindWallKeys()
 	w.host.PlayInstance(id)
-	if err := w.host.BindInstanceKeys(); err != nil {
-		log.Printf("wallPlay: Failed to bind instance keys: %s\n", err)
-	}
 
 	w.host.RunHook(HookWallPlay)
 	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {

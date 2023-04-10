@@ -155,7 +155,7 @@ func run(opts Options) int {
 	}
 	time.Sleep(100 * time.Millisecond)
 	for _, instance := range instances {
-		x.SendKeyPress(instance.ResetKey.Code, instance.Wid)
+		x.SendKeyPress(instance.ResetKey, instance.Wid)
 	}
 
 	resets := 0
@@ -192,7 +192,7 @@ func run(opts Options) int {
 			case 100:
 				if last.Type != mc.StIdle && next.Type == mc.StIdle {
 					x.SendKeyPress(
-						instances[update.Id].ResetKey.Code,
+						instances[update.Id].ResetKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1
@@ -201,7 +201,7 @@ func run(opts Options) int {
 			case 0:
 				if last.Type != mc.StPreview && next.Type == mc.StPreview {
 					x.SendKeyPress(
-						instances[update.Id].PreviewKey.Code,
+						instances[update.Id].PreviewKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1
@@ -210,7 +210,7 @@ func run(opts Options) int {
 			default:
 				if next.Type != mc.StDirt && next.Progress >= opts.ResetAt && last.Progress < opts.ResetAt {
 					x.SendKeyPress(
-						instances[update.Id].ResetKey.Code,
+						instances[update.Id].ResetKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1

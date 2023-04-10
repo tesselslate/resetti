@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +28,12 @@ const (
 	wmName            = "WM_NAME"
 )
 
+// Key/button states
+const (
+	StateDown InputState = iota
+	StateUp
+)
+
 // Event masks
 const (
 	maskButton uint32 = xproto.EventMaskButtonPress |
@@ -39,9 +44,6 @@ const (
 
 	maskKeyPress uint32 = xproto.EventMaskKeyPress |
 		xproto.EventMaskKeyRelease
-
-	maskPointer uint16 = xproto.EventMaskPointerMotion |
-		xproto.EventMaskButtonPress | xproto.EventMaskButtonRelease
 
 	maskProperty uint32 = xproto.EventMaskPropertyChange |
 		xproto.EventMaskSubstructureNotify
@@ -55,8 +57,15 @@ const (
 		xproto.ConfigWindowWidth
 )
 
-// Keyboard-only mod mask. Discards mouse button modifiers.
-const keyboardModMask = 255
+// Important keys
+var (
+	KeyEsc   = xproto.Keycode(9)
+	KeyF1    = xproto.Keycode(67)
+	KeyF3    = xproto.Keycode(69)
+	KeyF6    = xproto.Keycode(72)
+	KeyH     = xproto.Keycode(43)
+	KeyShift = xproto.Keycode(50)
+)
 
 // Error types
 var (
@@ -64,13 +73,13 @@ var (
 	errInvalidLength  = errors.New("invalid response length")
 )
 
-// Pointer grab error names
-var pointerGrabErrors = []string{
-	"Success",
-	"Already grabbed",
-	"Invalid time",
-	"Not viewable",
-	"Frozen",
+// Button -> mask mappings
+var masks = map[xproto.Button]uint16{
+	xproto.ButtonIndex1: xproto.ButtonMask1,
+	xproto.ButtonIndex2: xproto.ButtonMask2,
+	xproto.ButtonIndex3: xproto.ButtonMask3,
+	xproto.ButtonIndex4: xproto.ButtonMask4,
+	xproto.ButtonIndex5: xproto.ButtonMask5,
 }
 
 // Client maintains a connection with the X server and performs tasks like
@@ -87,6 +96,30 @@ type Client struct {
 	// to ensure that resetti's inputs don't get dropped by GLFW.
 	lastKeyState map[xproto.Window]keyState
 	mu           sync.Mutex
+}
+
+// InputState represents the state of a button or key (up or down.)
+type InputState int
+
+// Keymap contains information about the state of the user's keyboard.
+type Keymap struct {
+	// Keyboard data. 256-bit bitfield.
+	data [32]byte
+}
+
+// Point represents a point on the X screen.
+type Point struct {
+	X int16
+	Y int16
+}
+
+// Pointer contains information about the state of the mouse pointer.
+type Pointer struct {
+	RootX, RootY, EventX, EventY int
+	Window                       xproto.Window
+
+	// Modmask (contains keyboard modifiers)
+	buttons uint16
 }
 
 // keyState contains state about the last key event sent to a given window.
@@ -267,43 +300,6 @@ func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
 	return c.getPropertyString(win, wmName)
 }
 
-// GrabKey grabs a keyboard key from the given window, diverting all instances
-// of that keypress for that window to resetti.
-func (c *Client) GrabKey(key Key, win xproto.Window) error {
-	return xproto.GrabKeyChecked(
-		c.conn,
-		true,
-		win,
-		uint16(key.Mod),
-		key.Code,
-		xproto.GrabModeAsync,
-		xproto.GrabModeAsync,
-	).Check()
-}
-
-// GrabPointer grabs the mouse pointer, diverting all mouse events to resetti.
-func (c *Client) GrabPointer(win xproto.Window) error {
-	reply, err := xproto.GrabPointer(
-		c.conn,
-		true,
-		win,
-		maskPointer,
-		xproto.GrabModeAsync,
-		xproto.GrabModeAsync,
-		c.root,
-		xproto.CursorNone,
-		xproto.TimeCurrentTime,
-	).Reply()
-	if err != nil {
-		return err
-	}
-	if reply.Status == xproto.GrabStatusSuccess {
-		return nil
-	} else {
-		return errors.New(pointerGrabErrors[reply.Status])
-	}
-}
-
 // MoveWindow moves and resizes the given window.
 func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
 	xproto.ConfigureWindow(
@@ -314,12 +310,39 @@ func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
 	)
 }
 
-// Poll starts listening for user input events in the background.
-func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
-	ch := make(chan Event, 256)
+// Poll starts listening for window focus changes in the background.
+func (c *Client) Poll(ctx context.Context) (<-chan xproto.Window, <-chan error, error) {
+	ch := make(chan xproto.Window, 256)
 	errch := make(chan error, 8)
 	go c.poll(ctx, ch, errch)
 	return ch, errch, nil
+}
+
+// QueryKeymap queries the state of the keyboard.
+func (c *Client) QueryKeymap() (Keymap, error) {
+	reply, err := xproto.QueryKeymap(c.conn).Reply()
+	if err != nil {
+		return Keymap{}, err
+	}
+	if len(reply.Keys) > 32 {
+		return Keymap{}, errors.New("keymap greater than 32 bytes")
+	}
+	return Keymap{*(*[32]byte)(reply.Keys)}, nil
+}
+
+// QueryPointer queries the state of the pointer.
+func (c *Client) QueryPointer() (Pointer, error) {
+	reply, err := xproto.QueryPointer(c.conn, c.root).Reply()
+	if err != nil {
+		return Pointer{}, err
+	}
+	p := Pointer{
+		int(reply.RootX), int(reply.RootY),
+		int(reply.WinX), int(reply.WinY),
+		reply.Child,
+		reply.Mask,
+	}
+	return p, nil
 }
 
 // SendKeyDown sends a key down event to the given window with the given key.
@@ -337,21 +360,6 @@ func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window) {
 // SendKeyUp sends a key up event to the given window with the given key.
 func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window) {
 	c.sendKeyEvent(code, StateUp, win)
-}
-
-// UngrabKey releases a grabbed key and returns it back to the X server.
-func (c *Client) UngrabKey(key Key, win xproto.Window) error {
-	return xproto.UngrabKeyChecked(
-		c.conn,
-		key.Code,
-		win,
-		uint16(key.Mod),
-	).Check()
-}
-
-// UngrabPointer releases any pointer grabs.
-func (c *Client) UngrabPointer() error {
-	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
 }
 
 // getProperty retrieves a raw window property.
@@ -483,7 +491,7 @@ func (c *Client) setCurrentDesktop(desktop uint32) error {
 }
 
 // poll listens for user inputs in the background.
-func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) {
+func (c *Client) poll(ctx context.Context, ch chan<- xproto.Window, errch chan<- error) {
 	defer close(ch)
 	defer close(errch)
 	activeWindow, err := c.atoms.Get(netActiveWindow)
@@ -508,59 +516,6 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 			continue
 		}
 		switch evt := evt.(type) {
-		case xproto.KeyPressEvent:
-			ch <- KeyEvent{
-				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State & keyboardModMask)},
-				State:     StateDown,
-				Timestamp: uint32(evt.Time),
-			}
-		case xproto.KeyReleaseEvent:
-			// XXX: We have to use a GLFW hackfix here ourselves (:
-			// If there is a next event in the queue and it is a corresponding
-			// key press, drop the key release event.
-			evt2, err := c.conn.PollForEvent()
-			if err != nil {
-				log.Printf("X: Polled error: %s\n", err)
-				continue
-			}
-			evt.State &= keyboardModMask
-			if evt3, ok := evt2.(xproto.KeyPressEvent); ok {
-				evt3.State &= keyboardModMask
-				if evt.Detail == evt3.Detail && evt.State == evt3.State {
-					continue
-				}
-			}
-
-			ch <- KeyEvent{
-				Key:       Key{Code: evt.Detail, Mod: Keymod(evt.State)},
-				State:     StateUp,
-				Timestamp: uint32(evt.Time),
-			}
-		case xproto.ButtonPressEvent:
-			ch <- ButtonEvent{
-				Button:    evt.Detail,
-				Mod:       Keymod(evt.State & keyboardModMask),
-				State:     StateDown,
-				Point:     Point{evt.EventX, evt.EventY},
-				Timestamp: uint32(evt.Time),
-				Window:    evt.Child,
-			}
-		case xproto.ButtonReleaseEvent:
-			ch <- ButtonEvent{
-				Button:    evt.Detail,
-				Mod:       Keymod(evt.State & keyboardModMask),
-				State:     StateUp,
-				Point:     Point{evt.EventX, evt.EventY},
-				Timestamp: uint32(evt.Time),
-				Window:    evt.Child,
-			}
-		case xproto.MotionNotifyEvent:
-			ch <- MoveEvent{
-				Mod:       Keymod(evt.State & keyboardModMask),
-				Point:     Point{evt.EventX, evt.EventY},
-				Timestamp: uint32(evt.Time),
-				Window:    evt.Child,
-			}
 		case xproto.PropertyNotifyEvent:
 			if activeWindow != evt.Atom {
 				continue
@@ -570,9 +525,31 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 				errch <- err
 				continue
 			}
-			ch <- FocusEvent{uint32(evt.Time), win}
+			ch <- win
 		}
 	}
+}
+
+// HasPressed determines whether all of the given keys are pressed in the
+// keymap.
+func (k *Keymap) HasPressed(mask [32]byte) bool {
+	for i, v := range mask {
+		if k.data[i]&v != v {
+			return false
+		}
+	}
+	return true
+}
+
+// HasPressed determines whether all of the given buttons are pressed in the
+// keymap.
+func (p *Pointer) HasPressed(buttons []xproto.Button) bool {
+	for _, button := range buttons {
+		if p.buttons&masks[button] == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // approximateOffset attempts to find the offset between the system clock and

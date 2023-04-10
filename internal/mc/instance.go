@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
@@ -292,7 +293,7 @@ func (m *Manager) Reset(id int) bool {
 			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
 		}
 	}
-	var key x11.Key
+	var key xproto.Keycode
 	if state.Type == StPreview {
 		key = m.instances[id].info.PreviewKey
 	} else {
@@ -303,18 +304,18 @@ func (m *Manager) Reset(id int) bool {
 }
 
 // sendKeyDown sends a key down event to the given instance.
-func (m *Manager) sendKeyDown(id int, key x11.Key) {
-	m.x.SendKeyDown(key.Code, m.instances[id].info.Wid)
+func (m *Manager) sendKeyDown(id int, key xproto.Keycode) {
+	m.x.SendKeyDown(key, m.instances[id].info.Wid)
 }
 
 // sendKeyPress sends a key down and key up event to the given instance.
-func (m *Manager) sendKeyPress(id int, key x11.Key) {
-	m.x.SendKeyPress(key.Code, m.instances[id].info.Wid)
+func (m *Manager) sendKeyPress(id int, key xproto.Keycode) {
+	m.x.SendKeyPress(key, m.instances[id].info.Wid)
 }
 
 // sendKeyUp sends a key up event to the given instance.
-func (m *Manager) sendKeyUp(id int, key x11.Key) {
-	m.x.SendKeyUp(key.Code, m.instances[id].info.Wid)
+func (m *Manager) sendKeyUp(id int, key xproto.Keycode) {
+	m.x.SendKeyUp(key, m.instances[id].info.Wid)
 }
 
 // setResolution sets the window geometry of an instance.

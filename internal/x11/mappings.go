@@ -25,22 +25,22 @@ var Buttons = map[string]xproto.Button{
 	"m5":          xproto.ButtonIndex5,
 }
 
-// Keymods is a list of key modifiers used for config parsing.
-var Keymods = map[string]Keymod{
-	"ctrl":    ModCtrl,
-	"control": ModCtrl,
-	"shift":   ModShift,
-	"alt":     Mod1,
-	"mod1":    Mod1,
-	"mod2":    Mod2,
-	"mod3":    Mod3,
-	"mod4":    Mod4,
-	"mod5":    Mod5,
-	"modlock": ModLock,
-}
-
 // Keycodes is a list of keycodes used for config parsing.
 var Keycodes = map[string]xproto.Keycode{
+	// Modifier keys
+	"ctrl":     37,
+	"control":  37,
+	"lctrl":    37,
+	"lcontrol": 37,
+	"shift":    50,
+	"lshift":   50,
+	"rshift":   62,
+	"alt":      64,
+	"lalt":     64,
+	"rctrl":    105,
+	"rcontrol": 105,
+
+	// Keys
 	"0":            19,
 	"1":            10,
 	"2":            11,
@@ -117,6 +117,7 @@ var Keycodes = map[string]xproto.Keycode{
 	"pause":        127,
 	"menu":         135,
 	"print.screen": 107,
+	"printscreen":  107,
 }
 
 // KeycodesMc is a list of keycodes used for parsing Minecraft options.
