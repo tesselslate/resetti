@@ -130,7 +130,7 @@ func getCcxIds(topo *cpuTopology) [2][]int {
 func getCoreIds(topo *cpuTopology) [][]int {
 	// TODO: A 128 core maximum is a safe assumption for now, but this function
 	// should just be made better.
-	// XXX: L1 cache IDs can get skipped. On my 5900X, 6-7 are skipped. It goes
+	// NOTE: L1 cache IDs can get skipped. On my 5900X, 6-7 are skipped. It goes
 	// from 5 to 8.
 	cores := make([][]int, 128)
 	for id, l1 := range topo.l1 {

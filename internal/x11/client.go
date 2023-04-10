@@ -287,7 +287,7 @@ func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
 
 // GetWindowSize returns the size of the given window.
 func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
-	// XXX: cache window size from poll loop?
+	// PERF: cache window size from poll loop?
 	geo, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
 	if err != nil {
 		return 0, 0, err
@@ -436,9 +436,6 @@ func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.W
 	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1260
 	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1359
 
-	// XXX: Can lock contention be a problem here? Come back to this after
-	// ctl package is implemented and either remove the mutex or figure out if
-	// contention is a performance issue.
 	c.mu.Lock()
 	lastState, ok := c.lastKeyState[win]
 	time := c.GetCurrentTime() + 15

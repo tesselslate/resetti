@@ -196,9 +196,7 @@ func Run(conf *cfg.Profile) error {
 	c.mgrEvents = evtch
 	c.mgrErrors = errch
 	go c.manager.Run(ctx, evtch, errch)
-	if c.conf.Wall.Enabled {
-		c.focusChanges, c.x11Errors, err = c.x.Poll(ctx)
-	}
+	c.focusChanges, c.x11Errors, err = c.x.Poll(ctx)
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
@@ -349,7 +347,7 @@ func (i *inputManager) Run(inputs chan<- Input) {
 			continue
 		}
 
-		// XXX: This is kind of bad and can probably be optimized
+		// PERF: This is kind of bad and can probably be optimized
 		var pressed []cfg.Bind
 		for bind := range i.conf.Keybinds {
 			var mask [32]byte
@@ -365,7 +363,7 @@ func (i *inputManager) Run(inputs chan<- Input) {
 			continue
 		}
 
-		// XXX: This is kinda jank but it works (mostly).
+		// TODO: This is kinda jank but it works (mostly).
 		// (thanks boyenn for the suggestion)
 		//
 		// TODO: This should probably be made better (or more config restrictions

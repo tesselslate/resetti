@@ -29,6 +29,8 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	m.active = 0
 	m.states = make([]mc.State, len(deps.states))
 	copy(m.states, deps.states)
+
+	m.host.FocusInstance(0)
 	return nil
 }
 
@@ -40,20 +42,23 @@ func (m *Multi) FocusChange(win xproto.Window) {
 // Input implements Frontend.
 func (m *Multi) Input(input Input) {
 	actions := m.conf.Keybinds[input.Bind]
+	if input.Held {
+		return
+	}
 	for _, action := range actions.IngameActions {
 		switch action.Type {
 		case cfg.ActionIngameFocus:
 			m.host.FocusInstance(m.active)
 		case cfg.ActionIngameReset:
 			// TODO: Implement moving wall style best instance picker
-			// TODO: Handle reset failure
 			next := (m.active + 1) % len(m.states)
 			current := m.active
-			_ = m.host.ResetInstance(current)
-			m.host.PlayInstance(next)
-			m.active = next
-			m.updateObs()
-			m.host.RunHook(HookReset)
+			if m.host.ResetInstance(current) {
+				m.host.PlayInstance(next)
+				m.active = next
+				m.updateObs()
+				m.host.RunHook(HookReset)
+			}
 		}
 	}
 }

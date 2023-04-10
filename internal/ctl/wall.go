@@ -123,6 +123,9 @@ func (w *Wall) FocusChange(win xproto.Window) {
 func (w *Wall) Input(input Input) {
 	actions := w.conf.Keybinds[input.Bind]
 	if w.active != -1 {
+		if input.Held {
+			return
+		}
 		for _, action := range actions.IngameActions {
 			switch action.Type {
 			case cfg.ActionIngameReset:
@@ -136,6 +139,9 @@ func (w *Wall) Input(input Input) {
 			// wall_focus_projector is the only wall action that can be taken
 			// while the projector isn't focused.
 			if action.Type == cfg.ActionWallFocus {
+				if input.Held {
+					continue
+				}
 				if err := w.focusProjector(); err != nil {
 					log.Printf("Input: Failed to focus projector: %s\n", err)
 				}
