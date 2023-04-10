@@ -200,13 +200,7 @@ func (c *advancedCpuManager) updateAffinity(id int) {
 		group = c.states[id].group
 	}
 	name := baseNames[group]
-	if c.conf.Wall.Perf.Adv.CcxSplit {
-		if id < len(c.pids)/2 {
-			name += "0"
-		} else {
-			name += "1"
-		}
-	}
+	name += strconv.Itoa(id / (len(c.states) / c.conf.Wall.Perf.Adv.CcxSplit))
 	// These writes are usually fast (<= ~500us) but sometimes spike up to as
 	// slow as 30+ ms. Do them asynchronously.
 	go func() {

@@ -20,6 +20,7 @@ import (
 
 type Options struct {
 	Affinity      string
+	CcxCount      int
 	Fancy         bool
 	InstanceCount int
 	ResetCount    int
@@ -35,6 +36,12 @@ func main() {
 		"affinity",
 		"none",
 		"The affinity type to use (sequence, ccx, none).",
+	)
+	flag.IntVar(
+		&opts.CcxCount,
+		"ccx",
+		2,
+		"The number of CCXs to split across for CCX affinity.",
 	)
 	flag.BoolVar(
 		&opts.Fancy,
@@ -102,8 +109,8 @@ func run(opts Options) int {
 	case "ccx":
 		conf.Wall.Enabled = true
 		conf.Wall.Perf.Affinity = "advanced"
-		conf.Wall.Perf.Adv.CcxSplit = true
-		conf.Wall.Perf.Adv.CpusHigh = runtime.NumCPU() / 2
+		conf.Wall.Perf.Adv.CcxSplit = opts.CcxCount
+		conf.Wall.Perf.Adv.CpusHigh = runtime.NumCPU() / opts.CcxCount
 	}
 	mgr, err := mc.NewManager(instances, conf, &x)
 	if err != nil {

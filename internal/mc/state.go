@@ -332,7 +332,7 @@ func (r *wpstateReader) Process() (State, bool, error) {
 		r.state.Progress = 0
 		r.state.Menu = false
 	case "generating":
-		// NOTE: WorldPreview sometimes reports itself as on dirt for one
+		// WorldPreview sometimes reports itself as on dirt for one
 		// state update near the end of world generation. If this occurs,
 		// do not update the state to dirt.
 		progress, err := strconv.Atoi(b)

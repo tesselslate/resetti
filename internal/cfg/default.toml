@@ -166,12 +166,9 @@ lock_cpus = 10
 
 # Advanced affinity settings.
 [wall.performance.advanced]
-# Whether or not to evenly divide instances between CCXs (core complexes).
-# - You should only use this if you have an AMD CPU with 2 CCXs.
-# - If enabled, the number of CPU cores available to each affinity group
-#   is halved. One affinity group is created per CCX with the given number
-#   of cores.
-ccx_split = false
+# How many groups to subdivide affinity groups into. Set this to the number of
+# CCXs your CPU has. If you don't know what this means, leave it at 1.
+ccx_split = 1
 
 # The number of CPUs (cores, or threads if you have SMT) to allocate to each
 # affinity group.

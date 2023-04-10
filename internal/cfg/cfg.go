@@ -88,10 +88,7 @@ type Wall struct {
 
 		// Adv affinity settings.
 		Adv struct {
-			// If enabled, halves the amount of CPU cores available to affinity
-			// groups and instead creates double the amount of groups (half for
-			// each CCX.)
-			CcxSplit bool `toml:"ccx_split"`
+			CcxSplit int `toml:"ccx_split"`
 
 			CpusIdle   int `toml:"affinity_idle"`   // CPUs for idle group
 			CpusLow    int `toml:"affinity_low"`    // CPUs for low group
@@ -247,11 +244,13 @@ func validateProfile(conf *Profile) error {
 			return fmt.Errorf("invalid lock cpu count %d", seq.LockCpus)
 		}
 	case "advanced":
+		if conf.Wall.Perf.Adv.CcxSplit <= 0 {
+			return fmt.Errorf("invalid ccx split %d", conf.Wall.Perf.Adv.CcxSplit)
+		}
+
 		maxCpu := runtime.NumCPU()
 		adv := conf.Wall.Perf.Adv
-		if adv.CcxSplit {
-			maxCpu /= 2
-		}
+		maxCpu /= adv.CcxSplit
 		if adv.CpusIdle > maxCpu {
 			return fmt.Errorf("invalid idle cpu count (%d > %d)", adv.CpusIdle, maxCpu)
 		}
