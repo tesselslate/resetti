@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"sync"
@@ -200,7 +201,8 @@ func (c *advancedCpuManager) updateAffinity(id int) {
 		group = c.states[id].group
 	}
 	name := baseNames[group]
-	name += strconv.Itoa(id / (len(c.states) / c.conf.Wall.Perf.Adv.CcxSplit))
+	perGroup := int(math.Ceil(float64(len(c.states)) / float64(c.conf.Wall.Perf.Adv.CcxSplit)))
+	name += strconv.Itoa(id / perGroup)
 	// These writes are usually fast (<= ~500us) but sometimes spike up to as
 	// slow as 30+ ms. Do them asynchronously.
 	go func() {
