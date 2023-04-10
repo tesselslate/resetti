@@ -355,12 +355,19 @@ func (i *inputManager) Run(inputs chan<- Input) {
 			continue
 		}
 
-		// XXX: This is kinda jank but it works (thanks boyenn)
+		// XXX: This is kinda jank but it works (mostly).
+		// (thanks boyenn for the suggestion)
+		//
+		// TODO: This should probably be made better (or more config restrictions
+		// should be put in place.) Right now, you can trigger essentially random
+		// keybind behavior by having e.g. (A+B, B+C, C+D) and holding down all
+		// of A, B, C, and D at once. This is caused by Go's non-deterministic
+		// map iteration order.
 		slices.SortFunc(pressed, func(a, b cfg.Bind) bool {
-			if a.KeyCount >= b.KeyCount {
+			if b.KeyCount < a.KeyCount {
 				return true
 			}
-			return a.ButtonCount >= b.ButtonCount
+			return b.ButtonCount < a.ButtonCount
 		})
 		bind := pressed[0]
 		inputs <- Input{
