@@ -102,7 +102,9 @@ type inputManager struct {
 	conf *cfg.Profile
 	x    *x11.Client
 
-	lastBinds []cfg.Bind
+	lastBinds   []cfg.Bind
+	queryWindow xproto.Window
+	mu          sync.Mutex
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -201,7 +203,7 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
 	inputs := make(chan Input, 256)
-	c.inputMgr = inputManager{c.conf, c.x, nil}
+	c.inputMgr = inputManager{c.conf, c.x, nil, 0, sync.Mutex{}}
 	c.inputs = inputs
 	go c.inputMgr.Run(inputs)
 
@@ -318,6 +320,9 @@ func (c *Controller) run(ctx context.Context) error {
 			}
 		case win := <-c.focusChanges:
 			c.frontend.FocusChange(win)
+			c.inputMgr.mu.Lock()
+			c.inputMgr.queryWindow = win
+			c.inputMgr.mu.Unlock()
 		case input := <-c.inputs:
 			c.frontend.Input(input)
 		}
@@ -333,7 +338,12 @@ func (i *inputManager) Run(inputs chan<- Input) {
 			log.Printf("inputManager: Query keymap failed: %s\n", err)
 			continue
 		}
-		pointer, err := i.x.QueryPointer()
+
+		// Lock the input manager to get the query window (which can be modified
+		// by the Controller.)
+		i.mu.Lock()
+		pointer, err := i.x.QueryPointer(i.queryWindow)
+		i.mu.Unlock()
 		if err != nil {
 			log.Printf("inputManager: Query pointer failed: %s\n", err)
 			continue

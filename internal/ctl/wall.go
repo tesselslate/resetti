@@ -14,6 +14,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/exp/slices"
 )
 
 // Wall implements a standard "Wall" interface, where the user can see all of
@@ -53,6 +54,7 @@ type projectorState struct {
 	size     cfg.Rectangle
 	window   xproto.Window
 	children []xproto.Window
+	active   bool
 }
 
 // Setup implements Frontend.
@@ -114,7 +116,7 @@ func (w *Wall) FocusChange(win xproto.Window) {
 		log.Printf("FocusChange: Failed to find projector: %s\n", err)
 		return
 	}
-	// TODO
+	w.proj.active = slices.Contains(w.proj.children, win)
 }
 
 // Input implements Frontend.
@@ -131,25 +133,29 @@ func (w *Wall) Input(input Input) {
 		}
 	} else {
 		for _, action := range actions.WallActions {
-			switch action.Type {
-			case cfg.ActionWallFocus:
+			// wall_focus_projector is the only wall action that can be taken
+			// while the projector isn't focused.
+			if action.Type == cfg.ActionWallFocus {
 				if err := w.focusProjector(); err != nil {
 					log.Printf("Input: Failed to focus projector: %s\n", err)
 				}
+			}
+			if w.active != -1 || !w.proj.active {
+				continue
+			}
+
+			switch action.Type {
 			case cfg.ActionWallResetAll:
-				if w.active != -1 || input.Held {
+				if input.Held {
 					continue
 				}
 				w.wallResetAll()
 			case cfg.ActionWallPlayFirstLocked:
-				if w.active != -1 || input.Held {
+				if input.Held {
 					continue
 				}
 				w.playFirstLocked()
 			case cfg.ActionWallLock, cfg.ActionWallPlay, cfg.ActionWallReset, cfg.ActionWallResetOthers:
-				if w.active != -1 {
-					continue
-				}
 				var id int
 				if action.Extra != nil {
 					if input.Held {

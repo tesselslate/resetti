@@ -331,8 +331,8 @@ func (c *Client) QueryKeymap() (Keymap, error) {
 }
 
 // QueryPointer queries the state of the pointer.
-func (c *Client) QueryPointer() (Pointer, error) {
-	reply, err := xproto.QueryPointer(c.conn, c.root).Reply()
+func (c *Client) QueryPointer(win xproto.Window) (Pointer, error) {
+	reply, err := xproto.QueryPointer(c.conn, win).Reply()
 	if err != nil {
 		return Pointer{}, err
 	}
