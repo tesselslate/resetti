@@ -74,13 +74,16 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(w.instances); i += 1 {
 			settings := obs.StringMap{
+				"show_cursor":    true,
+				"capture_window": strconv.Itoa(int(w.instances[i-1].Wid)),
+			}
+			wallSettings := obs.StringMap{
 				"show_cursor":    false,
 				"capture_window": strconv.Itoa(int(w.instances[i-1].Wid)),
 			}
 			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
 			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
-			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), settings, true)
-			settings["show_cursor"] = true
+			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), wallSettings, true)
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
 		}
 	})
