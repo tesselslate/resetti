@@ -109,6 +109,7 @@ type inputManager struct {
 
 // Run creates a new controller with the given configuration profile and runs it.
 func Run(conf *cfg.Profile) error {
+	log.Println("Starting up.")
 	defer log.Println("Done!")
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
@@ -205,6 +206,7 @@ func Run(conf *cfg.Profile) error {
 	c.inputs = inputs
 	go c.inputMgr.Run(inputs)
 
+	log.Printf("Ready.")
 	err = c.run(ctx)
 	if err != nil {
 		fmt.Println("Failed to run:", err)

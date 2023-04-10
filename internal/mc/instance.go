@@ -125,7 +125,6 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Manager: context cancelled")
 			return
 		case id := <-m.pause:
 			state := m.instances[id].state.Type

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -176,6 +177,8 @@ func getCpuTopology() (cpuTopology, error) {
 	topo.populateCores()
 	topo.populateCcx()
 	topo.CcxCount = len(topo.Ccx)
+
+	log.Printf("Found CPU topology: %d CPUs, %d cores, %d CCXs\n", topo.CpuCount, len(topo.Cores), topo.CcxCount)
 
 	return topo, nil
 }
