@@ -8,6 +8,9 @@ reset_count = ""
 # Whether or not instances should automatically unpause when you tab in.
 unpause_focus = true
 
+# The rate (in Hz) to poll for hotkey inputs.
+poll_rate = 100
+
 # The delay section contains delays (in milliseconds) before performing various
 # actions. These defaults are completely arbitrary. Increase relevant delays if
 # you have issues, decrease for lower latency. Depending on your setup, you may
@@ -90,6 +93,10 @@ password = ""
 [wall]
 enabled = false
 
+# Whether or not to confine the mouse pointer to the OBS projector when on the
+# wall.
+confine_pointer = false
+
 # Also known as "wall bypass" on other macros. If enabled, resetting from
 # ingame will immediately bring you to the next locked instance which has
 # finished generating a world (if any.)
@@ -160,12 +167,9 @@ lock_cpus = 10
 
 # Advanced affinity settings.
 [wall.performance.advanced]
-# Whether or not to evenly divide instances between CCXs (core complexes).
-# - You should only use this if you have an AMD CPU with 2 CCXs.
-# - If enabled, the number of CPU cores available to each affinity group
-#   is halved. One affinity group is created per CCX with the given number
-#   of cores.
-ccx_split = false
+# How many groups to subdivide affinity groups into. Set this to the number of
+# CCXs your CPU has. If you don't know what this means, leave it at 1.
+ccx_split = 1
 
 # The number of CPUs (cores, or threads if you have SMT) to allocate to each
 # affinity group.

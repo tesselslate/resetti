@@ -3,10 +3,10 @@ package ctl
 import (
 	"fmt"
 
+	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
-	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // Multi implements a traditional Multi-instance interface, where the user
@@ -26,38 +26,39 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	m.conf = deps.conf
 	m.obs = deps.obs
 
-	if err := m.host.BindInstanceKeys(); err != nil {
-		return fmt.Errorf("bind instance keys: %w", err)
-	}
-
 	m.active = 0
 	m.states = make([]mc.State, len(deps.states))
 	copy(m.states, deps.states)
+
+	m.host.FocusInstance(0)
 	return nil
 }
 
 // FocusChange implements Frontend.
-func (m *Multi) FocusChange(evt x11.FocusEvent) {
+func (m *Multi) FocusChange(win xproto.Window) {
 	// Do nothing.
 }
 
 // Input implements Frontend.
 func (m *Multi) Input(input Input) {
 	actions := m.conf.Keybinds[input.Bind]
+	if input.Held {
+		return
+	}
 	for _, action := range actions.IngameActions {
 		switch action.Type {
 		case cfg.ActionIngameFocus:
 			m.host.FocusInstance(m.active)
 		case cfg.ActionIngameReset:
 			// TODO: Implement moving wall style best instance picker
-			// TODO: Handle reset failure
 			next := (m.active + 1) % len(m.states)
 			current := m.active
-			_ = m.host.ResetInstance(current)
-			m.host.PlayInstance(next)
-			m.active = next
-			m.updateObs()
-			m.host.RunHook(HookReset)
+			if m.host.ResetInstance(current) {
+				m.host.PlayInstance(next)
+				m.active = next
+				m.updateObs()
+				m.host.RunHook(HookReset)
+			}
 		}
 	}
 }

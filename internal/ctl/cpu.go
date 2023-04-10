@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -48,9 +49,14 @@ type CpuManager interface {
 
 // cpuTopology contains information about the user's CPU cache topology.
 type cpuTopology struct {
-	count int   // CPU count
-	l1    []int // Per-CPU L1 cache ID (for core detection)
-	l3    []int // Per-CPU L3 cache ID (for CCX detection)
+	l1 []int // Per-CPU L1 cache ID (for core detection)
+	l3 []int // Per-CPU L3 cache ID (for CCX detection)
+
+	Ccx   [][]int
+	Cores [][]int
+
+	CpuCount int
+	CcxCount int
 }
 
 // priorityUpdate contains an update to the priority of a single instance.
@@ -98,7 +104,7 @@ func NewCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 			false,
 			pids,
 			mgrStates,
-			getCoreIds(&topo),
+			topo.Cores,
 			nil,
 			conf,
 			make(chan priorityUpdate, bufferSize*len(instances)),
@@ -113,41 +119,11 @@ func NewCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 	}
 }
 
-// getCcxIds returns the CPU IDs for each CCX on the user's CPU.
-func getCcxIds(topo *cpuTopology) [2][]int {
-	// TODO: I don't think there are any consumer CPUs with more than 2 CCXs but
-	// that should probably get handled at some point.
-	// TODO: Sort the list to group by core as well (e.g. 0,0,1,1,..), which
-	// might help performance a bit more on groups with less CPUs allocated.
-	var ccx [2][]int
-	for id, l3 := range topo.l3 {
-		ccx[l3] = append(ccx[l3], id)
-	}
-	return ccx
-}
-
-// getCoreIds returns the CPU IDs for each core on the user's CPU.
-func getCoreIds(topo *cpuTopology) [][]int {
-	// TODO: A 128 core maximum is a safe assumption for now, but this function
-	// should just be made better.
-	// XXX: L1 cache IDs can get skipped. On my 5900X, 6-7 are skipped. It goes
-	// from 5 to 8.
-	cores := make([][]int, 128)
-	for id, l1 := range topo.l1 {
-		cores[l1] = append(cores[l1], id)
-	}
-	for i := len(cores) - 1; i >= 0; i -= 1 {
-		if len(cores[i]) == 0 {
-			cores = slices.Delete(cores, i, i+1)
-		}
-	}
-	return cores
-}
-
-// getCpuTopology returns information about the user's CPU cache topology.
+// getCpuTopology returns information about the user's CPU topology.
 func getCpuTopology() (cpuTopology, error) {
-	topo := cpuTopology{count: runtime.NumCPU()}
-	for i := 0; i < topo.count; i += 1 {
+	// Determine CPU cache topology.
+	topo := cpuTopology{CpuCount: runtime.NumCPU()}
+	for i := 0; i < topo.CpuCount; i += 1 {
 		cacheDir := fmt.Sprintf("/sys/devices/system/cpu/cpu%d/cache/", i)
 		l1, l3 := -1, -1
 		entries, err := os.ReadDir(cacheDir)
@@ -196,7 +172,24 @@ func getCpuTopology() (cpuTopology, error) {
 		topo.l1 = append(topo.l1, l1)
 		topo.l3 = append(topo.l3, l3)
 	}
+
+	// Group CPUs into cores and CCXs based on cache topology.
+	topo.populateCores()
+	topo.populateCcx()
+	topo.CcxCount = len(topo.Ccx)
+
+	log.Printf("Found CPU topology: %d CPUs, %d cores, %d CCXs\n", topo.CpuCount, len(topo.Cores), topo.CcxCount)
+
 	return topo, nil
+}
+
+// growLength increases the length of the given slice.
+func growLength[S []E, E any](slice S, to int) S {
+	current := len(slice)
+	if current >= to {
+		return slice
+	}
+	return append(slice, make(S, to-current)...)
 }
 
 // prepareCgroups prompts the user for root privileges and runs the cgroup
@@ -206,12 +199,10 @@ func prepareCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 	var shouldExist []string
 	switch conf.Wall.Perf.Affinity {
 	case "advanced":
-		if conf.Wall.Perf.Adv.CcxSplit {
+		for i := 0; i < conf.Wall.Perf.Adv.CcxSplit; i += 1 {
 			for _, name := range baseNames {
-				shouldExist = append(shouldExist, name+"0", name+"1")
+				shouldExist = append(shouldExist, name+strconv.Itoa(i))
 			}
-		} else {
-			shouldExist = baseNames[:]
 		}
 	case "sequence":
 		for i := 0; i < instances; i += 1 {
@@ -270,6 +261,16 @@ func prepareCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 func writeCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 	switch conf.Wall.Perf.Affinity {
 	case "advanced":
+		if conf.Wall.Perf.Adv.CcxSplit > topo.CcxCount {
+			return fmt.Errorf(
+				"mismatched CCX split and CPU topology (%d vs %d)",
+				conf.Wall.Perf.Adv.CcxSplit,
+				topo.CcxCount,
+			)
+		}
+		if conf.Wall.Perf.Adv.CcxSplit == 0 {
+			conf.Wall.Perf.Adv.CcxSplit = topo.CcxCount
+		}
 		cpus := [...]int{
 			conf.Wall.Perf.Adv.CpusIdle,
 			conf.Wall.Perf.Adv.CpusLow,
@@ -277,35 +278,18 @@ func writeCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 			conf.Wall.Perf.Adv.CpusHigh,
 			conf.Wall.Perf.Adv.CpusActive,
 		}
-		if conf.Wall.Perf.Adv.CcxSplit {
-			ccx := getCcxIds(topo)
-			for id, name := range baseNames {
-				cpuCount := cpus[id]
-				if err := writeCpuSet(name+"0", ccx[0][:cpuCount]); err != nil {
-					return fmt.Errorf("write cpus for %s0: %w", name, err)
-				}
-				if err := writeCpuSet(name+"1", ccx[1][:cpuCount]); err != nil {
-					return fmt.Errorf("write cpus for %s1: %w", name, err)
-				}
-			}
-		} else {
-			// Flatten the per-core CPU list. We want to pick CPUs on the same
-			// core one after another to improve locality.
-			var cpus []int
-			for _, core := range getCoreIds(topo) {
-				cpus = append(cpus, core...)
-			}
-			for id, name := range baseNames {
-				cpuCount := cpus[id]
-				if err := writeCpuSet(name, cpus[:cpuCount]); err != nil {
-					return fmt.Errorf("write cpus for %s: %w", name, err)
+		for id, name := range baseNames {
+			cpuCount := cpus[id]
+			for ccx := 0; ccx < topo.CcxCount; ccx += 1 {
+				group := name + strconv.Itoa(ccx)
+				if err := writeCpuSet(group, topo.Ccx[ccx][:cpuCount]); err != nil {
+					return fmt.Errorf("write cpus for %s: %w", group, err)
 				}
 			}
 		}
 	case "sequence":
-		cores := getCoreIds(topo)
 		for i := 0; i < instances; i += 1 {
-			if err := writeCpuSet(fmt.Sprintf("inst%d", i), cores[i]); err != nil {
+			if err := writeCpuSet(fmt.Sprintf("inst%d", i), topo.Cores[i]); err != nil {
 				return fmt.Errorf("write cpus for inst%d: %w", i, err)
 			}
 		}
@@ -324,4 +308,49 @@ func writeCpuSet(group string, cpus []int) error {
 		[]byte(strings.Join(cpusString, ",")),
 		0644,
 	)
+}
+
+// populateCcx generates a list of CPUs per CCX based on the cache topology.
+func (t *cpuTopology) populateCcx() {
+	// Group by CCX.
+	for id, l3 := range t.l3 {
+		t.Ccx = growLength(t.Ccx, l3+1)
+		t.Ccx[l3] = append(t.Ccx[l3], id)
+	}
+
+	// Sort each CCX by core (L1) ID to improve locality.
+	for _, cpus := range t.Ccx {
+		// Slice headers are captured by value but the data is behind a pointer,
+		// so SortFunc mutates the underlying data for ccx. We don't need to
+		// rewrite the slice headers.
+		slices.SortFunc(cpus, func(a, b int) bool {
+			return t.l1[b] > t.l1[a]
+		})
+	}
+
+	// Delete any empty/skipped CCX IDs.
+	// I hope this doesn't happen on any CPU but I'm sure it will if someone
+	// decides to run this on an EPYC one or something.
+	for i := len(t.Ccx) - 1; i >= 0; i -= 1 {
+		if len(t.Ccx[i]) == 0 {
+			t.Ccx = slices.Delete(t.Ccx, i, i+1)
+		}
+	}
+}
+
+// populateCores generates a list of CPUs per core based on the cache topology.
+func (t *cpuTopology) populateCores() {
+	// L1 cache IDs can get skipped. On my 5900X, 6-7 are skipped. It goes
+	// from 5 to 8.
+	for id, l1 := range t.l1 {
+		t.Cores = growLength(t.Cores, l1+1)
+		t.Cores[l1] = append(t.Cores[l1], id)
+	}
+
+	// Delete any empty/skipped core IDs.
+	for i := len(t.Cores) - 1; i >= 0; i -= 1 {
+		if len(t.Cores[i]) == 0 {
+			t.Cores = slices.Delete(t.Cores, i, i+1)
+		}
+	}
 }

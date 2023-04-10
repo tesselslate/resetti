@@ -20,6 +20,7 @@ import (
 
 type Options struct {
 	Affinity      string
+	CcxCount      int
 	Fancy         bool
 	InstanceCount int
 	ResetCount    int
@@ -35,6 +36,12 @@ func main() {
 		"affinity",
 		"none",
 		"The affinity type to use (sequence, ccx, none).",
+	)
+	flag.IntVar(
+		&opts.CcxCount,
+		"ccx",
+		2,
+		"The number of CCXs to split across for CCX affinity.",
 	)
 	flag.BoolVar(
 		&opts.Fancy,
@@ -102,8 +109,8 @@ func run(opts Options) int {
 	case "ccx":
 		conf.Wall.Enabled = true
 		conf.Wall.Perf.Affinity = "advanced"
-		conf.Wall.Perf.Adv.CcxSplit = true
-		conf.Wall.Perf.Adv.CpusHigh = runtime.NumCPU() / 2
+		conf.Wall.Perf.Adv.CcxSplit = opts.CcxCount
+		conf.Wall.Perf.Adv.CpusHigh = runtime.NumCPU() / opts.CcxCount
 	}
 	mgr, err := mc.NewManager(instances, conf, &x)
 	if err != nil {
@@ -150,12 +157,9 @@ func run(opts Options) int {
 	}
 
 	// Warmup instances
-	for _, instance := range instances {
-		x.Click(instance.Wid)
-	}
 	time.Sleep(100 * time.Millisecond)
 	for _, instance := range instances {
-		x.SendKeyPress(instance.ResetKey.Code, instance.Wid)
+		x.SendKeyPress(instance.ResetKey, instance.Wid)
 	}
 
 	resets := 0
@@ -192,7 +196,7 @@ func run(opts Options) int {
 			case 100:
 				if last.Type != mc.StIdle && next.Type == mc.StIdle {
 					x.SendKeyPress(
-						instances[update.Id].ResetKey.Code,
+						instances[update.Id].ResetKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1
@@ -201,7 +205,7 @@ func run(opts Options) int {
 			case 0:
 				if last.Type != mc.StPreview && next.Type == mc.StPreview {
 					x.SendKeyPress(
-						instances[update.Id].PreviewKey.Code,
+						instances[update.Id].PreviewKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1
@@ -210,7 +214,7 @@ func run(opts Options) int {
 			default:
 				if next.Type != mc.StDirt && next.Progress >= opts.ResetAt && last.Progress < opts.ResetAt {
 					x.SendKeyPress(
-						instances[update.Id].ResetKey.Code,
+						instances[update.Id].ResetKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1

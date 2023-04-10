@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 
@@ -45,9 +46,10 @@ type Obs struct {
 
 // Wall contains the user's wall settings.
 type Wall struct {
-	Enabled     bool `toml:"enabled"`      // Whether to use multi or wall
-	GotoLocked  bool `toml:"goto_locked"`  // Also known as wall bypass
-	GracePeriod int  `toml:"grace_period"` // Milliseconds to wait after preview before a reset can occur
+	Enabled        bool `toml:"enabled"`         // Whether to use multi or wall
+	ConfinePointer bool `toml:"confine_pointer"` // Whether or not to confine the pointer to the projector
+	GotoLocked     bool `toml:"goto_locked"`     // Also known as wall bypass
+	GracePeriod    int  `toml:"grace_period"`    // Milliseconds to wait after preview before a reset can occur
 
 	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution
 	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution
@@ -87,10 +89,7 @@ type Wall struct {
 
 		// Adv affinity settings.
 		Adv struct {
-			// If enabled, halves the amount of CPU cores available to affinity
-			// groups and instead creates double the amount of groups (half for
-			// each CCX.)
-			CcxSplit bool `toml:"ccx_split"`
+			CcxSplit int `toml:"ccx_split"`
 
 			CpusIdle   int `toml:"affinity_idle"`   // CPUs for idle group
 			CpusLow    int `toml:"affinity_low"`    // CPUs for low group
@@ -114,6 +113,7 @@ type Wall struct {
 type Profile struct {
 	ResetCount   string `toml:"reset_count"` // Reset counter path
 	UnpauseFocus bool   `toml:"unpause_focus"`
+	PollRate     int    `toml:"poll_rate"`
 
 	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`
@@ -186,6 +186,14 @@ func MakeProfile(name string) error {
 // validateProfile ensures that the user's configuration profile does not have
 // any illegal or invalid settings.
 func validateProfile(conf *Profile) error {
+	// Make sure polling rate is fine.
+	if conf.PollRate <= 0 {
+		return errors.New("invalid polling rate")
+	}
+	if conf.PollRate <= 10 {
+		log.Println("Warning: Very low poll rate in config. Consider increasing.")
+	}
+
 	// Fix up the sleepbg.lock path.
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -240,11 +248,13 @@ func validateProfile(conf *Profile) error {
 			return fmt.Errorf("invalid lock cpu count %d", seq.LockCpus)
 		}
 	case "advanced":
+		if conf.Wall.Perf.Adv.CcxSplit <= 0 {
+			return fmt.Errorf("invalid ccx split %d", conf.Wall.Perf.Adv.CcxSplit)
+		}
+
 		maxCpu := runtime.NumCPU()
 		adv := conf.Wall.Perf.Adv
-		if adv.CcxSplit {
-			maxCpu /= 2
-		}
+		maxCpu /= adv.CcxSplit
 		if adv.CpusIdle > maxCpu {
 			return fmt.Errorf("invalid idle cpu count (%d > %d)", adv.CpusIdle, maxCpu)
 		}

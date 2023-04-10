@@ -79,9 +79,6 @@ type State struct {
 
 	// The last time the instance reached the world preview screen.
 	LastPreview time.Time
-
-	// The last time the instance was reset.
-	LastReset time.Time
 }
 
 // The StateReader interface provides a method for obtaining the state of an
@@ -335,7 +332,7 @@ func (r *wpstateReader) Process() (State, bool, error) {
 		r.state.Progress = 0
 		r.state.Menu = false
 	case "generating":
-		// XXX: WorldPreview sometimes reports itself as on dirt for one
+		// WorldPreview sometimes reports itself as on dirt for one
 		// state update near the end of world generation. If this occurs,
 		// do not update the state to dirt.
 		progress, err := strconv.Atoi(b)

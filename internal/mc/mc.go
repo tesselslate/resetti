@@ -18,13 +18,13 @@ import (
 // InstanceInfo contains information about how to interact with a Minecraft
 // instance, such as its game directory and window ID.
 type InstanceInfo struct {
-	Id         int           // Instance number
-	Pid        uint32        // Process ID
-	Wid        xproto.Window // Window ID
-	Dir        string        // .minecraft directory
-	Version    int           // Minecraft version
-	ResetKey   x11.Key       // Atum reset key
-	PreviewKey x11.Key       // Leave preview key
+	Id         int            // Instance number
+	Pid        uint32         // Process ID
+	Wid        xproto.Window  // Window ID
+	Dir        string         // .minecraft directory
+	Version    int            // Minecraft version
+	ResetKey   xproto.Keycode // Atum reset key
+	PreviewKey xproto.Keycode // Leave preview key
 }
 
 // FindInstances returns a sorted list of all running Minecraft instances,
@@ -115,18 +115,16 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 		if keyName == "unknown" {
 			continue
 		}
-		key := x11.Key{}
 		keycode, ok := x11.KeycodesMc[keyName]
 		if !ok {
 			return InstanceInfo{}, fmt.Errorf("unknown keycode %s", keyName)
 		}
-		key.Code = keycode
 
 		// Store it.
 		if isResetKey {
-			resetKey = key
+			resetKey = keycode
 		} else {
-			previewKey = key
+			previewKey = keycode
 		}
 	}
 
