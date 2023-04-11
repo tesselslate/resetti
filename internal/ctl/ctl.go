@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -212,6 +213,45 @@ func Run(conf *cfg.Profile) error {
 		fmt.Println("Failed to run:", err)
 	}
 	return nil
+}
+
+// createSleepbgLock creates the sleepbg.lock file.
+func createSleepbgLock(conf *cfg.Profile) {
+	file, err := os.Create(conf.Wall.Perf.SleepbgPath)
+	if err != nil {
+		log.Printf("Failed to create sleepbg.lock: %s\n", err)
+	} else {
+		_ = file.Close()
+	}
+}
+
+// deleteSleepbgLock deletes the sleepbg.lock file.
+func deleteSleepbgLock(conf *cfg.Profile, ignoreErrors bool) {
+	err := os.Remove(conf.Wall.Perf.SleepbgPath)
+	if err != nil && !ignoreErrors {
+		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
+	}
+}
+
+// prepareObs hides all lock sources and sets the settings for each instance
+// capture.
+func prepareObs(o *obs.Client, instances []mc.InstanceInfo) error {
+	return o.Batch(obs.SerialRealtime, func(b *obs.Batch) {
+		for i := 1; i <= len(instances); i += 1 {
+			settings := obs.StringMap{
+				"show_cursor":    true,
+				"capture_window": strconv.Itoa(int(instances[i-1].Wid)),
+			}
+			wallSettings := obs.StringMap{
+				"show_cursor":    false,
+				"capture_window": strconv.Itoa(int(instances[i-1].Wid)),
+			}
+			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
+			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
+			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), wallSettings, true)
+			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
+		}
+	})
 }
 
 // FocusInstance switches focus to the given instance.

@@ -1,12 +1,8 @@
 package ctl
 
 import (
-	"errors"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jezek/xgb/xproto"
@@ -14,7 +10,6 @@ import (
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
-	"golang.org/x/exp/slices"
 )
 
 // Wall implements a standard "Wall" interface, where the user can see all of
@@ -25,37 +20,16 @@ type Wall struct {
 	obs  *obs.Client
 	x    *x11.Client
 
-	instances []mc.InstanceInfo
-	states    []mc.State
-	locks     []bool
-	active    int // Active instance. -1 is a sentinel for wall
+	instances             []mc.InstanceInfo // List of instance metadata
+	states                []mc.State        // List of instance states
+	locks                 []bool            // Which instances are locked
+	active                int               // Active instance. -1 is a sentinel for wall
+	instWidth, instHeight int               // The size of each instance on the OBS scene.
+	wallWidth, wallHeight int               // The size of the wall, in instances.
+	lastMouseId           int               // The ID of the last instance a mouse action was done on.
 
-	proj  projectorState
-	grab  bool
+	proj  ProjectorController
 	hider hider
-
-	lastMouseId int
-}
-
-// projectorState contains information about the state of the projector.
-type projectorState struct {
-	// Wall size (in instances)
-	wallWidth, wallHeight int
-
-	// Instance size (in pixels)
-	instWidth, instHeight int
-
-	// Projector window size
-	winWidth, winHeight int
-
-	// OBS canvas size
-	baseWidth, baseHeight int
-
-	// Section of the projector window that contains the wall
-	size     cfg.Rectangle
-	window   xproto.Window
-	children []xproto.Window
-	active   bool
 }
 
 // Setup implements Frontend.
@@ -72,33 +46,19 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	w.locks = make([]bool, len(deps.states))
 	copy(w.instances, deps.instances)
 	copy(w.states, deps.states)
-
-	err := w.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
-		for i := 1; i <= len(w.instances); i += 1 {
-			settings := obs.StringMap{
-				"show_cursor":    true,
-				"capture_window": strconv.Itoa(int(w.instances[i-1].Wid)),
-			}
-			wallSettings := obs.StringMap{
-				"show_cursor":    false,
-				"capture_window": strconv.Itoa(int(w.instances[i-1].Wid)),
-			}
-			b.SetItemVisibility("Wall", fmt.Sprintf("Lock %d", i), false)
-			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
-			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), wallSettings, true)
-			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
-		}
-	})
-	if err != nil {
+	if err := w.proj.Setup(deps.conf, deps.obs, deps.x); err != nil {
+		return fmt.Errorf("projector setup: %w", err)
+	}
+	if err := prepareObs(deps.obs, deps.instances); err != nil {
 		return fmt.Errorf("obs setup: %w", err)
 	}
-	if err = w.getWallSize(); err != nil {
+	if err := w.getWallSize(); err != nil {
 		return fmt.Errorf("get wall size: %w", err)
 	}
-	if err = w.focusProjector(); err != nil {
+	if err := w.proj.Focus(); err != nil {
 		return fmt.Errorf("focus projector: %w", err)
 	}
-	if err = w.obs.SetScene("Wall"); err != nil {
+	if err := w.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
 	}
 	if w.conf.Wall.Hiding.ShowMethod != "" {
@@ -106,42 +66,16 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 		go w.hider.Run()
 	}
 
-	w.deleteSleepbgLock(true)
+	// Often, the user will not have an existing sleepbg.lock file from their
+	// last session, so ignore any errors on the first deletion.
+	deleteSleepbgLock(w.conf, true)
 
 	return nil
 }
 
 // FocusChange implements Frontend.
 func (w *Wall) FocusChange(win xproto.Window) {
-	if err := w.findProjector(); err != nil {
-		log.Printf("FocusChange: Failed to find projector: %s\n", err)
-		return
-	}
-
-	// HACK: We don't actually need the pointer grab here, but if we don't grab
-	// it then OBS decides to for some reason. This prevents the game from being
-	// able to grab the pointer quickly. There's no code in OBS for grabbing the
-	// pointer, so it's likely somewhere in Qt and I'm not interested in digging
-	// into more C(++) code at the moment.
-	w.proj.active = slices.Contains(w.proj.children, win)
-	if w.grab && !w.proj.active {
-		w.ungrabPointer()
-	} else if !w.grab && w.proj.active {
-		// OBS can still be grabbing the pointer, so retry with backoff.
-		timeout := time.Millisecond
-		for tries := 1; tries <= 5; tries += 1 {
-			if err := w.x.GrabPointer(w.proj.window, w.conf.Wall.ConfinePointer); err != nil {
-				log.Printf("Pointer grab failed: (%d/5): %s\n", tries, err)
-			} else {
-				log.Println("Grabbed pointer.")
-				w.grab = true
-				return
-			}
-			time.Sleep(timeout)
-			timeout *= 4
-		}
-		log.Printf("Pointer grab failed.")
-	}
+	w.proj.FocusChange(win)
 }
 
 // Input implements Frontend.
@@ -167,11 +101,11 @@ func (w *Wall) Input(input Input) {
 				if input.Held {
 					continue
 				}
-				if err := w.focusProjector(); err != nil {
+				if err := w.proj.Focus(); err != nil {
 					log.Printf("Input: Failed to focus projector: %s\n", err)
 				}
 			}
-			if w.active != -1 || !w.proj.active {
+			if w.active != -1 || !w.proj.Active {
 				continue
 			}
 
@@ -195,16 +129,14 @@ func (w *Wall) Input(input Input) {
 					id = *action.Extra
 				} else {
 					// Only accept mouse-based inputs if the projector is focused.
-					if !w.proj.active {
+					if !w.proj.Active {
 						continue
 					}
 					mouseId, ok := w.getInstanceId(input)
 					if !ok {
 						// Ungrab the pointer if the user clicks outside of
 						// the projector.
-						if w.grab {
-							w.ungrabPointer()
-						}
+						w.proj.Unfocus()
 						continue
 					}
 					if input.Held && mouseId == w.lastMouseId {
@@ -241,82 +173,15 @@ func (w *Wall) Update(update mc.Update) {
 	w.hider.Update(update)
 }
 
-// createSleepbgLock creates the sleepbg.lock file.
-func (w *Wall) createSleepbgLock() {
-	file, err := os.Create(w.conf.Wall.Perf.SleepbgPath)
-	if err != nil {
-		log.Printf("Failed to create sleepbg.lock: %s\n", err)
-	} else {
-		_ = file.Close()
-	}
-}
-
-// deleteSleepbgLock deletes the sleepbg.lock file.
-func (w *Wall) deleteSleepbgLock(ignoreErrors bool) {
-	err := os.Remove(w.conf.Wall.Perf.SleepbgPath)
-	if err != nil && !ignoreErrors {
-		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
-	}
-}
-
-// findProjector finds the wall projector.
-func (w *Wall) findProjector() error {
-	windows := w.x.GetWindowList()
-	for _, win := range windows {
-		title, err := w.x.GetWindowTitle(win)
-		if err != nil {
-			continue
-		}
-		if strings.Contains(title, "Projector (Scene) - Wall") {
-			w.proj.window = win
-			width, height, err := w.x.GetWindowSize(win)
-			if err != nil {
-				return fmt.Errorf("get projector size: %w", err)
-			}
-			w.proj.children = w.x.GetWindowChildren(win)
-
-			// Calculate projector letterboxing. Reference:
-			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/display-helpers.hpp#L23
-			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/window-projector.cpp#L180
-			w.proj.winWidth, w.proj.winHeight = int(width), int(height)
-			baseRatio := float64(w.proj.baseWidth) / float64(w.proj.baseHeight)
-			projRatio := float64(w.proj.winWidth) / float64(w.proj.winHeight)
-			var scale float64
-			if projRatio > baseRatio {
-				scale = float64(w.proj.winHeight) / float64(w.proj.baseHeight)
-			} else {
-				scale = float64(w.proj.winWidth) / float64(w.proj.baseWidth)
-			}
-			w.proj.size.X = uint32(w.proj.winWidth/2) - (w.proj.size.W / 2)
-			w.proj.size.Y = uint32(w.proj.winHeight/2) - (w.proj.size.H / 2)
-			w.proj.size.W = uint32(scale * float64(w.proj.baseWidth))
-			w.proj.size.H = uint32(scale * float64(w.proj.baseHeight))
-			w.proj.instWidth, w.proj.instHeight = int(w.proj.size.W)/w.proj.wallWidth, int(w.proj.size.H)/w.proj.wallHeight
-			return nil
-		}
-	}
-	return errors.New("no projector found")
-}
-
-// focusProjector finds the wall projector and focuses it.
-func (w *Wall) focusProjector() error {
-	if err := w.findProjector(); err != nil {
-		return fmt.Errorf("find projector: %w", err)
-	}
-	if err := w.x.FocusWindow(w.proj.window); err != nil {
-		return fmt.Errorf("focus projector: %w", err)
-	}
-	return nil
-}
-
 // getInstanceId returns the ID of the instance at the specified coordinates.
 func (w *Wall) getInstanceId(input Input) (id int, ok bool) {
-	x := (input.X - int(w.proj.size.X)) / w.proj.instWidth
-	y := (input.Y - int(w.proj.size.Y)) / w.proj.instHeight
-	if x < 0 || y < 0 || x >= w.proj.wallWidth || y >= w.proj.wallHeight {
+	x, y := w.proj.ToVideo(input.X, input.Y)
+	x /= w.instWidth
+	y /= w.instHeight
+	if x < 0 || y < 0 || x >= w.wallWidth || y >= w.wallHeight {
 		return 0, false
 	}
-	id = y*w.proj.wallWidth + x
+	id = y*w.wallWidth + x
 	return id, id < len(w.instances)
 }
 
@@ -342,12 +207,12 @@ func (w *Wall) getWallSize() error {
 		xs = appendUnique(xs, x)
 		ys = appendUnique(ys, y)
 	}
-	w.proj.wallWidth, w.proj.wallHeight = len(xs), len(ys)
+	w.wallWidth, w.wallHeight = len(xs), len(ys)
 	width, height, err := w.obs.GetCanvasSize()
 	if err != nil {
 		return err
 	}
-	w.proj.baseWidth, w.proj.baseHeight = width, height
+	w.instWidth, w.instHeight = width/w.wallWidth, height/w.wallHeight
 	return nil
 }
 
@@ -358,10 +223,10 @@ func (w *Wall) resetIngame() {
 	if w.conf.Wall.GotoLocked && w.playFirstLocked() {
 		return
 	}
-	if err := w.focusProjector(); err != nil {
+	if err := w.proj.Focus(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
-	w.deleteSleepbgLock(false)
+	deleteSleepbgLock(w.conf, false)
 	w.obs.SetSceneAsync("Wall")
 	w.host.RunHook(HookReset)
 }
@@ -387,16 +252,6 @@ func (w *Wall) setLocked(id int, lock bool) {
 	w.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), lock)
 }
 
-// ungrabPointer ungrabs the pointer.
-func (w *Wall) ungrabPointer() {
-	if err := w.x.UngrabPointer(); err != nil {
-		log.Printf("Failed to ungrab pointer: %s\n", err)
-	} else {
-		log.Println("Ungrabbed pointer.")
-		w.grab = false
-	}
-}
-
 // wallLock toggles the lock state of the given instance.
 func (w *Wall) wallLock(id int) {
 	lock := !w.locks[id]
@@ -412,9 +267,7 @@ func (w *Wall) wallLock(id int) {
 // if the instance is in a valid state for playing.
 func (w *Wall) wallPlay(id int) {
 	w.active = id
-	if w.grab {
-		w.ungrabPointer()
-	}
+	w.proj.Unfocus()
 	w.host.PlayInstance(id)
 
 	w.host.RunHook(HookWallPlay)
@@ -427,7 +280,7 @@ func (w *Wall) wallPlay(id int) {
 	if w.locks[id] {
 		w.setLocked(id, false)
 	}
-	w.createSleepbgLock()
+	createSleepbgLock(w.conf)
 }
 
 // wallReset resets the given instance.

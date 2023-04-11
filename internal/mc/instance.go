@@ -87,9 +87,8 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 	}
 
 	// Warmup instances.
-	for i, inst := range infos {
+	for _, inst := range infos {
 		x.Click(inst.Wid)
-		m.setResolution(i, conf.Wall.StretchRes)
 	}
 
 	return &m, nil
