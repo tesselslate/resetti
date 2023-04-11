@@ -120,8 +120,7 @@ play_res = "1920x1080+0,0"
 use_f1 = false
 
 # Instance hiding makes instances invisible on the wall while they are on the
-# dirt screen, which can be used to get rid of the chunk map in the center of
-# the screen and give a cleaner look.
+# dirt screen.
 [wall.hiding]
 # What criteria to use to determine when to make an instance visible again.
 # Leave blank to disable.
@@ -136,6 +135,34 @@ show_method = "percentage"
 # When to show the instances. Refer to the above option for information on what
 # this does.
 show_at = 20
+
+# Instance moving settings.
+[wall.moving]
+# Whether or not to use moving.
+enabled = false
+
+# The list of main instance groups. Instances enter the last group and move
+# towards the first group as you reset. You do not need enough groups to show
+# all instances on screen at once.
+#
+# Refer to the documentation for examples on various moving setups. TODO
+[[wall.moving.groups]]
+# The position on the projector.
+position = "1920x880+0,0"
+
+# The size of the group (in instances.)
+width = 2
+height = 2
+
+# The locked instance group. You can delete this if you want to have no locked
+# instances on the projector.
+[wall.moving.locks]
+# The position on the projector.
+position = "1920x200+0,880"
+
+# The size of the group (in instances.)
+width = 6
+height = 1
 
 # This section contains settings for optimizing CPU utilization while resetting.
 [wall.performance]
