@@ -51,6 +51,7 @@ func (m *Multi) Input(input Input) {
 			m.host.FocusInstance(m.active)
 		case cfg.ActionIngameReset:
 			// TODO: Implement moving wall style best instance picker
+			// TODO sleepbg lock
 			next := (m.active + 1) % len(m.states)
 			current := m.active
 			if m.host.ResetInstance(current) {

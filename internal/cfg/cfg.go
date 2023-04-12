@@ -67,6 +67,13 @@ type Wall struct {
 		ShowAt int `toml:"show_at"`
 	} `toml:"hiding"`
 
+	// Instance moving settings.
+	Moving struct {
+		Enabled bool    `toml:"enabled"`
+		Locks   *Group  `toml:"locks"`  // Locked group
+		Groups  []Group `toml:"groups"` // Normal groups
+	} `toml:"moving"`
+
 	// Performance settings.
 	Perf struct {
 		// Optional. Overrides the default sleepbg.lock path ($HOME)
@@ -120,6 +127,15 @@ type Profile struct {
 	Keybinds Keybinds `toml:"keybinds"`
 	Obs      Obs      `toml:"obs"`
 	Wall     Wall     `toml:"wall"`
+}
+
+// Group represents a group of instances for moving.
+type Group struct {
+	// The space this group occupies on the wall scene.
+	Space Rectangle `toml:"position"`
+
+	Width  uint32 `toml:"width"`  // Width of the group, in instances.
+	Height uint32 `toml:"height"` // Height of the group, in instances.
 }
 
 // Rectangle is a rectangle. That's it.
@@ -219,6 +235,8 @@ func validateProfile(conf *Profile) error {
 	if (stretch || unstretch) && (!stretch || !unstretch) {
 		return errors.New("need both stretched and active resolution")
 	}
+
+	// TODO moving
 
 	switch conf.Wall.Hiding.ShowMethod {
 	case "":
