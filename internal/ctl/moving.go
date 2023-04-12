@@ -40,13 +40,6 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	m.obs = deps.obs
 	m.x = deps.x
 
-	// Fill the queue with all instances.
-	for i := range deps.instances {
-		m.queue = append(m.queue, i)
-	}
-	m.layout()
-	m.render()
-
 	m.active = -1
 	m.lastHitbox = cfg.Rectangle{}
 	m.instances = make([]mc.InstanceInfo, len(deps.instances))
@@ -69,6 +62,13 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 		m.hider = newHider(deps.conf, deps.obs, deps.states)
 		go m.hider.Run()
 	}
+
+	// Fill the queue with all instances.
+	for i := range deps.instances {
+		m.queue = append(m.queue, i)
+	}
+	m.layout()
+	m.render()
 	return nil
 }
 
