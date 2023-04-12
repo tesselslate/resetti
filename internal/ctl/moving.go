@@ -410,6 +410,7 @@ func (m *MovingWall) wallResetAll() {
 			m.wallReset(m.queue[i])
 		}
 	}
+	m.collapseEmpty()
 	log.Printf("Reset all in %.2f ms\n", float64(time.Since(start).Microseconds())/1000)
 }
 
