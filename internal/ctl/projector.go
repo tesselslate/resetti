@@ -58,6 +58,12 @@ func (p *ProjectorController) FocusChange(win xproto.Window) {
 	}
 }
 
+// InBounds returns whether or not the given coordinates are outside the bounds
+// of the projector window.
+func (p *ProjectorController) InBounds(x, y int) bool {
+	return x >= 0 && y >= 0 && x <= p.winWidth && y <= p.winHeight
+}
+
 // Setup sets up the ProjectorController.
 func (p *ProjectorController) Setup(conf *cfg.Profile, obs *obs.Client, x *x11.Client) error {
 	p.conf = conf

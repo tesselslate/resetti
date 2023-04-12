@@ -68,7 +68,7 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 
 	// Often, the user will not have an existing sleepbg.lock file from their
 	// last session, so ignore any errors on the first deletion.
-	deleteSleepbgLock(w.conf, true)
+	w.host.DeleteSleepbgLock(true)
 
 	return nil
 }
@@ -132,11 +132,13 @@ func (w *Wall) Input(input Input) {
 					if !w.proj.Active {
 						continue
 					}
+					// Ungrab the pointer if the user clicks outside of
+					// the projector.
+					if !w.proj.InBounds(input.X, input.Y) {
+						w.proj.Unfocus()
+					}
 					mouseId, ok := w.getInstanceId(input)
 					if !ok {
-						// Ungrab the pointer if the user clicks outside of
-						// the projector.
-						w.proj.Unfocus()
 						continue
 					}
 					if input.Held && mouseId == w.lastMouseId {
@@ -170,6 +172,7 @@ func (w *Wall) Input(input Input) {
 // Update implements Frontend.
 func (w *Wall) Update(update mc.Update) {
 	w.states[update.Id] = update.State
+	// TODO guard
 	w.hider.Update(update)
 }
 
@@ -226,12 +229,12 @@ func (w *Wall) resetIngame() {
 	if err := w.proj.Focus(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
-	deleteSleepbgLock(w.conf, false)
+	w.host.DeleteSleepbgLock(false)
 	w.obs.SetSceneAsync("Wall")
 	w.host.RunHook(HookReset)
 }
 
-// playFirstLocked plays the first instance that is locked
+// playFirstLocked plays the first idle, locked instance.
 func (w *Wall) playFirstLocked() bool {
 	for id, state := range w.states {
 		if state.Type == mc.StIdle && w.locks[id] {
@@ -280,7 +283,7 @@ func (w *Wall) wallPlay(id int) {
 	if w.locks[id] {
 		w.setLocked(id, false)
 	}
-	createSleepbgLock(w.conf)
+	w.host.CreateSleepbgLock()
 }
 
 // wallReset resets the given instance.

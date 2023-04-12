@@ -172,7 +172,11 @@ func Run(conf *cfg.Profile) error {
 	}
 
 	if c.conf.Wall.Enabled {
-		c.frontend = &Wall{}
+		if c.conf.Wall.Moving.Enabled {
+			c.frontend = &MovingWall{}
+		} else {
+			c.frontend = &Wall{}
+		}
 	} else {
 		c.frontend = &Multi{}
 	}
@@ -215,24 +219,6 @@ func Run(conf *cfg.Profile) error {
 	return nil
 }
 
-// createSleepbgLock creates the sleepbg.lock file.
-func createSleepbgLock(conf *cfg.Profile) {
-	file, err := os.Create(conf.Wall.Perf.SleepbgPath)
-	if err != nil {
-		log.Printf("Failed to create sleepbg.lock: %s\n", err)
-	} else {
-		_ = file.Close()
-	}
-}
-
-// deleteSleepbgLock deletes the sleepbg.lock file.
-func deleteSleepbgLock(conf *cfg.Profile, ignoreErrors bool) {
-	err := os.Remove(conf.Wall.Perf.SleepbgPath)
-	if err != nil && !ignoreErrors {
-		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
-	}
-}
-
 // prepareObs hides all lock sources and sets the settings for each instance
 // capture.
 func prepareObs(o *obs.Client, instances []mc.InstanceInfo) error {
@@ -252,6 +238,24 @@ func prepareObs(o *obs.Client, instances []mc.InstanceInfo) error {
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
 		}
 	})
+}
+
+// CreateSleepbgLock creates the sleepbg.lock file.
+func (c *Controller) CreateSleepbgLock() {
+	file, err := os.Create(c.conf.Wall.Perf.SleepbgPath)
+	if err != nil {
+		log.Printf("Failed to create sleepbg.lock: %s\n", err)
+	} else {
+		_ = file.Close()
+	}
+}
+
+// DeleteSleepbgLock deletes the sleepbg.lock file.
+func (c *Controller) DeleteSleepbgLock(ignoreErrors bool) {
+	err := os.Remove(c.conf.Wall.Perf.SleepbgPath)
+	if err != nil && !ignoreErrors {
+		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
+	}
 }
 
 // FocusInstance switches focus to the given instance.

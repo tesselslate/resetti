@@ -68,8 +68,9 @@ type Wall struct {
 
 	// Instance moving settings.
 	Moving struct {
-		Locks  *Group  `toml:"locks"`  // Locked group
-		Groups []Group `toml:"groups"` // Normal groups
+		Enabled bool    `toml:"enabled"`
+		Locks   *Group  `toml:"locks"`  // Locked group
+		Groups  []Group `toml:"groups"` // Normal groups
 	} `toml:"moving"`
 
 	// Performance settings.
