@@ -317,6 +317,7 @@ func (m *MovingWall) setLocked(id int, lock bool) {
 		m.locks = append(m.locks, id)
 	} else {
 		m.locks = slices.Delete(m.locks, idx, idx+1)
+		m.queue = append(m.queue, id)
 	}
 	m.host.SetPriority(id, lock)
 }
