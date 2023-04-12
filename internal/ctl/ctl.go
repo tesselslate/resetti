@@ -128,10 +128,6 @@ func Run(conf *cfg.Profile) error {
 		HookWallReset: c.conf.Hooks.WallReset,
 	}
 
-	signals := make(chan os.Signal, 8)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
-	c.signals = signals
-
 	x, err := x11.NewClient()
 	if err != nil {
 		return fmt.Errorf("(init) create X client: %w", err)
@@ -210,6 +206,10 @@ func Run(conf *cfg.Profile) error {
 	c.inputMgr = inputManager{c.conf, c.x, nil, 0, sync.Mutex{}}
 	c.inputs = inputs
 	go c.inputMgr.Run(inputs)
+
+	signals := make(chan os.Signal, 8)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
+	c.signals = signals
 
 	log.Printf("Ready.")
 	err = c.run(ctx)

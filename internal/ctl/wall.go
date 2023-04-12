@@ -3,6 +3,7 @@ package ctl
 import (
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/jezek/xgb/xproto"
@@ -188,32 +189,93 @@ func (w *Wall) getInstanceId(input Input) (id int, ok bool) {
 	return id, id < len(w.instances)
 }
 
-// getWallSize finds the size of the wall and stores it in the Wall object.
+// getWallSize checks that the layout of the wall is valid and finds the size
+// of the wall in instances. If it is not valid, it prompts the user to update
+// the wall layout.
 func (w *Wall) getWallSize() error {
-	appendUnique := func(slice []float64, item float64) []float64 {
-		for _, v := range slice {
-			if item == v {
-				return slice
-			}
-		}
-		return append(slice, item)
-	}
-	var xs, ys []float64
+	// Get the wall size (assuming the layout is correct.)
+	var xs []float64
+	var ys []float64
+	var width, height int
+	validLayout := true
 	for i := 1; i <= len(w.instances); i += 1 {
-		x, y, _, _, err := w.obs.GetSceneItemTransform(
-			"Wall",
-			fmt.Sprintf("Wall MC %d", i),
-		)
+		x, y, w, h, err := w.obs.GetSceneItemTransform("Wall", fmt.Sprintf("Wall MC %d", i))
 		if err != nil {
 			return err
 		}
-		xs = appendUnique(xs, x)
-		ys = appendUnique(ys, y)
+		xs = append(xs, x)
+		ys = append(ys, y)
+		if (width != 0 && int(w) != width) || (height != 0 && int(h) != height) {
+			validLayout = false
+			break
+		}
+		width, height = int(w), int(h)
 	}
-	w.wallWidth, w.wallHeight = len(xs), len(ys)
+
+	// Check that the layout is correct.
+	if validLayout {
+		w.wallWidth = w.proj.BaseWidth / width
+		w.wallHeight = w.proj.BaseHeight / height
+		const epsilon = 0.01
+
+		for i := 0; i < len(w.instances); i += 1 {
+			x := i % w.wallWidth
+			y := i / w.wallWidth
+			cx := math.Abs(xs[i]-float64(width*x)) <= epsilon
+			cy := math.Abs(ys[i]-float64(height*y)) <= epsilon
+			if !cx || !cy {
+				validLayout = false
+				break
+			}
+		}
+	}
+
+	if validLayout {
+		w.instWidth = w.proj.BaseWidth / w.wallWidth
+		w.instHeight = w.proj.BaseHeight / w.wallHeight
+		log.Printf("Found wall size: %dx%d\n", w.wallWidth, w.wallHeight)
+		return nil
+	} else {
+		return w.promptWallSize()
+	}
+}
+
+// promptWallSize prompts the user to enter a wall size and readjusts the
+// layout automatically.
+func (w *Wall) promptWallSize() error {
+	fmt.Println("It seems like your wall layout is incorrect. Please enter the new wall size you would like to adjust to. (WxH)")
+	var width, height int
+	for {
+		n, err := fmt.Scanf("%dx%d", &width, &height)
+		if n == 2 {
+			if width*height >= len(w.instances) {
+				break
+			}
+			fmt.Printf("That wall size is not big enough. You need to fit %d instances.\n", len(w.instances))
+		}
+		if err != nil {
+			fmt.Println("There was an error reading your input:", err)
+		}
+		fmt.Println("Your input did not follow the correct format. (WxH)")
+	}
+	w.wallWidth, w.wallHeight = width, height
 	w.instWidth = w.proj.BaseWidth / w.wallWidth
 	w.instHeight = w.proj.BaseHeight / w.wallHeight
-	return nil
+	err := w.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
+		for i := range w.instances {
+			x := i % width
+			y := i / width
+			b.SetItemBounds(
+				"Wall",
+				fmt.Sprintf("Wall MC %d", i+1),
+				float64(x*w.instWidth),
+				float64(y*w.instHeight),
+				float64(w.instWidth),
+				float64(w.instHeight),
+			)
+		}
+	})
+	return err
 }
 
 // resetIngame resets the active instance.
