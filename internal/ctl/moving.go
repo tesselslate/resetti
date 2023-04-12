@@ -23,7 +23,7 @@ type MovingWall struct {
 
 	instances  []mc.InstanceInfo     // List of instance metadata
 	states     []mc.State            // List of instance states
-	queue      []int                 // Instance queue.
+	queue      []int                 // Instance queue. -1 marks empty.
 	locks      []int                 // List of locked instances.
 	hitboxes   map[cfg.Rectangle]int // Each instance's location on the projector.
 	active     int                   // Active instance. -1 is a sentinel for wall
@@ -194,6 +194,17 @@ func (m *MovingWall) Update(update mc.Update) {
 	}
 }
 
+// collapseEmpty removes all empty instances from the queue.
+func (m *MovingWall) collapseEmpty() {
+	var newQueue []int
+	for _, id := range m.queue {
+		if id != -1 {
+			newQueue = append(newQueue, id)
+		}
+	}
+	m.queue = newQueue
+}
+
 // getHitbox gets the hitbox the given input intersects with, if any.
 func (m *MovingWall) getHitbox(input Input) (cfg.Rectangle, bool) {
 	x, y := m.proj.ToVideo(input.X, input.Y)
@@ -236,6 +247,9 @@ func (m *MovingWall) layoutGroup(group cfg.Group, instances []int) {
 	instWidth := group.Space.W / group.Width
 	instHeight := group.Space.H / group.Height
 	for idx, inst := range instances {
+		if inst == -1 {
+			continue
+		}
 		x := uint32(idx) % group.Width
 		y := uint32(idx) / group.Width
 		if y >= group.Height {
@@ -345,7 +359,8 @@ func (m *MovingWall) wallLock(id int) {
 	lock := !slices.Contains(m.locks, id)
 	m.setLocked(id, lock)
 	if lock {
-		m.removeFromQueue(id)
+		idx := slices.Index(m.queue, id)
+		m.queue[idx] = -1
 		m.host.RunHook(HookLock)
 	} else {
 		m.host.RunHook(HookUnlock)
@@ -379,6 +394,7 @@ func (m *MovingWall) wallReset(id int) {
 		m.removeFromQueue(id)
 		m.host.RunHook(HookWallReset)
 	}
+	m.collapseEmpty()
 }
 
 // wallResetAll resets all instances in the first group.
@@ -390,7 +406,9 @@ func (m *MovingWall) wallResetAll() {
 		to = len(m.queue)
 	}
 	for i := to - 1; i >= 0; i -= 1 {
-		m.wallReset(m.queue[i])
+		if m.queue[i] != -1 {
+			m.wallReset(m.queue[i])
+		}
 	}
 	log.Printf("Reset all in %.2f ms\n", float64(time.Since(start).Microseconds())/1000)
 }
@@ -406,6 +424,8 @@ func (m *MovingWall) wallResetOthers(id int) {
 		to = len(m.queue)
 	}
 	for i := to - 1; i >= 0; i -= 1 {
-		m.wallReset(m.queue[i])
+		if m.queue[i] != -1 {
+			m.wallReset(m.queue[i])
+		}
 	}
 }
