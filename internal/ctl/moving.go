@@ -254,8 +254,8 @@ func (m *MovingWall) layoutGroup(group cfg.Group, instances []int) {
 // playFirstLocked plays the first idle, locked instance. If no instance fits
 // the criteria, it returns false. Otherwise, it returns true.
 func (m *MovingWall) playFirstLocked() bool {
-	for id, state := range m.states {
-		if state.Type == mc.StIdle && slices.Contains(m.locks, id) {
+	for _, id := range m.locks {
+		if m.states[id].Type == mc.StIdle {
 			m.wallPlay(id)
 			return true
 		}
