@@ -211,11 +211,8 @@ func (w *Wall) getWallSize() error {
 		ys = appendUnique(ys, y)
 	}
 	w.wallWidth, w.wallHeight = len(xs), len(ys)
-	width, height, err := w.obs.GetCanvasSize()
-	if err != nil {
-		return err
-	}
-	w.instWidth, w.instHeight = width/w.wallWidth, height/w.wallHeight
+	w.instWidth = w.proj.BaseWidth / w.wallWidth
+	w.instHeight = w.proj.BaseHeight / w.wallHeight
 	return nil
 }
 

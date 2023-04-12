@@ -24,7 +24,7 @@ type ProjectorController struct {
 	Active bool // Whether the projector is focused
 
 	winWidth, winHeight   int             // Projector window size
-	baseWidth, baseHeight int             // OBS canvas size
+	BaseWidth, BaseHeight int             // OBS canvas size
 	display               cfg.Rectangle   // Visible area of the projector window
 	scale                 float64         // The scale of the window size to display area.
 	window                xproto.Window   // Projector window ID
@@ -73,7 +73,7 @@ func (p *ProjectorController) Setup(conf *cfg.Profile, obs *obs.Client, x *x11.C
 	if err != nil {
 		return fmt.Errorf("get video size: %w", err)
 	}
-	p.baseWidth, p.baseHeight = width, height
+	p.BaseWidth, p.BaseHeight = width, height
 	if err := p.findProjector(); err != nil {
 		return fmt.Errorf("find projector: %w", err)
 	}
@@ -121,15 +121,15 @@ func (p *ProjectorController) findProjector() error {
 			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/display-helpers.hpp#L23
 			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/window-projector.cpp#L180
 			p.winWidth, p.winHeight = int(width), int(height)
-			baseRatio := float64(p.baseWidth) / float64(p.baseHeight)
+			baseRatio := float64(p.BaseWidth) / float64(p.BaseHeight)
 			projRatio := float64(p.winWidth) / float64(p.winHeight)
 			if projRatio > baseRatio {
-				p.scale = float64(p.winHeight) / float64(p.baseHeight)
+				p.scale = float64(p.winHeight) / float64(p.BaseHeight)
 			} else {
-				p.scale = float64(p.winWidth) / float64(p.baseWidth)
+				p.scale = float64(p.winWidth) / float64(p.BaseWidth)
 			}
-			p.display.W = uint32(p.scale * float64(p.baseWidth))
-			p.display.H = uint32(p.scale * float64(p.baseHeight))
+			p.display.W = uint32(p.scale * float64(p.BaseWidth))
+			p.display.H = uint32(p.scale * float64(p.BaseHeight))
 			p.display.X = uint32(p.winWidth/2) - (p.display.W / 2)
 			p.display.Y = uint32(p.winHeight/2) - (p.display.H / 2)
 			return nil

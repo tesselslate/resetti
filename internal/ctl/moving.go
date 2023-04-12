@@ -181,14 +181,17 @@ func (m *MovingWall) Input(input Input) {
 func (m *MovingWall) Update(update mc.Update) {
 	prev := m.states[update.Id].Type
 	next := update.State.Type
-	if prev != mc.StPreview && next == mc.StPreview {
+	nowPreview := prev != mc.StPreview && next == mc.StPreview
+	catchIdle := (next == mc.StIdle && !slices.Contains(m.queue, update.Id))
+	if (nowPreview || catchIdle) && !slices.Contains(m.locks, update.Id) {
 		m.queue = append(m.queue, update.Id)
 		m.layout()
 		m.render()
 	}
 	m.states[update.Id] = update.State
-	// TODO guard
-	m.hider.Update(update)
+	if m.conf.Wall.Hiding.ShowMethod != "" {
+		m.hider.Update(update)
+	}
 }
 
 // getHitbox gets the hitbox the given input intersects with, if any.
@@ -224,9 +227,8 @@ func (m *MovingWall) layout() {
 			to = len(m.queue)
 		}
 		m.layoutGroup(group, m.queue[from:to])
-		from += to
+		from = to
 	}
-	fmt.Printf("%+v\n", m.queue)
 }
 
 // layoutGroup updates the layout of a specific group of instances.
@@ -273,8 +275,24 @@ func (m *MovingWall) removeFromQueue(id int) {
 // It uses the current set of hitboxes, so layout must be called between any
 // queue/lock changes and render.
 func (m *MovingWall) render() {
-	err := m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
-		for hitbox, id := range m.hitboxes {
+	// Make sure to move invisible instances offscreen.
+	visible := make(map[int]cfg.Rectangle)
+	for hitbox, id := range m.hitboxes {
+		visible[id] = hitbox
+	}
+
+	err := m.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
+		for id := range m.instances {
+			var hitbox cfg.Rectangle
+			if box, ok := visible[id]; ok {
+				hitbox = box
+			} else {
+				hitbox = cfg.Rectangle{
+					X: uint32(m.proj.BaseWidth),
+					Y: uint32(m.proj.BaseHeight),
+					W: 1, H: 1,
+				}
+			}
 			b.SetItemBounds(
 				"Wall",
 				fmt.Sprintf("Wall MC %d", id+1),
