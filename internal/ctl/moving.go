@@ -274,7 +274,9 @@ func (m *MovingWall) removeFromQueue(id int) {
 // queue/lock changes and render.
 func (m *MovingWall) render() {
 	err := m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
+		renderedInstances := make([]int, len(m.hitboxes))
 		for hitbox, id := range m.hitboxes {
+			renderedInstances = append(renderedInstances, id)
 			b.SetItemBounds(
 				"Wall",
 				fmt.Sprintf("Wall MC %d", id+1),
@@ -283,6 +285,11 @@ func (m *MovingWall) render() {
 				float64(hitbox.W),
 				float64(hitbox.H),
 			)
+		}
+
+		for id := range m.instances {
+			b.SetItemVisibility("Wall",
+				fmt.Sprintf("Wall MC %d", id+1), slices.Contains(renderedInstances, id))
 		}
 	})
 	if err != nil {
@@ -332,6 +339,7 @@ func (m *MovingWall) wallLock(id int) {
 	} else {
 		m.host.RunHook(HookUnlock)
 	}
+
 }
 
 // wallPlay plays the given instance. It is the caller's responsibility to check
