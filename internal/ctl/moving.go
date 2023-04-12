@@ -80,6 +80,7 @@ func (m *MovingWall) FocusChange(win xproto.Window) {
 // Input processes a single user input.
 func (m *MovingWall) Input(input Input) {
 	actions := m.conf.Keybinds[input.Bind]
+
 	if m.active != -1 {
 		if input.Held {
 			return
@@ -90,10 +91,14 @@ func (m *MovingWall) Input(input Input) {
 				m.resetIngame()
 			case cfg.ActionIngameFocus:
 				m.host.FocusInstance(m.active)
+			case cfg.ActionIngameThin:
+				m.host.ToggleThinInstance(m.active)
 			}
 		}
 	} else {
 		for _, action := range actions.WallActions {
+			log.Printf("%v", action)
+
 			// wall_focus_projector is the only wall action that can be taken
 			// while the projector isn't focused.
 			if action.Type == cfg.ActionWallFocus {
@@ -181,14 +186,18 @@ func (m *MovingWall) Input(input Input) {
 func (m *MovingWall) Update(update mc.Update) {
 	prev := m.states[update.Id].Type
 	next := update.State.Type
-	if prev != mc.StPreview && next == mc.StPreview {
-		m.queue = append(m.queue, update.Id)
-		m.layout()
-		m.render()
+	if prev != mc.StPreview && next == mc.StPreview || (next == mc.StIdle && !slices.Contains(m.queue, update.Id)) {
+		if !slices.Contains(m.locks, update.Id) {
+			m.queue = append(m.queue, update.Id)
+			m.layout()
+			m.render()
+		}
+
 	}
 	m.states[update.Id] = update.State
-	// TODO guard
-	m.hider.Update(update)
+	if m.conf.Wall.Hiding.ShowMethod != "" {
+		m.hider.Update(update)
+	}
 }
 
 // getHitbox gets the hitbox the given input intersects with, if any.
@@ -224,9 +233,9 @@ func (m *MovingWall) layout() {
 			to = len(m.queue)
 		}
 		m.layoutGroup(group, m.queue[from:to])
-		from += to
+		from = to
 	}
-	fmt.Printf("%+v\n", m.queue)
+	fmt.Printf("%v: %+v\n", len(m.queue), m.queue)
 }
 
 // layoutGroup updates the layout of a specific group of instances.
@@ -252,6 +261,10 @@ func (m *MovingWall) layoutGroup(group cfg.Group, instances []int) {
 // playFirstLocked plays the first idle, locked instance. If no instance fits
 // the criteria, it returns false. Otherwise, it returns true.
 func (m *MovingWall) playFirstLocked() bool {
+	firstGroup := m.conf.Wall.Moving.Groups[0]
+	if len(m.queue) >= int(firstGroup.Height)*int(firstGroup.Width) {
+		return false
+	}
 	for id, state := range m.states {
 		if state.Type == mc.StIdle && slices.Contains(m.locks, id) {
 			m.wallPlay(id)
@@ -273,10 +286,36 @@ func (m *MovingWall) removeFromQueue(id int) {
 // It uses the current set of hitboxes, so layout must be called between any
 // queue/lock changes and render.
 func (m *MovingWall) render() {
-	err := m.obs.Batch(obs.SerialRealtime, func(b *obs.Batch) {
-		renderedInstances := make([]int, len(m.hitboxes))
-		for hitbox, id := range m.hitboxes {
+	err := m.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
+		renderedInstances := make([]int, 0)
+		for _, id := range m.hitboxes {
 			renderedInstances = append(renderedInstances, id)
+
+		}
+
+		for _, inst := range m.instances {
+			log.Printf("id: %d (%v) in %v", inst.Id, slices.Contains(renderedInstances, inst.Id), renderedInstances)
+			if !slices.Contains(renderedInstances, inst.Id) {
+				b.SetItemBounds(
+					"Wall",
+					fmt.Sprintf("Wall MC %d", inst.Id+1),
+					float64(m.proj.baseWidth),
+					0,
+					1,
+					1,
+				)
+				b.SetItemBounds(
+					"Wall",
+					fmt.Sprintf("Num %d", inst.Id+1),
+					float64(m.proj.baseWidth),
+					0,
+					1,
+					1,
+				)
+
+			}
+		}
+		for hitbox, id := range m.hitboxes {
 			b.SetItemBounds(
 				"Wall",
 				fmt.Sprintf("Wall MC %d", id+1),
@@ -285,12 +324,18 @@ func (m *MovingWall) render() {
 				float64(hitbox.W),
 				float64(hitbox.H),
 			)
+			b.SetItemBounds(
+				"Wall",
+				fmt.Sprintf("Num %d", id+1),
+				float64(hitbox.X),
+				float64(hitbox.Y),
+				float64(50),
+				float64(50),
+			)
+
+			log.Printf("render: %d: %v", id, hitbox)
 		}
 
-		for id := range m.instances {
-			b.SetItemVisibility("Wall",
-				fmt.Sprintf("Wall MC %d", id+1), slices.Contains(renderedInstances, id))
-		}
 	})
 	if err != nil {
 		log.Printf("MovingWall: render failed: %s\n", err)
