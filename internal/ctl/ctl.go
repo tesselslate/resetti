@@ -152,6 +152,13 @@ func Run(conf *cfg.Profile) error {
 	if err != nil {
 		return fmt.Errorf("(init) find instances: %w", err)
 	}
+	modernWpCount := 0
+	for _, inst := range instances {
+		if inst.ModernWp {
+			modernWpCount += 1
+		}
+	}
+	log.Printf("Found %d/%d instances with modern WorldPreview\n", modernWpCount, len(instances))
 	c.manager, err = mc.NewManager(instances, conf, &x)
 	if err != nil {
 		return fmt.Errorf("(init) create manager: %w", err)

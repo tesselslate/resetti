@@ -3,6 +3,8 @@
 package mc
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +17,13 @@ import (
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
+// List of WorldPreview jar hashes that support wpstateout.txt.
+var wpHashes = map[string]bool{
+	"c8893b913e0e9692ba1344e067f611ddd26a9779": true, // 1.15.2 build 3
+	"042d4fa41bef26b5727d6977820a37aad829f2af": true, // 1.16.1 build 3
+	"5398cb2adf4ddf99fa96e479b68d54c7d0ad9f0c": true, // 1.16.1 build 4
+}
+
 // InstanceInfo contains information about how to interact with a Minecraft
 // instance, such as its game directory and window ID.
 type InstanceInfo struct {
@@ -23,6 +32,7 @@ type InstanceInfo struct {
 	Wid        xproto.Window  // Window ID
 	Dir        string         // .minecraft directory
 	Version    int            // Minecraft version
+	ModernWp   bool           // Has wpstateout.txt WorldPreview
 	ResetKey   xproto.Keycode // Atum reset key
 	PreviewKey xproto.Keycode // Leave preview key
 }
@@ -94,6 +104,12 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 		return InstanceInfo{}, errors.New("only 1.14 and newer are currently supported")
 	}
 
+	// Determine if the instance has wpstateout.txt.
+	modernWp, err := hasModernWp(pwd)
+	if err != nil {
+		return InstanceInfo{}, fmt.Errorf("has modern wp: %w", err)
+	}
+
 	// Get the Atum and WorldPreview keys from the user's options.
 	options, err := os.ReadFile(pwd + "/options.txt")
 	if err != nil {
@@ -129,14 +145,42 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 	}
 
 	return InstanceInfo{
-		Id:         id,
-		Pid:        pid,
-		Wid:        win,
-		Dir:        pwd,
-		Version:    version,
-		ResetKey:   resetKey,
-		PreviewKey: previewKey,
+		id,
+		pid,
+		win,
+		pwd,
+		version,
+		modernWp,
+		resetKey,
+		previewKey,
 	}, nil
+}
+
+// hasModernWp determines whether or not the instance has a WorldPreview build
+// with wpstateout.txt.
+func hasModernWp(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir + "/mods")
+	if err != nil {
+		return false, fmt.Errorf("read dir: %w", err)
+	}
+	for _, entry := range entries {
+		// This is probably a safe assumption.
+		if !strings.Contains(strings.ToLower(entry.Name()), "preview") {
+			continue
+		}
+		if !strings.HasSuffix(entry.Name(), ".jar") {
+			continue
+		}
+		jar, err := os.ReadFile(dir + "/mods/" + entry.Name())
+		if err != nil {
+			return false, fmt.Errorf("read %s: %w", entry.Name(), err)
+		}
+		hash := sha1.Sum(jar)
+		if wpHashes[hex.EncodeToString(hash[:])] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // isMinecraftWindow determines whether or not the window is a Minecraft

@@ -126,17 +126,8 @@ type wpstateReader struct {
 // createStateReader attempts to create the best StateReader for the given
 // instance.
 func createStateReader(inst InstanceInfo) (StateReader, State, error) {
-	// TODO: Better state detection heuristic (WorldPreview jar version?)
-
 	// Decide which state reader to create.
-	_, err := os.Stat(inst.Dir + "/wpstateout.txt")
-	if err != nil && !os.IsNotExist(err) {
-		return nil, State{}, fmt.Errorf("stat %d/wpstateout.txt: %w", inst.Id, err)
-	}
-	if forceLog && forceWpstate {
-		return nil, State{}, errors.New("can only force one state reader type")
-	}
-	useLogReader := forceLog || (!forceWpstate && os.IsNotExist(err))
+	useLogReader := forceLog || (!forceWpstate && !inst.ModernWp)
 
 	// Create the state reader.
 	if useLogReader {
@@ -146,8 +137,8 @@ func createStateReader(inst InstanceInfo) (StateReader, State, error) {
 		}
 		return &reader, state, nil
 	} else {
-		if os.IsNotExist(err) {
-			return nil, State{}, errors.New("cannot force wpstate reader without wpstateout.txt")
+		if !inst.ModernWp {
+			return nil, State{}, errors.New("cannot force wpstate reader without modern WorldPreview")
 		}
 		reader, state, err := newWpstateReader(inst)
 		if err != nil {
