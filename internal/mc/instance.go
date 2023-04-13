@@ -168,10 +168,9 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 						m.instances[id].state.Type = StIdle
 						if lastType != StIdle {
 							if m.conf.Delay.IdlePause > 0 {
-								go func() {
-									<-time.After(time.Millisecond * time.Duration(m.conf.Delay.IdlePause))
+								time.AfterFunc(time.Millisecond*time.Duration(m.conf.Delay.IdlePause), func() {
 									m.pause <- id
-								}()
+								})
 							} else {
 								m.sendKeyDown(id, x11.KeyF3)
 								m.sendKeyPress(id, x11.KeyEsc)
@@ -183,10 +182,9 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 					if lastType != StPreview {
 						m.instances[id].state.LastPreview = time.Now()
 						if m.conf.Delay.WpPause > 0 {
-							go func() {
-								<-time.After(time.Millisecond * time.Duration(m.conf.Delay.WpPause))
+							time.AfterFunc(time.Millisecond*time.Duration(m.conf.Delay.WpPause), func() {
 								m.pause <- id
-							}()
+							})
 						} else {
 							m.sendKeyDown(id, x11.KeyF3)
 							m.sendKeyPress(id, x11.KeyEsc)

@@ -134,6 +134,15 @@ type Pointer struct {
 	buttons uint16
 }
 
+// atomCache maintains a mapping of strings to X11 atoms to avoid re-requesting
+// atoms from the X server repeatedly.
+type atomCache struct {
+	mu sync.RWMutex
+
+	conn *xgb.Conn
+	data map[string]xproto.Atom
+}
+
 // keyState contains state about the last key event sent to a given window.
 // This is used to ensure that resetti's inputs don't get dropped by GLFW.
 type keyState struct {
@@ -177,6 +186,27 @@ func NewClient() (Client, error) {
 		make(map[xproto.Window]keyState),
 		sync.Mutex{},
 	}, nil
+}
+
+// Get returns the atom with the associated name.
+func (c *atomCache) Get(name string) (xproto.Atom, error) {
+	// Try to retrieve the atom from the cache.
+	c.mu.RLock()
+	if atom, ok := c.data[name]; ok {
+		c.mu.RUnlock()
+		return atom, nil
+	}
+	c.mu.RUnlock()
+
+	// Request the atom from the X server.
+	reply, err := xproto.InternAtom(c.conn, false, uint16(len(name)), name).Reply()
+	if err != nil {
+		return 0, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[name] = reply.Atom
+	return reply.Atom, nil
 }
 
 // Click clicks the top left corner (0, 0) of the given window.

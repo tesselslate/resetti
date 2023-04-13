@@ -23,7 +23,7 @@ import (
 // Client manages an OBS websocket connection.
 type Client struct {
 	ws      *websocket.Conn
-	mx      *sync.Mutex
+	mu      sync.Mutex
 	idCache idCache
 
 	err map[uuid.UUID]chan error
@@ -38,6 +38,12 @@ type StringMap map[string]any
 type batchResponse struct {
 	Id      uuid.UUID         `json:"requestID"`
 	Results []requestResponse `json:"results"`
+}
+
+// idCache is used to keep a cache of scene item IDs.
+type idCache struct {
+	mu    sync.RWMutex
+	cache map[[2]string]int
 }
 
 // requestResponse contains data sent back from OBS as a result of a request.
@@ -88,8 +94,7 @@ func (c *Client) Batch(mode BatchMode, fn func(*Batch)) error {
 // authentication is required, the given password will be used.
 func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan error, error) {
 	// Setup websocket connection.
-	c.mx = &sync.Mutex{}
-	c.idCache = newIdCache()
+	c.idCache = idCache{sync.RWMutex{}, make(map[[2]string]int)}
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
 	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:%d", port), nil)
@@ -151,14 +156,14 @@ func (c *Client) batchSubmit(mode BatchMode, batch *Batch) error {
 		},
 	}
 	errch := make(chan error, 1)
-	c.mx.Lock()
+	c.mu.Lock()
 	c.err[id] = errch
-	c.mx.Unlock()
+	c.mu.Unlock()
 	err := wsjson.Write(context.Background(), c.ws, &rawBatch)
 	if err != nil {
-		c.mx.Lock()
+		c.mu.Lock()
 		delete(c.err, id)
-		c.mx.Unlock()
+		c.mu.Unlock()
 		return err
 	}
 
@@ -262,7 +267,7 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 			}
 
 			// Process the response.
-			c.mx.Lock()
+			c.mu.Lock()
 			if !data.Status.Result {
 				c.err[data.Id] <- fmt.Errorf("code %d: %s", data.Status.Code, data.Status.Comment)
 			} else {
@@ -270,7 +275,7 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 			}
 			delete(c.err, data.Id)
 			delete(c.rcv, data.Id)
-			c.mx.Unlock()
+			c.mu.Unlock()
 		case 9:
 			// Request batch response.
 			data := batchResponse{}
@@ -288,10 +293,10 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 			}
 
 			// Send the result to whatever submitted the batch.
-			c.mx.Lock()
+			c.mu.Lock()
 			c.err[data.Id] <- err
 			delete(c.err, data.Id)
-			c.mx.Unlock()
+			c.mu.Unlock()
 		}
 	}
 }
@@ -308,15 +313,15 @@ func (c *Client) sendRequest(data request) (res json.RawMessage, err error) {
 	}
 
 	// Send the request.
-	c.mx.Lock()
+	c.mu.Lock()
 	c.rcv[id] = resch
 	c.err[id] = errch
-	c.mx.Unlock()
+	c.mu.Unlock()
 	if err := wsjson.Write(context.Background(), c.ws, req); err != nil {
-		c.mx.Lock()
+		c.mu.Lock()
 		delete(c.rcv, id)
 		delete(c.err, id)
-		c.mx.Unlock()
+		c.mu.Unlock()
 		return nil, err
 	}
 
@@ -470,4 +475,19 @@ func (c *Client) SetSourceSettingsAsync(name string, settings StringMap, overlay
 			log.Printf("SetSourceSettingsAsync error: %s\n", err)
 		}
 	}()
+}
+
+// Get returns the ID of the given scene/source pair if it exists.
+func (i *idCache) Get(scene string, name string) (int, bool) {
+	i.mu.RLock()
+	id, ok := i.cache[[2]string{scene, name}]
+	i.mu.RUnlock()
+	return id, ok
+}
+
+// Set inserts the given scene/source pair into the cache.
+func (i *idCache) Set(scene string, name string, id int) {
+	i.mu.Lock()
+	i.cache[[2]string{scene, name}] = id
+	i.mu.Unlock()
 }

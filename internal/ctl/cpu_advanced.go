@@ -116,10 +116,9 @@ func (c *advancedCpuManager) handleUpdate(update mc.Update) {
 		}
 		if changed {
 			c.moveInstance(update.Id, affMid)
-			go func() {
-				<-time.After(time.Millisecond * time.Duration(c.conf.Wall.Perf.Adv.BurstLength))
+			time.AfterFunc(time.Millisecond*time.Duration(c.conf.Wall.Perf.Adv.BurstLength), func() {
 				c.removeBurst <- update.Id
-			}()
+			})
 		}
 	case mc.StDirt:
 		if c.anyActive {
