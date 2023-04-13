@@ -30,7 +30,7 @@ type MovingWall struct {
 	lastHitbox cfg.Rectangle         // The last hitbox a mouse action was done on.
 
 	proj  ProjectorController
-	hider hider
+	hider *hider
 }
 
 // Setup implements Frontend.
@@ -58,9 +58,8 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	if err := m.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
 	}
-	if m.conf.Wall.Hiding.ShowMethod != "" {
+	if m.conf.Wall.ShowAt >= 0 {
 		m.hider = newHider(deps.conf, deps.obs, deps.states)
-		go m.hider.Run()
 	}
 
 	// Fill the queue with all instances.
@@ -179,19 +178,25 @@ func (m *MovingWall) Input(input Input) {
 
 // Update processes a single instance state update.
 func (m *MovingWall) Update(update mc.Update) {
-	prev := m.states[update.Id].Type
-	next := update.State.Type
-	nowPreview := prev != mc.StPreview && next == mc.StPreview
-	catchIdle := (next == mc.StIdle && !slices.Contains(m.queue, update.Id))
-	if (nowPreview || catchIdle) && !slices.Contains(m.locks, update.Id) {
-		m.queue = append(m.queue, update.Id)
-		m.layout()
-		m.render()
+	if m.hider != nil {
+		show := m.hider.Update(update)
+		if show {
+			m.queue = append(m.queue, update.Id)
+			m.layout()
+			m.render()
+		}
+	} else {
+		prev := m.states[update.Id].Type
+		next := update.State.Type
+		nowPreview := prev != mc.StPreview && next == mc.StPreview
+		catchIdle := (next == mc.StIdle && !slices.Contains(m.queue, update.Id))
+		if (nowPreview || catchIdle) && !slices.Contains(m.locks, update.Id) {
+			m.queue = append(m.queue, update.Id)
+			m.layout()
+			m.render()
+		}
 	}
 	m.states[update.Id] = update.State
-	if m.conf.Wall.Hiding.ShowMethod != "" {
-		m.hider.Update(update)
-	}
 }
 
 // collapseEmpty removes all empty instances from the queue.
@@ -325,6 +330,9 @@ func (m *MovingWall) render() {
 // resetIngame resets the active instance.
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
+	if m.hider != nil {
+		m.hider.Reset(m.active)
+	}
 	m.active = -1
 	if m.conf.Wall.GotoLocked && m.playFirstLocked() {
 		return
@@ -391,6 +399,9 @@ func (m *MovingWall) wallReset(id int) {
 		return
 	}
 	if m.states[id].Type != mc.StIngame && m.host.ResetInstance(id) {
+		if m.hider != nil {
+			m.hider.Reset(id)
+		}
 		m.removeFromQueue(id)
 		m.host.RunHook(HookWallReset)
 	}

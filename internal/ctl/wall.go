@@ -30,7 +30,7 @@ type Wall struct {
 	lastMouseId           int               // The ID of the last instance a mouse action was done on.
 
 	proj  ProjectorController
-	hider hider
+	hider *hider
 }
 
 // Setup implements Frontend.
@@ -62,9 +62,8 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	if err := w.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
 	}
-	if w.conf.Wall.Hiding.ShowMethod != "" {
+	if w.conf.Wall.ShowAt >= 0 {
 		w.hider = newHider(deps.conf, deps.obs, deps.states)
-		go w.hider.Run()
 	}
 
 	// Often, the user will not have an existing sleepbg.lock file from their
@@ -173,8 +172,9 @@ func (w *Wall) Input(input Input) {
 // Update implements Frontend.
 func (w *Wall) Update(update mc.Update) {
 	w.states[update.Id] = update.State
-	// TODO guard
-	w.hider.Update(update)
+	if w.hider != nil {
+		w.hider.Update(update)
+	}
 }
 
 // getInstanceId returns the ID of the instance at the specified coordinates.
@@ -281,6 +281,9 @@ func (w *Wall) promptWallSize() error {
 // resetIngame resets the active instance.
 func (w *Wall) resetIngame() {
 	w.host.ResetInstance(w.active)
+	if w.hider != nil {
+		w.hider.Reset(w.active)
+	}
 	w.active = -1
 	if w.conf.Wall.GotoLocked && w.playFirstLocked() {
 		return
@@ -351,6 +354,9 @@ func (w *Wall) wallReset(id int) {
 		return
 	}
 	if w.states[id].Type != mc.StIngame && w.host.ResetInstance(id) {
+		if w.hider != nil {
+			w.hider.Reset(id)
+		}
 		w.host.RunHook(HookWallReset)
 	}
 }

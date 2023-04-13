@@ -55,16 +55,8 @@ type Wall struct {
 	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution
 	UseF1        bool       `toml:"use_f1"`
 
-	// Instance hiding (dirt cover) settings.
-	Hiding struct {
-		// What criteria to use when determining when to show the instance.
-		// Only valid options are "percentage" and "delay".
-		ShowMethod string `toml:"show_method"`
-
-		// When to show the instances (either milliseconds for delay or
-		// generation percentage for percentage.)
-		ShowAt int `toml:"show_at"`
-	} `toml:"hiding"`
+	// Preview percentage to show instance at.
+	ShowAt int `toml:"show_at"`
 
 	// Instance moving settings.
 	Moving struct {
@@ -233,17 +225,6 @@ func validateProfile(conf *Profile) error {
 	}
 
 	// TODO moving
-
-	switch conf.Wall.Hiding.ShowMethod {
-	case "":
-		break
-	case "delay", "percentage":
-		if conf.Wall.Hiding.ShowAt < 0 {
-			return fmt.Errorf("invalid instance hiding show_at value of %d", conf.Wall.Hiding.ShowAt)
-		}
-	default:
-		return fmt.Errorf("invalid instance hiding method %q", conf.Wall.Hiding.ShowMethod)
-	}
 
 	// Check affinity settings.
 	switch conf.Wall.Perf.Affinity {

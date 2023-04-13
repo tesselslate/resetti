@@ -119,22 +119,8 @@ play_res = "1920x1080+0,0"
 # enabled, make sure to set "f1:true" in your StandardSettings configuration.
 use_f1 = false
 
-# Instance hiding makes instances invisible on the wall while they are on the
-# dirt screen.
-[wall.hiding]
-# What criteria to use to determine when to make an instance visible again.
-# Leave blank to disable.
-# Options:
-# - percentage      Show the instance when it reaches the given worldgen
-#                   percentage and is previewing
-#
-# - delay           Show the instance a given number of milliseconds after it
-#                   starts previewing
-show_method = "percentage"
-
-# When to show the instances. Refer to the above option for information on what
-# this does.
-show_at = 20
+# The percentage to show instances at on preview. Set below 0 to disable.
+show_at = 5
 
 # Instance moving settings.
 [wall.moving]
