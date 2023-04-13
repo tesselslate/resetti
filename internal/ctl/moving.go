@@ -418,15 +418,15 @@ func (m *MovingWall) wallResetAll() {
 // It is the caller's responsibility to check that the instance is in a valid
 // state for playing.
 func (m *MovingWall) wallResetOthers(id int) {
-	m.wallPlay(id)
 	group := m.conf.Wall.Moving.Groups[0]
 	to := int(group.Width * group.Height)
 	if to > len(m.queue) {
 		to = len(m.queue)
 	}
 	for i := to - 1; i >= 0; i -= 1 {
-		if m.queue[i] != -1 {
+		if m.queue[i] != -1 && m.queue[i] != id {
 			m.wallReset(m.queue[i])
 		}
 	}
+	m.wallPlay(id)
 }
