@@ -281,6 +281,10 @@ func (c *Controller) ResetInstance(id int) bool {
 	ok := c.manager.Reset(id)
 	if ok {
 		c.counter.Increment()
+		c.cpu.Update(mc.Update{
+			State: mc.State{Type: mc.StDirt},
+			Id:    id,
+		})
 	}
 	return ok
 }

@@ -42,6 +42,7 @@ type CpuManager interface {
 
 	// SetPriority sets the priority state of the given instance.
 	SetPriority(int, bool)
+
 	// Update updates the affinity state of the given instance as needed based on
 	// the state change.
 	Update(mc.Update)

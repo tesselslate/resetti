@@ -47,11 +47,11 @@ func (h *hider) Update(update mc.Update) (show bool) {
 	nowOver := next.Progress >= threshold
 	if (next.Type == mc.StPreview && wasUnder && nowOver) || (nowPreview && nowOver) {
 		h.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", update.Id+1), true)
-        show = true
+		show = true
 	}
 
 	h.states[update.Id] = update.State
-    return show
+	return show
 }
 
 // showAll shows all instances.
