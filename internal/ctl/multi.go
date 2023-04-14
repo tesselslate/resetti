@@ -7,6 +7,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
+	"github.com/woofdoggo/resetti/internal/x11"
 )
 
 // Multi implements a traditional Multi-instance interface, where the user
@@ -15,9 +16,11 @@ type Multi struct {
 	host *Controller
 	conf *cfg.Profile
 	obs  *obs.Client
+	x    *x11.Client
 
-	states []mc.State
-	active int
+	instances []mc.InstanceInfo
+	states    []mc.State
+	active    int
 }
 
 // Setup implements Frontend.
@@ -25,9 +28,12 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	m.host = deps.host
 	m.conf = deps.conf
 	m.obs = deps.obs
+	m.x = deps.x
 
 	m.active = 0
+	m.instances = make([]mc.InstanceInfo, len(deps.instances))
 	m.states = make([]mc.State, len(deps.states))
+	copy(m.instances, deps.instances)
 	copy(m.states, deps.states)
 
 	m.host.FocusInstance(0)
@@ -50,6 +56,9 @@ func (m *Multi) Input(input Input) {
 		case cfg.ActionIngameFocus:
 			m.host.FocusInstance(m.active)
 		case cfg.ActionIngameReset:
+			if m.x.GetActiveWindow() != m.instances[m.active].Wid {
+				continue
+			}
 			// TODO: Implement moving wall style best instance picker
 			// TODO sleepbg lock
 			next := (m.active + 1) % len(m.states)

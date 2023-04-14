@@ -86,7 +86,9 @@ func (m *MovingWall) Input(input Input) {
 		for _, action := range actions.IngameActions {
 			switch action.Type {
 			case cfg.ActionIngameReset:
-				m.resetIngame()
+				if m.x.GetActiveWindow() == m.instances[m.active].Wid {
+					m.resetIngame()
+				}
 			case cfg.ActionIngameFocus:
 				m.host.FocusInstance(m.active)
 			}
