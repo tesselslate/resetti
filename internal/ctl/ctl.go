@@ -103,9 +103,8 @@ type inputManager struct {
 	conf *cfg.Profile
 	x    *x11.Client
 
-	lastBinds   []cfg.Bind
-	queryWindow xproto.Window
-	mu          sync.Mutex
+	lastBinds   []cfg.Bind // The keybinds pressed during the last query.
+	lastFailure time.Time  // The last time QueryPointer failed.
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -210,7 +209,7 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
 	inputs := make(chan Input, 256)
-	c.inputMgr = inputManager{c.conf, c.x, nil, 0, sync.Mutex{}}
+	c.inputMgr = inputManager{c.conf, c.x, nil, time.Time{}}
 	c.inputs = inputs
 	go c.inputMgr.Run(inputs)
 
@@ -375,9 +374,6 @@ func (c *Controller) run(ctx context.Context) error {
 			}
 		case win := <-c.focusChanges:
 			c.frontend.FocusChange(win)
-			c.inputMgr.mu.Lock()
-			c.inputMgr.queryWindow = win
-			c.inputMgr.mu.Unlock()
 		case input := <-c.inputs:
 			c.frontend.Input(input)
 		}
@@ -394,18 +390,16 @@ func (i *inputManager) Run(inputs chan<- Input) {
 			continue
 		}
 
-		// Lock the input manager to get the query window (which can be modified
-		// by the Controller.)
-		i.mu.Lock()
 		var pointer x11.Pointer
-		if i.queryWindow != 0 {
-			pointer, err = i.x.QueryPointer(i.queryWindow)
-			if err != nil {
+		pointer, err = i.x.QueryPointer(i.x.GetActiveWindow())
+		if err != nil {
+			// Ignore any one-off errors due to the active window being closed.
+			if time.Since(i.lastFailure) < time.Second {
 				log.Printf("inputManager: Query pointer failed: %s\n", err)
-				continue
 			}
+			i.lastFailure = time.Now()
+			continue
 		}
-		i.mu.Unlock()
 
 		// PERF: This is kind of bad and can probably be optimized
 		var pressed []cfg.Bind

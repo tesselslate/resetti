@@ -101,13 +101,18 @@ type Client struct {
 	conn  *xgb.Conn     // The X server connection
 	root  xproto.Window // Root window
 
+	// The active window.
+	active xproto.Window
+
 	// The offset between the system clock and X server time, in milliseconds.
 	timeOffset uint64
 
 	// Information about the last key events sent for each window. This is used
 	// to ensure that resetti's inputs don't get dropped by GLFW.
 	lastKeyState map[xproto.Window]keyState
-	mu           sync.Mutex
+
+	// The mutex guards lastKeyState and active.
+	mu sync.Mutex
 }
 
 // InputState represents the state of a button or key (up or down.)
@@ -182,6 +187,7 @@ func NewClient() (Client, error) {
 		},
 		conn,
 		root,
+		0,
 		offset,
 		make(map[xproto.Window]keyState),
 		sync.Mutex{},
@@ -265,18 +271,11 @@ func (c *Client) FocusWindow(win xproto.Window) error {
 	return nil
 }
 
-// GetActiveWindow returns the currently focused window.
-func (c *Client) GetActiveWindow() (xproto.Window, error) {
-	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
-	if err != nil {
-		// The _NET_ACTIVE_WINDOW property might not exist depending on the
-		// window manager.
-		if err == errInvalidLength {
-			return 0, nil
-		}
-		return 0, err
-	}
-	return xproto.Window(win), nil
+// GetActiveWindow returns the active window.
+func (c *Client) GetActiveWindow() xproto.Window {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.active
 }
 
 // GetCurrentTime returns the approximate current X server time.
@@ -436,6 +435,23 @@ func (c *Client) UngrabPointer() error {
 	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
 }
 
+// getActiveWindow returns the currently focused window.
+func (c *Client) getActiveWindow() (xproto.Window, error) {
+	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
+	if err != nil {
+		// The _NET_ACTIVE_WINDOW property might not exist depending on the
+		// window manager.
+		if err == errInvalidLength {
+			return 0, nil
+		}
+		return 0, err
+	}
+	c.mu.Lock()
+	c.active = xproto.Window(win)
+	c.mu.Unlock()
+	return xproto.Window(win), nil
+}
+
 // getProperty retrieves a raw window property.
 func (c *Client) getProperty(win xproto.Window, name string, typ xproto.Atom) ([]byte, error) {
 	atom, err := c.atoms.Get(name)
@@ -591,7 +607,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- xproto.Window, errch chan<-
 			if activeWindow != evt.Atom {
 				continue
 			}
-			win, err := c.GetActiveWindow()
+			win, err := c.getActiveWindow()
 			if err != nil {
 				errch <- err
 				continue
