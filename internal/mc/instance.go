@@ -24,6 +24,7 @@ type instance struct {
 	info   InstanceInfo
 	reader StateReader
 	state  State
+    thin bool
 }
 
 // A Manager controls several Minecraft instances. It keeps track of each
@@ -56,7 +57,7 @@ func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manage
 		if state.Type == stWorld {
 			state.Type = StIdle
 		}
-		instance := instance{info, reader, state}
+		instance := instance{info, reader, state, false}
 		instances = append(instances, instance)
 	}
 
@@ -218,6 +219,16 @@ func (m *Manager) Focus(id int) {
 	}
 }
 
+func (m *Manager) ToggleThin(id int) {
+	if m.instances[id].thin {
+		m.setResolution(id, m.conf.Wall.UnstretchRes)
+	} else {
+		m.setResolution(id, m.conf.Wall.ThinRes)
+	}
+	m.instances[id].thin = !m.instances[id].thin
+	m.Focus(id)
+}
+
 // Play attempts to play the given instance.
 //
 // If there is a currently active instance, the given instance will supersede it.
@@ -295,6 +306,7 @@ func (m *Manager) Reset(id int) bool {
 	} else {
 		key = m.instances[id].info.ResetKey
 	}
+    m.instances[id].thin = false
 	m.sendKeyPress(id, key)
 	return true
 }
