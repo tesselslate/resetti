@@ -56,6 +56,7 @@ wall_reset = ""
 # Available actions:
 # - ingame_focus            Focus active instance.
 # - ingame_reset            Reset active instance.
+# - ingame_toggle_thin Toggle thin resolution of active instance.
 # - wall_focus              Focus wall projector.
 # - wall_reset_all          Reset all unlocked instances.
 # - wall_lock               Lock hovered instance.
@@ -68,14 +69,14 @@ wall_reset = ""
 # - wall_reset_others(n)    Focus reset instance N.
 # - wall_play_next_locked   Plays the first locked and idle instance.
 [keybinds]
-"Ctrl-Shift-D"      = ["wall_reset_all",    "ingame_reset"]
-"Ctrl-Shift-F"      = ["ingame_focus",      "wall_focus"]
-"LMB"               = ["wall_reset"]
-"LMB-Shift"         = ["wall_play"]
-"LMB-Ctrl"          = ["wall_lock"]
-"LMB-Ctrl-Shift"    = ["wall_focus_reset"]
-"1"                 = ["wall_reset(1)"]
-"Shift-1"           = ["wall_play(1)"]
+"Ctrl-Shift-D" = ["wall_reset_all", "ingame_reset"]
+"Ctrl-Shift-F" = ["ingame_focus", "wall_focus"]
+"LMB" = ["wall_reset"]
+"LMB-Shift" = ["wall_play"]
+"LMB-Ctrl" = ["wall_lock"]
+"LMB-Ctrl-Shift" = ["wall_reset_others"]
+"1" = ["wall_reset(1)"]
+"Shift-1" = ["wall_play(1)"]
 
 # The obs section lets you specify connection information for OBS websocket.
 # This can be disabled if you are not using wall and are not recording;
@@ -149,6 +150,11 @@ position = "1920x200+0,880"
 # The size of the group (in instances.)
 width = 6
 height = 1
+
+# Whether to have gaps in displaying the instances.
+# Set it to false for smaller group sizes.
+use_gaps = true
+
 
 # This section contains settings for optimizing CPU utilization while resetting.
 [wall.performance]
