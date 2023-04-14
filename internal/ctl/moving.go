@@ -115,6 +115,7 @@ func (m *MovingWall) Input(input Input) {
 					continue
 				}
 				m.wallResetAll()
+				m.collapseEmpty()
 				m.layout()
 				m.render()
 			case cfg.ActionWallPlayFirstLocked:
@@ -122,6 +123,7 @@ func (m *MovingWall) Input(input Input) {
 					continue
 				}
 				m.playFirstLocked()
+				m.collapseEmpty()
 			case cfg.ActionWallLock, cfg.ActionWallPlay, cfg.ActionWallReset, cfg.ActionWallResetOthers:
 				var id int
 				if action.Extra != nil {
@@ -163,12 +165,15 @@ func (m *MovingWall) Input(input Input) {
 				case cfg.ActionWallPlay:
 					if m.states[id].Type == mc.StIdle {
 						m.wallPlay(id)
+						m.collapseEmpty()
 					}
 				case cfg.ActionWallReset:
 					m.wallReset(id)
+					m.collapseEmpty()
 				case cfg.ActionWallResetOthers:
 					if m.states[id].Type == mc.StIdle {
 						m.wallResetOthers(id)
+						m.collapseEmpty()
 					}
 				}
 				m.layout()
@@ -407,7 +412,6 @@ func (m *MovingWall) wallReset(id int) {
 		m.removeFromQueue(id)
 		m.host.RunHook(HookWallReset)
 	}
-	m.collapseEmpty()
 }
 
 // wallResetAll resets all instances in the first group.
@@ -423,7 +427,6 @@ func (m *MovingWall) wallResetAll() {
 			m.wallReset(m.queue[i])
 		}
 	}
-	m.collapseEmpty()
 	log.Printf("Reset all in %.2f ms\n", float64(time.Since(start).Microseconds())/1000)
 }
 
