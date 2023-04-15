@@ -269,6 +269,11 @@ func (c *Controller) FocusInstance(id int) {
 	c.manager.Focus(id)
 }
 
+// ToggleThinInstance toggles the thin mode of the given instance.
+func (c *Controller) ToggleThinInstance(id int) {
+	c.manager.ToggleThin(id)
+}
+
 // PlayInstance switches focus to the given instance, marks it as the active
 // instance, and starts playing it.
 func (c *Controller) PlayInstance(id int) {

@@ -93,6 +93,8 @@ func (w *Wall) Input(input Input) {
 				}
 			case cfg.ActionIngameFocus:
 				w.host.FocusInstance(w.active)
+            case cfg.ActionIngameThin:
+				w.host.ToggleThinInstance(w.active)
 			}
 		}
 	} else {

@@ -91,6 +91,8 @@ func (m *MovingWall) Input(input Input) {
 				}
 			case cfg.ActionIngameFocus:
 				m.host.FocusInstance(m.active)
+            case cfg.ActionIngameThin:
+				m.host.ToggleThinInstance(m.active)
 			}
 		}
 	} else {
@@ -380,6 +382,9 @@ func (m *MovingWall) wallLock(id int) {
 	} else {
 		m.host.RunHook(HookUnlock)
 	}
+    if !m.conf.Wall.Moving.Gaps{
+        m.collapseEmpty()
+    }
 }
 
 // wallPlay plays the given instance. It is the caller's responsibility to check
