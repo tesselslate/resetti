@@ -15,7 +15,7 @@ import (
 const (
 	ActionIngameFocus int = iota
 	ActionIngameReset
-    ActionIngameThin
+	ActionIngameThin
 	ActionWallFocus
 	ActionWallResetAll
 	ActionWallLock
@@ -29,7 +29,7 @@ const (
 var actionNames = map[string]int{
 	"ingame_focus":           ActionIngameFocus,
 	"ingame_reset":           ActionIngameReset,
-    "ingame_toggle_thin": ActionIngameThin,
+	"ingame_toggle_thin":     ActionIngameThin,
 	"wall_focus":             ActionWallFocus,
 	"wall_reset_all":         ActionWallResetAll,
 	"wall_lock":              ActionWallLock,

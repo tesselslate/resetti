@@ -24,7 +24,7 @@ type instance struct {
 	info   InstanceInfo
 	reader StateReader
 	state  State
-    thin bool
+	thin   bool
 }
 
 // A Manager controls several Minecraft instances. It keeps track of each
@@ -306,7 +306,7 @@ func (m *Manager) Reset(id int) bool {
 	} else {
 		key = m.instances[id].info.ResetKey
 	}
-    m.instances[id].thin = false
+	m.instances[id].thin = false
 	m.sendKeyPress(id, key)
 	return true
 }

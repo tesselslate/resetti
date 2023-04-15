@@ -53,7 +53,7 @@ type Wall struct {
 
 	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution
 	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution
-    ThinRes *Rectangle `toml:"thin_res"`
+	ThinRes      *Rectangle `toml:"thin_res"`
 	UseF1        bool       `toml:"use_f1"`
 
 	// Preview percentage to show instance at.
@@ -64,7 +64,7 @@ type Wall struct {
 		Enabled bool    `toml:"enabled"`
 		Locks   *Group  `toml:"locks"`  // Locked group
 		Groups  []Group `toml:"groups"` // Normal groups
-        Gaps   bool `toml:"use_gaps"`
+		Gaps    bool    `toml:"use_gaps"`
 	} `toml:"moving"`
 
 	// Performance settings.
@@ -220,7 +220,7 @@ func validateProfile(conf *Profile) error {
 	if !validateRectangle(conf.Wall.UnstretchRes) {
 		return errors.New("invalid active resolution")
 	}
-    if !validateRectangle(conf.Wall.ThinRes) {
+	if !validateRectangle(conf.Wall.ThinRes) {
 		return errors.New("invalid thin resolution")
 	}
 	stretch := conf.Wall.StretchRes != nil
