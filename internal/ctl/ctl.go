@@ -31,6 +31,8 @@ const bufferSize = 16
 // Hook types
 const (
 	HookReset int = iota
+	HookAltRes
+	HookNormalRes
 	HookLock
 	HookUnlock
 	HookWallPlay
@@ -121,6 +123,8 @@ func Run(conf *cfg.Profile) error {
 	c.binds = make(map[cfg.Bind]cfg.ActionList)
 	c.hooks = map[int]string{
 		HookReset:     c.conf.Hooks.Reset,
+		HookAltRes:    c.conf.Hooks.AltRes,
+		HookNormalRes: c.conf.Hooks.NormalRes,
 		HookLock:      c.conf.Hooks.WallLock,
 		HookUnlock:    c.conf.Hooks.WallUnlock,
 		HookWallPlay:  c.conf.Hooks.WallPlay,
@@ -269,9 +273,14 @@ func (c *Controller) FocusInstance(id int) {
 	c.manager.Focus(id)
 }
 
-// ToggleThinInstance toggles the thin mode of the given instance.
-func (c *Controller) ToggleThinInstance(id int) {
-	c.manager.ToggleThin(id)
+// ToggleResolution switches the given instance between the normal and alternate
+// resolution.
+func (c *Controller) ToggleResolution(id int) {
+	if c.manager.ToggleResolution(id) {
+		c.RunHook(HookAltRes)
+	} else {
+		c.RunHook(HookNormalRes)
+	}
 }
 
 // PlayInstance switches focus to the given instance, marks it as the active

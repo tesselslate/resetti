@@ -24,7 +24,7 @@ type instance struct {
 	info   InstanceInfo
 	reader StateReader
 	state  State
-	thin   bool
+	altRes bool
 }
 
 // A Manager controls several Minecraft instances. It keeps track of each
@@ -219,14 +219,17 @@ func (m *Manager) Focus(id int) {
 	}
 }
 
-func (m *Manager) ToggleThin(id int) {
-	if m.instances[id].thin {
+// ToggleResolution switches the given instance between the normal and alternate
+// resolution and returns whether or not it is now on the alternate resolution.
+func (m *Manager) ToggleResolution(id int) bool {
+	if m.instances[id].altRes {
 		m.setResolution(id, m.conf.Wall.UnstretchRes)
 	} else {
-		m.setResolution(id, m.conf.Wall.ThinRes)
+		m.setResolution(id, m.conf.Wall.AltRes)
 	}
-	m.instances[id].thin = !m.instances[id].thin
+	m.instances[id].altRes = !m.instances[id].altRes
 	m.Focus(id)
+	return m.instances[id].altRes
 }
 
 // Play attempts to play the given instance.
@@ -293,7 +296,9 @@ func (m *Manager) Reset(id int) bool {
 		if m.conf.Delay.GhostPie > 0 {
 			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.GhostPie))
 		}
+
 		// Unstretch.
+		m.instances[id].altRes = false
 		m.active = -1
 		m.setResolution(id, m.conf.Wall.StretchRes)
 		if m.conf.Delay.Stretch > 0 {
@@ -306,7 +311,6 @@ func (m *Manager) Reset(id int) bool {
 	} else {
 		key = m.instances[id].info.ResetKey
 	}
-	m.instances[id].thin = false
 	m.sendKeyPress(id, key)
 	return true
 }

@@ -91,8 +91,8 @@ func (m *MovingWall) Input(input Input) {
 				}
 			case cfg.ActionIngameFocus:
 				m.host.FocusInstance(m.active)
-			case cfg.ActionIngameThin:
-				m.host.ToggleThinInstance(m.active)
+			case cfg.ActionIngameRes:
+				m.host.ToggleResolution(m.active)
 			}
 		}
 	} else {

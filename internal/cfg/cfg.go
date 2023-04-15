@@ -28,6 +28,8 @@ type Delays struct {
 // actions.
 type Hooks struct {
 	Reset      string `toml:"reset"`       // Command to run on ingame reset
+	AltRes     string `toml:"alt_res"`     // Command to run on alternate resolution
+	NormalRes  string `toml:"normal_res"`  // Command to run on normal resolution
 	WallLock   string `toml:"wall_lock"`   // Command to run on wall reset
 	WallUnlock string `toml:"wall_unlock"` // Command to run on wall unlock
 	WallPlay   string `toml:"wall_play"`   // Command to run on wall play
@@ -53,7 +55,7 @@ type Wall struct {
 
 	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution
 	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution
-	ThinRes      *Rectangle `toml:"thin_res"`
+	AltRes       *Rectangle `toml:"alt_res"`     // Alternate ingame resolution
 	UseF1        bool       `toml:"use_f1"`
 
 	// Preview percentage to show instance at.
@@ -62,9 +64,9 @@ type Wall struct {
 	// Instance moving settings.
 	Moving struct {
 		Enabled bool    `toml:"enabled"`
+		Gaps    bool    `toml:"use_gaps"`
 		Locks   *Group  `toml:"locks"`  // Locked group
 		Groups  []Group `toml:"groups"` // Normal groups
-		Gaps    bool    `toml:"use_gaps"`
 	} `toml:"moving"`
 
 	// Performance settings.
@@ -220,8 +222,8 @@ func validateProfile(conf *Profile) error {
 	if !validateRectangle(conf.Wall.UnstretchRes) {
 		return errors.New("invalid active resolution")
 	}
-	if !validateRectangle(conf.Wall.ThinRes) {
-		return errors.New("invalid thin resolution")
+	if !validateRectangle(conf.Wall.AltRes) {
+		return errors.New("invalid alternate resolution")
 	}
 	stretch := conf.Wall.StretchRes != nil
 	unstretch := conf.Wall.UnstretchRes != nil
