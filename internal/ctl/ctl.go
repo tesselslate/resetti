@@ -105,8 +105,8 @@ type inputManager struct {
 	conf *cfg.Profile
 	x    *x11.Client
 
-	lastBinds   []cfg.Bind // The keybinds pressed during the last query.
-	lastFailure time.Time  // The last time QueryPointer failed.
+	lastBinds      []cfg.Bind    // The keybinds pressed during the last query.
+	lastFailWindow xproto.Window // The last window QueryPointer failed on.
 }
 
 // Run creates a new controller with the given configuration profile and runs it.
@@ -213,7 +213,7 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
 	inputs := make(chan Input, 256)
-	c.inputMgr = inputManager{c.conf, c.x, nil, time.Time{}}
+	c.inputMgr = inputManager{c.conf, c.x, nil, 0}
 	c.inputs = inputs
 	go c.inputMgr.Run(inputs)
 
@@ -405,14 +405,15 @@ func (i *inputManager) Run(inputs chan<- Input) {
 		}
 
 		var pointer x11.Pointer
-		pointer, err = i.x.QueryPointer(i.x.GetActiveWindow())
-		if err != nil {
-			// Ignore any one-off errors due to the active window being closed.
-			if time.Since(i.lastFailure) < time.Second {
+
+		window := i.x.GetActiveWindow()
+		if window != i.lastFailWindow {
+			pointer, err = i.x.QueryPointer(window)
+			if err != nil {
 				log.Printf("inputManager: Query pointer failed: %s\n", err)
+				i.lastFailWindow = window
+				continue
 			}
-			i.lastFailure = time.Now()
-			continue
 		}
 
 		// PERF: This is kind of bad and can probably be optimized
