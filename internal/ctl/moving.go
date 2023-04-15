@@ -29,8 +29,9 @@ type MovingWall struct {
 	active     int                   // Active instance. -1 is a sentinel for wall
 	lastHitbox cfg.Rectangle         // The last hitbox a mouse action was done on.
 
-	proj  ProjectorController
-	hider *hider
+	proj    ProjectorController
+	freezer *freezer
+	hider   *hider
 }
 
 // Setup implements Frontend.
@@ -57,6 +58,9 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	}
 	if err := m.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
+	}
+	if m.conf.Wall.FreezeAt >= 0 {
+		m.freezer = newFreezer(deps.conf, deps.obs, deps.states)
 	}
 	if m.conf.Wall.ShowAt >= 0 {
 		m.hider = newHider(deps.conf, deps.obs, deps.states)
@@ -187,6 +191,9 @@ func (m *MovingWall) Input(input Input) {
 
 // Update processes a single instance state update.
 func (m *MovingWall) Update(update mc.Update) {
+	if m.freezer != nil {
+		m.freezer.Update(update)
+	}
 	if m.hider != nil {
 		show := m.hider.Update(update)
 		if show {
@@ -339,6 +346,9 @@ func (m *MovingWall) render() {
 // resetIngame resets the active instance.
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
+	if m.freezer != nil {
+		m.freezer.Reset(m.active)
+	}
 	if m.hider != nil {
 		m.hider.Reset(m.active)
 	}
@@ -374,6 +384,9 @@ func (m *MovingWall) setLocked(id int, lock bool) {
 // wallLock toggles the lock state of the given instance.
 func (m *MovingWall) wallLock(id int) {
 	lock := !slices.Contains(m.locks, id)
+	if m.freezer != nil {
+		m.freezer.SetCanFreeze(id, !lock)
+	}
 	m.setLocked(id, lock)
 	if lock {
 		idx := slices.Index(m.queue, id)
@@ -411,6 +424,9 @@ func (m *MovingWall) wallReset(id int) {
 		return
 	}
 	if m.states[id].Type != mc.StIngame && m.host.ResetInstance(id) {
+		if m.freezer != nil {
+			m.freezer.Reset(id)
+		}
 		if m.hider != nil {
 			m.hider.Reset(id)
 		}

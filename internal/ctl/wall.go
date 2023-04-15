@@ -29,8 +29,9 @@ type Wall struct {
 	wallWidth, wallHeight int               // The size of the wall, in instances.
 	lastMouseId           int               // The ID of the last instance a mouse action was done on.
 
-	proj  ProjectorController
-	hider *hider
+	proj    ProjectorController
+	freezer *freezer
+	hider   *hider
 }
 
 // Setup implements Frontend.
@@ -61,6 +62,9 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	}
 	if err := w.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
+	}
+	if w.conf.Wall.FreezeAt > 0 {
+		w.freezer = newFreezer(deps.conf, deps.obs, deps.states)
 	}
 	if w.conf.Wall.ShowAt >= 0 {
 		w.hider = newHider(deps.conf, deps.obs, deps.states)
@@ -176,6 +180,9 @@ func (w *Wall) Input(input Input) {
 // Update implements Frontend.
 func (w *Wall) Update(update mc.Update) {
 	w.states[update.Id] = update.State
+	if w.freezer != nil {
+		w.freezer.Update(update)
+	}
 	if w.hider != nil {
 		w.hider.Update(update)
 	}
@@ -285,6 +292,9 @@ func (w *Wall) promptWallSize() error {
 // resetIngame resets the active instance.
 func (w *Wall) resetIngame() {
 	w.host.ResetInstance(w.active)
+	if w.freezer != nil {
+		w.freezer.Reset(w.active)
+	}
 	if w.hider != nil {
 		w.hider.Reset(w.active)
 	}
@@ -324,6 +334,9 @@ func (w *Wall) setLocked(id int, lock bool) {
 // wallLock toggles the lock state of the given instance.
 func (w *Wall) wallLock(id int) {
 	lock := !w.locks[id]
+	if w.freezer != nil {
+		w.freezer.SetCanFreeze(id, !lock)
+	}
 	w.setLocked(id, lock)
 	if lock {
 		w.host.RunHook(HookLock)
@@ -358,6 +371,9 @@ func (w *Wall) wallReset(id int) {
 		return
 	}
 	if w.states[id].Type != mc.StIngame && w.host.ResetInstance(id) {
+		if w.freezer != nil {
+			w.freezer.Reset(id)
+		}
 		if w.hider != nil {
 			w.hider.Reset(id)
 		}

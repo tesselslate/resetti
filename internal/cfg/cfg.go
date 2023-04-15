@@ -58,7 +58,10 @@ type Wall struct {
 	AltRes       *Rectangle `toml:"alt_res"`     // Alternate ingame resolution
 	UseF1        bool       `toml:"use_f1"`
 
-	// Preview percentage to show instance at.
+	// Preview percentage to freeze instances at.
+	FreezeAt int `toml:"freeze_at"`
+
+	// Preview percentage to show instances at.
 	ShowAt int `toml:"show_at"`
 
 	// Instance moving settings.

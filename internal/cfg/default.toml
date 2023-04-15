@@ -130,6 +130,9 @@ alt_res = "400x1080+810,0"
 # enabled, make sure to set "f1:true" in your StandardSettings configuration.
 use_f1 = false
 
+# The percentage to show freeze at on preview. Set to 0 or below to disable.
+freeze_at = 0
+
 # The percentage to show instances at on preview. Set below 0 to disable.
 show_at = 5
 

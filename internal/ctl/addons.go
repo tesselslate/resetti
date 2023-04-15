@@ -9,12 +9,35 @@ import (
 	"github.com/woofdoggo/resetti/internal/obs"
 )
 
+// freezer freezes and unfreezes instances as their states change.
+type freezer struct {
+	conf      *cfg.Profile
+	obs       *obs.Client
+	canFreeze []bool
+	states    []mc.State
+}
+
 // hider processes instance state updates and hides and shows instances as they
 // change states.
 type hider struct {
 	conf   *cfg.Profile
 	obs    *obs.Client
 	states []mc.State
+}
+
+// newFreezer creates a new freezer with the given config.
+func newFreezer(conf *cfg.Profile, obs *obs.Client, states []mc.State) *freezer {
+	canFreeze := make([]bool, len(states))
+	newStates := make([]mc.State, len(states))
+	copy(newStates, states)
+	f := freezer{
+		conf,
+		obs,
+		canFreeze,
+		newStates,
+	}
+	f.unfreezeAll()
+	return &f
 }
 
 // newHider creates a new hider with the given config.
@@ -30,9 +53,72 @@ func newHider(conf *cfg.Profile, obs *obs.Client, states []mc.State) *hider {
 	return &h
 }
 
+// SetCanFreeze sets whether or not the given instance can be frozen.
+func (f *freezer) SetCanFreeze(id int, canFreeze bool) {
+	f.canFreeze[id] = canFreeze
+	if !canFreeze {
+		f.setFrozen(id, false)
+	} else {
+		f.Update(mc.Update{State: f.states[id], Id: id})
+	}
+}
+
+// Reset marks the given instance as resetting and freezable.
+func (f *freezer) Reset(id int) {
+	f.canFreeze[id] = true
+	f.setFrozen(id, false)
+}
+
+// Update updates the state of an instance.
+func (f *freezer) Update(update mc.Update) {
+	prev := f.states[update.Id]
+	next := update.State
+	threshold := f.conf.Wall.FreezeAt
+
+	nowPreview := prev.Type != mc.StPreview && next.Type == mc.StPreview
+	wasUnder := prev.Progress < threshold
+	nowOver := next.Progress >= threshold
+	if (next.Type == mc.StPreview && wasUnder && nowOver) || (nowPreview && nowOver) {
+		f.setFrozen(update.Id, true)
+	}
+	if next.Type == mc.StDirt {
+		f.setFrozen(update.Id, false)
+	}
+
+	f.states[update.Id] = update.State
+}
+
+// setFrozen freezes or unfreezes the given instance.
+func (f *freezer) setFrozen(id int, frozen bool) {
+	if frozen && !f.canFreeze[id] {
+		return
+	}
+	f.obs.SetSourceFilterEnabledAsync(
+		fmt.Sprintf("Wall MC %d", id+1),
+		fmt.Sprintf("Freeze %d", id+1),
+		frozen,
+	)
+}
+
+// unfreezeAll unfreezes all instances.
+func (f *freezer) unfreezeAll() {
+	err := f.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
+		for i := 1; i <= len(f.states); i += 1 {
+			b.SetSourceFilterEnabled(
+				fmt.Sprintf("Wall MC %d", i),
+				fmt.Sprintf("Freeze %d", i),
+				false,
+			)
+		}
+	})
+	if err != nil {
+		log.Printf("freezer.unfreezeAll: Batch failed: %s\n", err)
+	}
+}
+
 // Reset signals that the given instance has been reset.
-func (n *hider) Reset(id int) {
-	n.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", id+1), false)
+func (h *hider) Reset(id int) {
+	h.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", id+1), false)
 }
 
 // Update updates the state of an instance and returns whether or not it is now
@@ -62,6 +148,6 @@ func (h *hider) showAll() {
 		}
 	})
 	if err != nil {
-		log.Printf("notifier.showAll: Batch failed: %s\n", err)
+		log.Printf("hider.showAll: Batch failed: %s\n", err)
 	}
 }

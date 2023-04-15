@@ -6,6 +6,7 @@ local instance_count = nil
 local wall = nil
 local wall_width = nil
 local wall_height = nil
+local freezing = nil
 
 local locks = nil
 local locks_path = nil
@@ -19,6 +20,7 @@ function script_update(settings)
     wall = O.obs_data_get_bool(settings, "wall")
     wall_width = O.obs_data_get_int(settings, "wall_width")
     wall_height = O.obs_data_get_int(settings, "wall_height")
+    freezing = O.obs_data_get_bool(settings, "wall_freezing")
 
     locks = O.obs_data_get_bool(settings, "locks")
     locks_path = O.obs_data_get_string(settings, "locks_path")
@@ -45,6 +47,7 @@ function script_properties()
     -- Wall
     O.obs_properties_add_int_slider(wall, "wall_width", "Width", 1, 12, 1)
     O.obs_properties_add_int_slider(wall, "wall_height", "Height", 1, 12, 1)
+    O.obs_properties_add_bool(wall, "wall_freezing", "Freezing")
 
     local locks = O.obs_properties_create()
     O.obs_properties_add_path(locks, "locks_path", "File", O.OBS_PATH_FILE, "*.png *.jpg *.gif", nil)
@@ -119,6 +122,19 @@ function create_wall_scene()
         vec2.x = inst_width * ((i-1) % wall_width)
         vec2.y = inst_height * math.floor((i-1) / wall_width)
         O.obs_sceneitem_set_pos(item, vec2)
+
+        if freezing then
+            local data = O.obs_data_create_from_json([[
+            {
+                "hide_action": 2,
+                "show_action": 1
+            }
+            ]])
+            local freeze = O.obs_source_create("freeze_filter", "Freeze " .. tostring(i), data, nil)
+            O.obs_source_filter_add(source, freeze)
+            O.obs_source_release(freeze)
+            O.obs_data_release(data)
+        end
 
         local data = O.obs_data_create_from_json('{"file": "' .. locks_path .. '"}')
         local lock = O.obs_source_create(
