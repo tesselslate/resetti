@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +42,7 @@ const (
 // handles communication between them.
 type Controller struct {
 	conf *cfg.Profile
+	dbg  *debugLogger
 	obs  *obs.Client
 	x    *x11.Client
 
@@ -119,6 +119,7 @@ func Run(conf *cfg.Profile) error {
 	defer cancel()
 
 	c := Controller{}
+	c.dbg = &debugLogger{&c}
 	c.conf = conf
 	c.binds = make(map[cfg.Bind]cfg.ActionList)
 	c.hooks = map[int]string{
@@ -222,6 +223,7 @@ func Run(conf *cfg.Profile) error {
 	c.signals = signals
 
 	log.Printf("Ready.")
+	go c.dbg.Run()
 	err = c.run(ctx)
 	if err != nil {
 		fmt.Println("Failed to run:", err)
@@ -336,26 +338,6 @@ func (c *Controller) SetPriority(id int, prio bool) {
 	}
 }
 
-// debug prints debug information.
-func (c *Controller) debug() {
-	mem := runtime.MemStats{}
-	runtime.ReadMemStats(&mem)
-	memStats := strings.Builder{}
-	memStats.WriteString(fmt.Sprintf("\nLive objects: %d\n", mem.HeapObjects))
-	memStats.WriteString(fmt.Sprintf("Malloc count: %d\n", mem.Mallocs))
-	memStats.WriteString(fmt.Sprintf("Total allocation: %.2f mb\n", float64(mem.TotalAlloc)/1000000))
-	memStats.WriteString(fmt.Sprintf("Current allocation: %.2f mb\n", float64(mem.HeapAlloc)/1000000))
-	memStats.WriteString(fmt.Sprintf("GC time: %.2f%%\n", mem.GCCPUFraction))
-	memStats.WriteString(fmt.Sprintf("GC cycles: %d\n", mem.NumGC))
-	memStats.WriteString(fmt.Sprintf("Total STW: %.4f ms", float64(mem.PauseTotalNs)/1000000))
-	log.Printf(
-		"Received SIGUSR1\n---- Debug info\nGoroutine count: %d\nMemory:%s\nInstances:\n%s",
-		runtime.NumGoroutine(),
-		memStats.String(),
-		c.manager.Debug(),
-	)
-}
-
 // run runs the main loop for the controller.
 func (c *Controller) run(ctx context.Context) error {
 	for {
@@ -366,7 +348,7 @@ func (c *Controller) run(ctx context.Context) error {
 				log.Println("Shutting down.")
 				return nil
 			case syscall.SIGUSR1:
-				c.debug()
+				c.dbg.printAll()
 			}
 		case err := <-c.mgrErrors:
 			// All manager errors are fatal.

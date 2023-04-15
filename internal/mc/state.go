@@ -55,16 +55,6 @@ var (
 	forceWpstate = slices.Contains(os.Args, "--force-wpstate")
 )
 
-// State names
-var stateNames = [...]string{
-	"menu",
-	"dirt",
-	"preview",
-	"idle",
-	"ingame",
-	"world",
-}
-
 // State contains information about the current state of an instance.
 type State struct {
 	// Current main state (e.g. dirt, preview)
