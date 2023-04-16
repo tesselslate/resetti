@@ -59,7 +59,7 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	if err := m.obs.SetScene("Wall"); err != nil {
 		return fmt.Errorf("set scene: %w", err)
 	}
-	if m.conf.Wall.FreezeAt >= 0 {
+	if m.conf.Wall.FreezeAt > 0 {
 		m.freezer = newFreezer(deps.conf, deps.obs, deps.states)
 	}
 	if m.conf.Wall.ShowAt >= 0 {
