@@ -174,7 +174,13 @@ func getCpuCount() (int, error) {
 // GetCpuCount returns the number of CPUs on the user's system.
 func GetCpuCount() int {
 	if cpuCount == 0 {
-		panic("CPU count not found yet")
+		// The benchmark will never cause getCpuCount to get called.
+		n, err := getCpuCount()
+		if err != nil {
+			panic(err)
+		}
+		cpuCount = n
+		return n
 	}
 	return cpuCount
 }
