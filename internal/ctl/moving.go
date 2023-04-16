@@ -195,8 +195,7 @@ func (m *MovingWall) Update(update mc.Update) {
 		m.freezer.Update(update)
 	}
 	if m.hider != nil {
-		show := m.hider.Update(update)
-		if show {
+		if m.hider.ShouldShow(update) {
 			m.queue = append(m.queue, update.Id)
 			m.layout()
 			m.render()
@@ -349,10 +348,7 @@ func (m *MovingWall) render() {
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
 	if m.freezer != nil {
-		m.freezer.Reset(m.active)
-	}
-	if m.hider != nil {
-		m.hider.Reset(m.active)
+		m.freezer.Unfreeze(m.active)
 	}
 	m.active = -1
 	if m.conf.Wall.GotoLocked && m.playFirstLocked() {
@@ -430,10 +426,7 @@ func (m *MovingWall) wallReset(id int) {
 	}
 	if m.states[id].Type != mc.StIngame && m.host.ResetInstance(id) {
 		if m.freezer != nil {
-			m.freezer.Reset(id)
-		}
-		if m.hider != nil {
-			m.hider.Reset(id)
+			m.freezer.Unfreeze(id)
 		}
 		m.removeFromQueue(id)
 		m.host.RunHook(HookWallReset)

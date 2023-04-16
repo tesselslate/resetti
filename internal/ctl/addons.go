@@ -63,8 +63,8 @@ func (f *freezer) SetCanFreeze(id int, canFreeze bool) {
 	}
 }
 
-// Reset marks the given instance as resetting and freezable.
-func (f *freezer) Reset(id int) {
+// Unfreeze unfreezes the given instance and marks it as freezable.
+func (f *freezer) Unfreeze(id int) {
 	f.canFreeze[id] = true
 	f.setFrozen(id, false)
 }
@@ -116,14 +116,9 @@ func (f *freezer) unfreezeAll() {
 	}
 }
 
-// Reset signals that the given instance has been reset.
-func (h *hider) Reset(id int) {
-	h.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", id+1), false)
-}
-
-// Update updates the state of an instance and returns whether or not it is now
-// shown.
-func (h *hider) Update(update mc.Update) (show bool) {
+// ShouldShow processes a single state update and determines whether or not the
+// instance should now be shown.
+func (h *hider) ShouldShow(update mc.Update) bool {
 	prev := h.states[update.Id]
 	next := update.State
 	threshold := h.conf.Wall.ShowAt
@@ -131,13 +126,8 @@ func (h *hider) Update(update mc.Update) (show bool) {
 	nowPreview := prev.Type != mc.StPreview && next.Type == mc.StPreview
 	wasUnder := prev.Progress < threshold
 	nowOver := next.Progress >= threshold
-	if (next.Type == mc.StPreview && wasUnder && nowOver) || (nowPreview && nowOver) {
-		h.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Wall MC %d", update.Id+1), true)
-		show = true
-	}
-
 	h.states[update.Id] = update.State
-	return show
+	return (next.Type == mc.StPreview && wasUnder && nowOver) || (nowPreview && nowOver)
 }
 
 // showAll shows all instances.

@@ -422,6 +422,16 @@ func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) erro
 	return err
 }
 
+// SetSceneItemBoundsAsync moves and resizes the given scene item in a new
+// goroutine and logs any errors that occur.
+func (c *Client) SetSceneItemBoundsAsync(scene, name string, x, y, w, h float64) {
+	go func() {
+		if err := c.SetSceneItemBounds(scene, name, x, y, w, h); err != nil {
+			log.Printf("SetSceneItemBoundsAsync error: %s\n", err)
+		}
+	}()
+}
+
 // SetSceneItemVisible hides or shows the given scene item.
 func (c *Client) SetSceneItemVisible(scene, name string, visible bool) error {
 	id, err := c.getSceneItemId(scene, name)

@@ -184,7 +184,18 @@ func (w *Wall) Update(update mc.Update) {
 		w.freezer.Update(update)
 	}
 	if w.hider != nil {
-		w.hider.Update(update)
+		if w.hider.ShouldShow(update) {
+			x := update.Id % w.wallWidth
+			y := update.Id / w.wallWidth
+			w.obs.SetSceneItemBoundsAsync(
+				"Wall",
+				fmt.Sprintf("Wall MC %d", update.Id+1),
+				float64(x*w.instWidth),
+				float64(y*w.instHeight),
+				float64(w.instWidth),
+				float64(w.instHeight),
+			)
+		}
 	}
 }
 
@@ -293,10 +304,17 @@ func (w *Wall) promptWallSize() error {
 func (w *Wall) resetIngame() {
 	w.host.ResetInstance(w.active)
 	if w.freezer != nil {
-		w.freezer.Reset(w.active)
+		w.freezer.Unfreeze(w.active)
 	}
 	if w.hider != nil {
-		w.hider.Reset(w.active)
+		w.obs.SetSceneItemBoundsAsync(
+			"Wall",
+			fmt.Sprintf("Wall MC %d", w.active+1),
+			float64(w.proj.BaseWidth),
+			float64(w.proj.BaseHeight),
+			1,
+			1,
+		)
 	}
 	w.active = -1
 	if w.conf.Wall.GotoLocked && w.playFirstLocked() {
@@ -375,10 +393,17 @@ func (w *Wall) wallReset(id int) {
 	}
 	if w.states[id].Type != mc.StIngame && w.host.ResetInstance(id) {
 		if w.freezer != nil {
-			w.freezer.Reset(id)
+			w.freezer.Unfreeze(id)
 		}
 		if w.hider != nil {
-			w.hider.Reset(id)
+			w.obs.SetSceneItemBoundsAsync(
+				"Wall",
+				fmt.Sprintf("Wall MC %d", id+1),
+				float64(w.proj.BaseWidth),
+				float64(w.proj.BaseHeight),
+				1,
+				1,
+			)
 		}
 		w.host.RunHook(HookWallReset)
 	}
