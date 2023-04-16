@@ -279,9 +279,6 @@ func (m *Manager) Reset(id int) bool {
 	if state.Type == StDirt {
 		return false
 	}
-	if state.Type == StPreview && state.Progress > 85 {
-		return false
-	}
 	if m.conf.Wall.Enabled {
 		if time.Since(state.LastPreview) < time.Duration(m.conf.Wall.GracePeriod) {
 			return false
@@ -306,7 +303,7 @@ func (m *Manager) Reset(id int) bool {
 		}
 	}
 	var key xproto.Keycode
-	if state.Type == StPreview {
+	if state.Type == StPreview && state.Progress < 80 {
 		key = m.instances[id].info.PreviewKey
 	} else {
 		key = m.instances[id].info.ResetKey
