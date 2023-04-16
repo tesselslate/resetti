@@ -394,95 +394,55 @@ func (c *Client) GetSceneItemTransform(scene, name string) (x, y, w, h float64, 
 	return res.T.X, res.T.Y, res.T.Width, res.T.Height, err
 }
 
-// SetScene sets the current scene.
-func (c *Client) SetScene(name string) error {
-	req := reqSetScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// SetSceneAsync sets the current scene in a new goroutine and logs any errors
+// SetScene sets the current scene in a new goroutine and logs any errors
 // that occur.
-func (c *Client) SetSceneAsync(name string) {
+func (c *Client) SetScene(name string) {
 	go func() {
-		if err := c.SetScene(name); err != nil {
-			log.Printf("SetSceneAsync error: %s\n", err)
+		req := reqSetScene(name)
+		if _, err := c.sendRequest(req); err != nil {
+			log.Printf("SetScene error: %s\n", err)
 		}
 	}()
 }
 
-// SetSceneItemBounds moves and resizes the given scene item.
-func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) error {
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := reqSetSceneItemTransform(scene, id, x, y, w, h)
-	_, err = c.sendRequest(req)
-	return err
-}
-
-// SetSceneItemBoundsAsync moves and resizes the given scene item in a new
+// SetSceneItemBounds moves and resizes the given scene item in a new
 // goroutine and logs any errors that occur.
-func (c *Client) SetSceneItemBoundsAsync(scene, name string, x, y, w, h float64) {
+func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) {
 	go func() {
-		if err := c.SetSceneItemBounds(scene, name, x, y, w, h); err != nil {
-			log.Printf("SetSceneItemBoundsAsync error: %s\n", err)
+		id, err := c.getSceneItemId(scene, name)
+		if err != nil {
+			log.Printf("SetSceneItemBounds error: %s\n", err)
+		}
+		req := reqSetSceneItemTransform(scene, id, x, y, w, h)
+		if _, err = c.sendRequest(req); err != nil {
+			log.Printf("SetSceneItemBounds error: %s\n", err)
 		}
 	}()
 }
 
-// SetSceneItemVisible hides or shows the given scene item.
-func (c *Client) SetSceneItemVisible(scene, name string, visible bool) error {
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := reqSetSceneItemVisible(scene, id, visible)
-	_, err = c.sendRequest(req)
-	return err
-}
-
-// SetSceneItemVisibleAsync hides or shows the given scene item in a new
+// SetSceneItemVisible hides or shows the given scene item in a new
 // goroutine and logs any errors that occur.
-func (c *Client) SetSceneItemVisibleAsync(scene, name string, visible bool) {
+func (c *Client) SetSceneItemVisible(scene, name string, visible bool) {
 	go func() {
-		if err := c.SetSceneItemVisible(scene, name, visible); err != nil {
-			log.Printf("SetSceneItemVisibleAsync error: %s\n", err)
+		id, err := c.getSceneItemId(scene, name)
+		if err != nil {
+			log.Printf("SetSceneItemVisible error: %s\n", err)
+		}
+		req := reqSetSceneItemVisible(scene, id, visible)
+		if _, err = c.sendRequest(req); err != nil {
+			log.Printf("SetSceneItemVisible error: %s\n", err)
 		}
 	}()
 }
 
-// SetSourceFilterEnabled enables or disables a given filter.
-func (c *Client) SetSourceFilterEnabled(source, filter string, enabled bool) error {
-	req := reqSetSourceFilterEnabled(source, filter, enabled)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// SetSourceFilterEnabledAsync enables or disables a given filter in a new
-// goroutine and logs any errors that occur.
-func (c *Client) SetSourceFilterEnabledAsync(source, filter string, enabled bool) {
+// SetSourceFilterEnabled enables or disables a given filter in a new goroutine
+// and logs any errors that occur.
+func (c *Client) SetSourceFilterEnabled(source, filter string, enabled bool) {
 	go func() {
-		if err := c.SetSourceFilterEnabled(source, filter, enabled); err != nil {
-			log.Printf("SetSourceFilterEnabledAsync error: %s\n", err)
-		}
-	}()
-}
-
-// SetSourceSettings configures the given source's settings.
-func (c *Client) SetSourceSettings(name string, settings StringMap, overlay bool) error {
-	req := reqSetSourceSettings(name, settings, overlay)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// SetSourceSettingsAsync configures the given source's settings in a new
-// goroutine and logs any errors that occur.
-func (c *Client) SetSourceSettingsAsync(name string, settings StringMap, overlay bool) {
-	go func() {
-		if err := c.SetSourceSettings(name, settings, overlay); err != nil {
-			log.Printf("SetSourceSettingsAsync error: %s\n", err)
+		req := reqSetSourceFilterEnabled(source, filter, enabled)
+		_, err := c.sendRequest(req)
+		if err != nil {
+			log.Printf("SetSourceFilterEnabled error: %s\n", err)
 		}
 	}()
 }

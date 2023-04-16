@@ -60,9 +60,7 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	if err := w.proj.Focus(); err != nil {
 		return fmt.Errorf("focus projector: %w", err)
 	}
-	if err := w.obs.SetScene("Wall"); err != nil {
-		return fmt.Errorf("set scene: %w", err)
-	}
+	w.obs.SetScene("Wall")
 	if w.conf.Wall.FreezeAt > 0 {
 		w.freezer = newFreezer(deps.conf, deps.obs, deps.states)
 	}
@@ -187,7 +185,7 @@ func (w *Wall) Update(update mc.Update) {
 		if w.hider.ShouldShow(update) {
 			x := update.Id % w.wallWidth
 			y := update.Id / w.wallWidth
-			w.obs.SetSceneItemBoundsAsync(
+			w.obs.SetSceneItemBounds(
 				"Wall",
 				fmt.Sprintf("Wall MC %d", update.Id+1),
 				float64(x*w.instWidth),
@@ -307,7 +305,7 @@ func (w *Wall) resetIngame() {
 		w.freezer.Unfreeze(w.active)
 	}
 	if w.hider != nil {
-		w.obs.SetSceneItemBoundsAsync(
+		w.obs.SetSceneItemBounds(
 			"Wall",
 			fmt.Sprintf("Wall MC %d", w.active+1),
 			float64(w.proj.BaseWidth),
@@ -324,7 +322,7 @@ func (w *Wall) resetIngame() {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
 	w.host.DeleteSleepbgLock(false)
-	w.obs.SetSceneAsync("Wall")
+	w.obs.SetScene("Wall")
 	w.host.RunHook(HookReset)
 }
 
@@ -346,7 +344,7 @@ func (w *Wall) setLocked(id int, lock bool) {
 	}
 	w.locks[id] = lock
 	w.host.SetPriority(id, lock)
-	w.obs.SetSceneItemVisibleAsync("Wall", fmt.Sprintf("Lock %d", id+1), lock)
+	w.obs.SetSceneItemVisible("Wall", fmt.Sprintf("Lock %d", id+1), lock)
 }
 
 // wallLock toggles the lock state of the given instance.
@@ -379,7 +377,7 @@ func (w *Wall) wallPlay(id int) {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
 		}
 	})
-	w.obs.SetSceneAsync("Instance")
+	w.obs.SetScene("Instance")
 	if w.locks[id] {
 		w.setLocked(id, false)
 	}
@@ -396,7 +394,7 @@ func (w *Wall) wallReset(id int) {
 			w.freezer.Unfreeze(id)
 		}
 		if w.hider != nil {
-			w.obs.SetSceneItemBoundsAsync(
+			w.obs.SetSceneItemBounds(
 				"Wall",
 				fmt.Sprintf("Wall MC %d", id+1),
 				float64(w.proj.BaseWidth),

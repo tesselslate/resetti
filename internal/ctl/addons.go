@@ -93,7 +93,7 @@ func (f *freezer) setFrozen(id int, frozen bool) {
 	if frozen && !f.canFreeze[id] {
 		return
 	}
-	f.obs.SetSourceFilterEnabledAsync(
+	f.obs.SetSourceFilterEnabled(
 		fmt.Sprintf("Wall MC %d", id+1),
 		fmt.Sprintf("Freeze %d", id+1),
 		frozen,

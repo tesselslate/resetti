@@ -56,9 +56,7 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	if err := m.proj.Focus(); err != nil {
 		return fmt.Errorf("focus projector: %w", err)
 	}
-	if err := m.obs.SetScene("Wall"); err != nil {
-		return fmt.Errorf("set scene: %w", err)
-	}
+	m.obs.SetScene("Wall")
 	if m.conf.Wall.FreezeAt > 0 {
 		m.freezer = newFreezer(deps.conf, deps.obs, deps.states)
 	}
@@ -360,7 +358,7 @@ func (m *MovingWall) resetIngame() {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}
 	m.host.DeleteSleepbgLock(false)
-	m.obs.SetSceneAsync("Wall")
+	m.obs.SetScene("Wall")
 	m.host.RunHook(HookReset)
 }
 
@@ -413,7 +411,7 @@ func (m *MovingWall) wallPlay(id int) {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
 		}
 	})
-	m.obs.SetSceneAsync("Instance")
+	m.obs.SetScene("Instance")
 	m.setLocked(id, false)
 	m.removeFromQueue(id)
 	m.host.CreateSleepbgLock()
