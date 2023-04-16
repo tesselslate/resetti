@@ -396,6 +396,9 @@ func (m *MovingWall) wallLock(id int) {
 		m.host.RunHook(HookLock)
 	} else {
 		m.host.RunHook(HookUnlock)
+		if m.conf.Wall.ResetUnlock {
+			m.wallReset(id)
+		}
 	}
 	if !m.conf.Wall.Moving.Gaps {
 		m.collapseEmpty()

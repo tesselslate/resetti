@@ -55,6 +55,7 @@ type Wall struct {
 	Enabled        bool `toml:"enabled"`         // Whether to use multi or wall
 	ConfinePointer bool `toml:"confine_pointer"` // Whether or not to confine the pointer to the projector
 	GotoLocked     bool `toml:"goto_locked"`     // Also known as wall bypass
+	ResetUnlock    bool `toml:"reset_unlock"`    // Reset on unlock
 	GracePeriod    int  `toml:"grace_period"`    // Milliseconds to wait after preview before a reset can occur
 
 	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution

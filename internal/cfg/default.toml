@@ -108,6 +108,9 @@ confine_pointer = false
 # finished generating a world (if any.)
 goto_locked = false
 
+# If enabled, instances will be automatically reset when they are unlocked.
+reset_unlock = false
+
 # The number of milliseconds to prevent you from resetting an instance after it
 # starts previewing. Set to 0 to disable.
 grace_period = 250

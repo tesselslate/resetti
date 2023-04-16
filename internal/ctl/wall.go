@@ -342,6 +342,9 @@ func (w *Wall) wallLock(id int) {
 		w.host.RunHook(HookLock)
 	} else {
 		w.host.RunHook(HookUnlock)
+		if w.conf.Wall.ResetUnlock {
+			w.wallReset(id)
+		}
 	}
 }
 
