@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 )
 
 // TODO: Pre 1.14 support
-// TODO: Process monitoring, handle instance death/restart
 
 // An instance contains all of the relevant information for an instance, such
 // as its game directory and current state.
@@ -111,10 +111,20 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 	defer func() {
 		_ = m.watcher.Close()
 	}()
+
+	instanceCheckup := time.NewTicker(time.Second)
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-instanceCheckup.C:
+			for id, inst := range m.instances {
+				_, err := os.Stat(fmt.Sprintf("/proc/%d/", inst.info.Pid))
+				if err != nil {
+					errch <- fmt.Errorf("instance %d (%s) died. reboot it", id, inst.info.Dir)
+					return
+				}
+			}
 		case id := <-m.pause:
 			state := m.instances[id].state.Type
 			if state == StPreview || state == StIdle {
