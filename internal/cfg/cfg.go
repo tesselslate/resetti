@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
+	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
+
+// The number of CPUs on the user's system.
+var cpuCount int
 
 //go:embed default.toml
 var defaultProfile []byte
@@ -141,6 +145,39 @@ type Rectangle struct {
 	X, Y, W, H uint32
 }
 
+// getCpuCount finds the user's CPU count through /sys.
+func getCpuCount() (int, error) {
+	if cpuCount != 0 {
+		panic("CPU count already found")
+	}
+
+	// I will absolutely lose it if this file can contain multiple segments
+	// on certain CPUs.
+	poss, err := os.ReadFile("/sys/devices/system/cpu/present")
+	if err != nil {
+		return 0, fmt.Errorf("read file: %w", err)
+	}
+	a, b, _ := strings.Cut(strings.TrimSuffix(string(poss), "\n"), "-")
+	x, err := strconv.Atoi(a)
+	if err != nil {
+		return 0, fmt.Errorf("convert online list: %w", err)
+	}
+	y, err := strconv.Atoi(b)
+	if err != nil {
+		return 0, fmt.Errorf("convert online list: %w", err)
+	}
+	cpuCount = y - x + 1 // e.g. (0-23) == 24
+	return cpuCount, nil
+}
+
+// GetCpuCount returns the number of CPUs on the user's system.
+func GetCpuCount() int {
+	if cpuCount == 0 {
+		panic("CPU count not found yet")
+	}
+	return cpuCount
+}
+
 // GetDirectory returns the path to the user's configuration directory.
 func GetDirectory() (string, error) {
 	// UserConfigDir automatically checks for $XDG_CONFIG_HOME and falls back
@@ -237,11 +274,14 @@ func validateProfile(conf *Profile) error {
 	// TODO moving
 
 	// Check affinity settings.
+	maxCpu, err := getCpuCount()
+	if err != nil {
+		return fmt.Errorf("get cpu count: %w", err)
+	}
 	switch conf.Wall.Perf.Affinity {
 	case "":
 		break
 	case "sequence":
-		maxCpu := runtime.NumCPU()
 		seq := conf.Wall.Perf.Seq
 		if seq.ActiveCpus > maxCpu {
 			return fmt.Errorf("invalid active cpu count %d", seq.ActiveCpus)
@@ -257,7 +297,6 @@ func validateProfile(conf *Profile) error {
 			return fmt.Errorf("invalid ccx split %d", conf.Wall.Perf.Adv.CcxSplit)
 		}
 
-		maxCpu := runtime.NumCPU()
 		adv := conf.Wall.Perf.Adv
 		maxCpu /= adv.CcxSplit
 		if adv.CpusIdle > maxCpu {

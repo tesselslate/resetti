@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -123,7 +122,7 @@ func NewCpuManager(instances []mc.InstanceInfo, states []mc.State, conf *cfg.Pro
 // getCpuTopology returns information about the user's CPU topology.
 func getCpuTopology() (cpuTopology, error) {
 	// Determine CPU cache topology.
-	topo := cpuTopology{CpuCount: runtime.NumCPU()}
+	topo := cpuTopology{CpuCount: cfg.GetCpuCount()}
 	for i := 0; i < topo.CpuCount; i += 1 {
 		cacheDir := fmt.Sprintf("/sys/devices/system/cpu/cpu%d/cache/", i)
 		l1, l3 := -1, -1
