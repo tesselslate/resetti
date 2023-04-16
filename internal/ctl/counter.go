@@ -63,8 +63,13 @@ func (c *counter) Increment() {
 // increment adds 1 to the reset count and writes it to the count file.
 func (c *counter) increment() {
 	c.count += 1
-	// TODO: Use lastWrite to batch writes.
-	c.lastWrite = time.Now()
+	if time.Since(c.lastWrite) > time.Second {
+		c.write()
+	}
+}
+
+// write writes the counter.
+func (c *counter) write() {
 	buf := []byte(strconv.Itoa(c.count))
 	_, err := c.file.Seek(0, 0)
 	if err != nil {
@@ -77,6 +82,7 @@ func (c *counter) increment() {
 	} else if n != len(buf) {
 		log.Printf("Reset counter: write failed: not a full write (%d/%d)\n", n, len(buf))
 	}
+	c.lastWrite = time.Now()
 }
 
 // Run starts processing resets in the background.
@@ -87,11 +93,12 @@ func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
 	}
 	wg.Add(1)
 	defer func() {
+		c.write()
 		if err := c.file.Close(); err != nil {
 			log.Printf("Reset counter: close failed: %s\n", err)
 			log.Printf("Here's your reset count! Back it up: %d\n", c.count)
 		} else {
-			log.Println("Reset counter stopped.")
+			log.Printf("Reset counter stopped (count: %d).\n", c.count)
 		}
 		wg.Done()
 	}()
@@ -99,10 +106,18 @@ func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			// Drain the channel of any more reset increments.
-			time.Sleep(10 * time.Millisecond)
-			for range c.inc {
-				c.increment()
+			log.Println("Reset counter: waiting for last resets...")
+			time.Sleep(50 * time.Millisecond)
+		outer:
+			for {
+				select {
+				case <-c.inc:
+					c.increment()
+				default:
+					break outer
+				}
 			}
+			return
 		case <-c.inc:
 			c.increment()
 		}
