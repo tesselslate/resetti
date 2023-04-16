@@ -59,7 +59,6 @@ func (m *Multi) Input(input Input) {
 			if m.x.GetActiveWindow() != m.instances[m.active].Wid {
 				continue
 			}
-			// TODO sleepbg lock
 			next := (m.active + 1) % len(m.states)
 			current := m.active
 			if m.host.ResetInstance(current) {

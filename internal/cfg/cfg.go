@@ -271,7 +271,29 @@ func validateProfile(conf *Profile) error {
 		return errors.New("need both stretched and active resolution")
 	}
 
-	// TODO moving
+	// Check moving settings.
+	if conf.Wall.Moving.Enabled {
+		if len(conf.Wall.Moving.Groups) < 1 {
+			return errors.New("need at least one moving group")
+		}
+		for _, group := range conf.Wall.Moving.Groups {
+			if group.Width*group.Height <= 0 {
+				return errors.New("each group must have at least one instance")
+			}
+			if !validateRectangle(&group.Space) {
+				return errors.New("each group must occupy a non-zero amount of space")
+			}
+		}
+		locks := conf.Wall.Moving.Locks
+		if locks != nil {
+			if locks.Width*locks.Height <= 0 {
+				return errors.New("lock group must have at least one instance")
+			}
+			if !validateRectangle(&locks.Space) {
+				return errors.New("lock group must occupy a non-zero amount of space")
+			}
+		}
+	}
 
 	// Check affinity settings.
 	maxCpu, err := getCpuCount()
