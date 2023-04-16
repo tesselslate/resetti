@@ -204,12 +204,14 @@ func (m *MovingWall) Update(update mc.Update) {
 	} else {
 		prev := m.states[update.Id].Type
 		next := update.State.Type
-		nowPreview := prev != mc.StPreview && next == mc.StPreview
-		catchIdle := (next == mc.StIdle && !slices.Contains(m.queue, update.Id))
-		if (nowPreview || catchIdle) && !slices.Contains(m.locks, update.Id) {
-			m.queue = append(m.queue, update.Id)
-			m.layout()
-			m.render()
+		if !slices.Contains(m.queue, update.Id) && !slices.Contains(m.locks, update.Id) {
+			nowPreview := prev != mc.StPreview && next == mc.StPreview
+			catchIdle := next == mc.StIdle
+			if nowPreview || catchIdle {
+				m.queue = append(m.queue, update.Id)
+				m.layout()
+				m.render()
+			}
 		}
 	}
 	m.states[update.Id] = update.State
