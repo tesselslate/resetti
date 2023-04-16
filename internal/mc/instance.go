@@ -108,11 +108,12 @@ func (m *Manager) GetStates() []State {
 // Run starts managing instances in the background. Any non-fatal errors are
 // logged, any fatal errors are returned via the provided error channel.
 func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- error) {
+	instanceCheckup := time.NewTicker(time.Second)
 	defer func() {
+		instanceCheckup.Stop()
 		_ = m.watcher.Close()
 	}()
 
-	instanceCheckup := time.NewTicker(time.Second)
 	for {
 		select {
 		case <-ctx.Done():
