@@ -65,7 +65,6 @@ func (p *ProjectorController) ProcessEvent(evt x11.Event) {
 		if err := p.updateProjector(p.window); err != nil {
 			log.Printf("ProjectorController: Failed to process resize event: %s\n", err)
 		}
-		log.Println("B")
 	}
 }
 
