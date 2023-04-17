@@ -126,8 +126,8 @@ function create_wall_scene()
         if freezing then
             local data = O.obs_data_create_from_json([[
             {
-                "deactivate_action": 2,
-                "activate_action": 1
+                "hide_action": 2,
+                "show_action": 1
             }
             ]])
             local freeze = O.obs_source_create("freeze_filter", "Freeze " .. tostring(i), data, nil)

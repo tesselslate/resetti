@@ -193,9 +193,11 @@ func (m *MovingWall) Update(update mc.Update) {
 	}
 	if m.hider != nil {
 		if m.hider.ShouldShow(update) {
-			m.queue = append(m.queue, update.Id)
-			m.layout()
-			m.render()
+			if !slices.Contains(m.queue, update.Id) {
+				m.queue = append(m.queue, update.Id)
+				m.layout()
+				m.render()
+			}
 		}
 	} else {
 		prev := m.states[update.Id].Type
