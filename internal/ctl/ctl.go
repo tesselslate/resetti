@@ -56,22 +56,22 @@ type Controller struct {
 	inputs   <-chan Input
 	hooks    map[int]string
 
-	obsErrors    <-chan error
-	mgrErrors    <-chan error
-	x11Errors    <-chan error
-	mgrEvents    <-chan mc.Update
-	signals      <-chan os.Signal
-	focusChanges <-chan xproto.Window
+	obsErrors <-chan error
+	mgrErrors <-chan error
+	x11Errors <-chan error
+	mgrEvents <-chan mc.Update
+	signals   <-chan os.Signal
+	x11Events <-chan x11.Event
 }
 
 // A Frontend handles user-facing I/O (input handling, instance actions, OBS
 // output) and communicates with a Controller.
 type Frontend interface {
-	// FocusChange processes a single window focus change.
-	FocusChange(xproto.Window)
-
 	// Input processes a single user input.
 	Input(Input)
+
+	// ProcessEvent processes a miscellanous event from the X server.
+	ProcessEvent(x11.Event)
 
 	// Setup takes in all of the potentially needed dependencies and prepares
 	// the Frontend to handle user input.
@@ -209,7 +209,7 @@ func Run(conf *cfg.Profile) error {
 	c.mgrEvents = evtch
 	c.mgrErrors = errch
 	go c.manager.Run(ctx, evtch, errch)
-	c.focusChanges, c.x11Errors, err = c.x.Poll(ctx)
+	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
@@ -368,8 +368,8 @@ func (c *Controller) run(ctx context.Context) error {
 			if c.cpu != nil {
 				c.cpu.Update(evt)
 			}
-		case win := <-c.focusChanges:
-			c.frontend.FocusChange(win)
+		case evt := <-c.x11Events:
+			c.frontend.ProcessEvent(evt)
 		case input := <-c.inputs:
 			c.frontend.Input(input)
 		}

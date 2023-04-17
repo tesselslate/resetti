@@ -3,7 +3,6 @@ package ctl
 import (
 	"fmt"
 
-	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
@@ -40,11 +39,6 @@ func (m *Multi) Setup(deps frontendDependencies) error {
 	return nil
 }
 
-// FocusChange implements Frontend.
-func (m *Multi) FocusChange(win xproto.Window) {
-	// Do nothing.
-}
-
 // Input implements Frontend.
 func (m *Multi) Input(input Input) {
 	actions := m.conf.Keybinds[input.Bind]
@@ -69,6 +63,11 @@ func (m *Multi) Input(input Input) {
 			}
 		}
 	}
+}
+
+// ProcessEvent implements Frontend.
+func (m *Multi) ProcessEvent(x11.Event) {
+	// Do nothing.
 }
 
 // Update implements Frontend.

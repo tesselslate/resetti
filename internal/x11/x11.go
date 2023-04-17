@@ -115,6 +115,12 @@ type Client struct {
 	mu sync.Mutex
 }
 
+// Event represents an event from the X server to be processed by resetti.
+type Event any
+
+// FocusEvent represents a window focus change.
+type FocusEvent xproto.Window
+
 // InputState represents the state of a button or key (up or down.)
 type InputState int
 
@@ -137,6 +143,12 @@ type Pointer struct {
 
 	// Modmask (contains keyboard modifiers)
 	buttons uint16
+}
+
+// ResizeEvent contains information about a change to a window's geometry.
+type ResizeEvent struct {
+	Window     xproto.Window
+	X, Y, W, H int
 }
 
 // atomCache maintains a mapping of strings to X11 atoms to avoid re-requesting
@@ -379,8 +391,8 @@ func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
 }
 
 // Poll starts listening for window focus changes in the background.
-func (c *Client) Poll(ctx context.Context) (<-chan xproto.Window, <-chan error, error) {
-	ch := make(chan xproto.Window, 256)
+func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
+	ch := make(chan Event, 256)
 	errch := make(chan error, 8)
 	go c.poll(ctx, ch, errch)
 	return ch, errch, nil
@@ -578,7 +590,7 @@ func (c *Client) setCurrentDesktop(desktop uint32) error {
 }
 
 // poll listens for user inputs in the background.
-func (c *Client) poll(ctx context.Context, ch chan<- xproto.Window, errch chan<- error) {
+func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) {
 	defer close(ch)
 	defer close(errch)
 	activeWindow, err := c.atoms.Get(netActiveWindow)
@@ -603,6 +615,14 @@ func (c *Client) poll(ctx context.Context, ch chan<- xproto.Window, errch chan<-
 			continue
 		}
 		switch evt := evt.(type) {
+		case xproto.ConfigureNotifyEvent:
+			ch <- ResizeEvent{
+				evt.Window,
+				int(evt.X),
+				int(evt.Y),
+				int(evt.Width),
+				int(evt.Height),
+			}
 		case xproto.PropertyNotifyEvent:
 			if activeWindow != evt.Atom {
 				continue
@@ -612,7 +632,7 @@ func (c *Client) poll(ctx context.Context, ch chan<- xproto.Window, errch chan<-
 				errch <- err
 				continue
 			}
-			ch <- win
+			ch <- FocusEvent(win)
 		}
 	}
 }

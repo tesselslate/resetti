@@ -43,18 +43,29 @@ func (p *ProjectorController) Focus() error {
 	return nil
 }
 
-// FocusChange processes a single window focus change.
-func (p *ProjectorController) FocusChange(win xproto.Window) {
-	// HACK: We don't actually need the pointer grab here, but if we don't grab
-	// it then OBS decides to for some reason. This prevents the game from being
-	// able to grab the pointer quickly. There's no code in OBS for grabbing the
-	// pointer, so it's likely somewhere in Qt and I'm not interested in digging
-	// into more C(++) code at the moment.
-	p.Active = slices.Contains(p.children, win)
-	if p.grab && !p.Active {
-		p.ungrabPointer()
-	} else if !p.grab && p.Active {
-		p.grabPointer()
+// ProcessEvent processes a single event.
+func (p *ProjectorController) ProcessEvent(evt x11.Event) {
+	switch evt := evt.(type) {
+	case x11.FocusEvent:
+		// HACK: We don't actually need the pointer grab here, but if we don't grab
+		// it then OBS decides to for some reason. This prevents the game from being
+		// able to grab the pointer quickly. There's no code in OBS for grabbing the
+		// pointer, so it's likely somewhere in Qt and I'm not interested in digging
+		// into more C(++) code at the moment.
+		p.Active = slices.Contains(p.children, xproto.Window(evt))
+		if p.grab && !p.Active {
+			p.ungrabPointer()
+		} else if !p.grab && p.Active {
+			p.grabPointer()
+		}
+	case x11.ResizeEvent:
+		if evt.Window != p.window {
+			return
+		}
+		if err := p.updateProjector(p.window); err != nil {
+			log.Printf("ProjectorController: Failed to process resize event: %s\n", err)
+		}
+		log.Println("B")
 	}
 }
 
@@ -110,29 +121,7 @@ func (p *ProjectorController) findProjector() error {
 			continue
 		}
 		if strings.Contains(title, "Projector (Scene) - Wall") {
-			p.window = win
-			width, height, err := p.x.GetWindowSize(win)
-			if err != nil {
-				return fmt.Errorf("get projector size: %w", err)
-			}
-			p.children = p.x.GetWindowChildren(win)
-
-			// Calculate projector letterboxing. Reference:
-			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/display-helpers.hpp#L23
-			// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/window-projector.cpp#L180
-			p.winWidth, p.winHeight = int(width), int(height)
-			baseRatio := float64(p.BaseWidth) / float64(p.BaseHeight)
-			projRatio := float64(p.winWidth) / float64(p.winHeight)
-			if projRatio > baseRatio {
-				p.scale = float64(p.winHeight) / float64(p.BaseHeight)
-			} else {
-				p.scale = float64(p.winWidth) / float64(p.BaseWidth)
-			}
-			p.display.W = uint32(p.scale * float64(p.BaseWidth))
-			p.display.H = uint32(p.scale * float64(p.BaseHeight))
-			p.display.X = uint32(p.winWidth/2) - (p.display.W / 2)
-			p.display.Y = uint32(p.winHeight/2) - (p.display.H / 2)
-			return nil
+			return p.updateProjector(win)
 		}
 	}
 	return errors.New("no projector found")
@@ -164,4 +153,31 @@ func (p *ProjectorController) ungrabPointer() {
 		log.Println("Ungrabbed pointer.")
 		p.grab = false
 	}
+}
+
+// updateProjector updates the projector size.
+func (p *ProjectorController) updateProjector(win xproto.Window) error {
+	p.window = win
+	width, height, err := p.x.GetWindowSize(win)
+	if err != nil {
+		return fmt.Errorf("get projector size: %w", err)
+	}
+	p.children = p.x.GetWindowChildren(win)
+
+	// Calculate projector letterboxing. Reference:
+	// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/display-helpers.hpp#L23
+	// https://github.com/obsproject/obs-studio/blob/1b708b312e00595277dbf871f8488820cba4540a/UI/window-projector.cpp#L180
+	p.winWidth, p.winHeight = int(width), int(height)
+	baseRatio := float64(p.BaseWidth) / float64(p.BaseHeight)
+	projRatio := float64(p.winWidth) / float64(p.winHeight)
+	if projRatio > baseRatio {
+		p.scale = float64(p.winHeight) / float64(p.BaseHeight)
+	} else {
+		p.scale = float64(p.winWidth) / float64(p.BaseWidth)
+	}
+	p.display.W = uint32(p.scale * float64(p.BaseWidth))
+	p.display.H = uint32(p.scale * float64(p.BaseHeight))
+	p.display.X = uint32(p.winWidth/2) - (p.display.W / 2)
+	p.display.Y = uint32(p.winHeight/2) - (p.display.H / 2)
+	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
@@ -73,11 +72,6 @@ func (w *Wall) Setup(deps frontendDependencies) error {
 	w.host.DeleteSleepbgLock(true)
 
 	return nil
-}
-
-// FocusChange implements Frontend.
-func (w *Wall) FocusChange(win xproto.Window) {
-	w.proj.FocusChange(win)
 }
 
 // Input implements Frontend.
@@ -173,6 +167,11 @@ func (w *Wall) Input(input Input) {
 			}
 		}
 	}
+}
+
+// ProcessEvent implements Frontend.
+func (w *Wall) ProcessEvent(evt x11.Event) {
+	w.proj.ProcessEvent(evt)
 }
 
 // Update implements Frontend.

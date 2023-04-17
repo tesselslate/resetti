@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
@@ -73,9 +72,9 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	return nil
 }
 
-// FocusChange processes a single window focus change.
-func (m *MovingWall) FocusChange(win xproto.Window) {
-	m.proj.FocusChange(win)
+// ProcessEvent implements Frontend.
+func (m *MovingWall) ProcessEvent(evt x11.Event) {
+	m.proj.ProcessEvent(evt)
 }
 
 // Input processes a single user input.
