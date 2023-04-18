@@ -4,9 +4,21 @@ resetti is a Linux-compatible reset macro for Minecraft speedruns. It supports
 a variety of different resetting styles, categories, and Minecraft versions.
 
 ## Installation
+Distribution specific packages are currently only limited to **Arch Linux**. More distros are planned for later.
 
-There are currently no distribution-specific packages available.
-
+### From the AUR
+#### Stable release
+```
+git clone https://aur.archlinux.org/resetti
+cd resetti
+makepkg -si
+```
+#### Development release
+```
+git clone https://aur.archlinux.org/resetti-git
+cd resetti-git
+makepkg -si
+```
 ### From source
 
 If you have [Go](https://go.dev) installed, you can install from source:
