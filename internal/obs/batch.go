@@ -13,7 +13,7 @@ type BatchMode int
 // batchError represents an internal error when processing a batch which should
 // be caught and handled by recover().
 type batchError struct {
-    err error
+	err error
 }
 
 // Request batch modes.

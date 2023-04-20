@@ -20,17 +20,25 @@ type MovingWall struct {
 	obs  *obs.Client
 	x    *x11.Client
 
-	instances  []mc.InstanceInfo     // List of instance metadata
-	states     []mc.State            // List of instance states
-	queue      []int                 // Instance queue. -1 marks empty.
-	locks      []int                 // List of locked instances.
-	hitboxes   map[cfg.Rectangle]int // Each instance's location on the projector.
-	active     int                   // Active instance. -1 is a sentinel for wall
-	lastHitbox cfg.Rectangle         // The last hitbox a mouse action was done on.
+	instances  []mc.InstanceInfo // List of instance metadata
+	states     []mc.State        // List of instance states
+	queue      []int             // Instance queue. -1 marks empty.
+	locks      []int             // List of locked instances.
+	hitboxes   []hitbox          // Each instance's location on the projector.
+	active     int               // Active instance. -1 is a sentinel for wall
+	lastHitbox cfg.Rectangle     // The last hitbox a mouse action was done on.
 
 	proj    ProjectorController
 	freezer *freezer
 	hider   *hider
+}
+
+// hitbox contains information about the state of an instance on the projector.
+type hitbox struct {
+	id        int // Instance ID
+	box       cfg.Rectangle
+	clickable bool
+	z         int
 }
 
 // Setup implements Frontend.
@@ -68,7 +76,6 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 		m.queue = append(m.queue, i)
 	}
 	m.layout()
-	m.render()
 	return nil
 }
 
@@ -120,7 +127,6 @@ func (m *MovingWall) Input(input Input) {
 				m.wallResetAll()
 				m.collapseEmpty()
 				m.layout()
-				m.render()
 			case cfg.ActionWallPlayFirstLocked:
 				if input.Held {
 					continue
@@ -153,11 +159,11 @@ func (m *MovingWall) Input(input Input) {
 					if !ok {
 						continue
 					}
-					if input.Held && hitbox == m.lastHitbox {
+					if input.Held && hitbox.box == m.lastHitbox {
 						continue
 					}
-					id = m.hitboxes[hitbox]
-					m.lastHitbox = hitbox
+					id = hitbox.id
+					m.lastHitbox = hitbox.box
 				}
 				if id < 0 || id > len(m.instances)-1 {
 					continue
@@ -180,7 +186,6 @@ func (m *MovingWall) Input(input Input) {
 					}
 				}
 				m.layout()
-				m.render()
 			}
 		}
 	}
@@ -196,7 +201,6 @@ func (m *MovingWall) Update(update mc.Update) {
 			if !slices.Contains(m.queue, update.Id) {
 				m.queue = append(m.queue, update.Id)
 				m.layout()
-				m.render()
 			}
 		}
 	} else {
@@ -208,7 +212,6 @@ func (m *MovingWall) Update(update mc.Update) {
 			if nowPreview || catchIdle {
 				m.queue = append(m.queue, update.Id)
 				m.layout()
-				m.render()
 			}
 		}
 	}
@@ -227,27 +230,34 @@ func (m *MovingWall) collapseEmpty() {
 }
 
 // getHitbox gets the hitbox the given input intersects with, if any.
-func (m *MovingWall) getHitbox(input Input) (cfg.Rectangle, bool) {
+func (m *MovingWall) getHitbox(input Input) (hitbox, bool) {
 	x, y := m.proj.ToVideo(input.X, input.Y)
-	for hitbox := range m.hitboxes {
-		a := x >= int(hitbox.X) && x <= int(hitbox.X+hitbox.W)
-		b := y >= int(hitbox.Y) && y <= int(hitbox.Y+hitbox.H)
-		if a && b {
-			return hitbox, true
+	var hits []hitbox
+	for _, hitbox := range m.hitboxes {
+		a := x >= int(hitbox.box.X) && x <= int(hitbox.box.X+hitbox.box.W)
+		b := y >= int(hitbox.box.Y) && y <= int(hitbox.box.Y+hitbox.box.H)
+		if a && b && hitbox.clickable {
+			hits = append(hits, hitbox)
 		}
 	}
-	return cfg.Rectangle{}, false
+	switch len(hits) {
+	case 0:
+		return hitbox{}, false
+	case 1:
+		return hits[0], true
+	default:
+		slices.SortFunc(hits, func(a, b hitbox) bool {
+			return a.z < b.z
+		})
+		return hits[0], true
+	}
 }
 
-// layout updates the mapping of hitboxes to instance IDs based on the current
-// state of the queue and locked instances.
+// layout updates the mapping of hitboxes to instance IDs and rerenders the
+// wall scene based on the current state of the queue and locked group.
 func (m *MovingWall) layout() {
-	m.hitboxes = make(map[cfg.Rectangle]int)
+	m.hitboxes = make([]hitbox, 0, len(m.instances))
 	groups := m.conf.Wall.Moving.Groups
-	locks := m.conf.Wall.Moving.Locks
-	if locks != nil {
-		m.layoutGroup(*locks, m.locks)
-	}
 
 	from := 0
 	for _, group := range groups {
@@ -258,13 +268,18 @@ func (m *MovingWall) layout() {
 		if to > len(m.queue) {
 			to = len(m.queue)
 		}
-		m.layoutGroup(group, m.queue[from:to])
+		m.layoutGroup(group, from, m.queue[from:to])
 		from = to
 	}
+	if m.conf.Wall.Moving.Locks != nil {
+		m.layoutGroup(*m.conf.Wall.Moving.Locks, from, m.locks)
+	}
+
+	m.layoutObs()
 }
 
 // layoutGroup updates the layout of a specific group of instances.
-func (m *MovingWall) layoutGroup(group cfg.Group, instances []int) {
+func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 	instWidth := group.Space.W / group.Width
 	instHeight := group.Space.H / group.Height
 	for idx, inst := range instances {
@@ -276,13 +291,56 @@ func (m *MovingWall) layoutGroup(group cfg.Group, instances []int) {
 		if y >= group.Height {
 			break
 		}
-		hitbox := cfg.Rectangle{
+		box := cfg.Rectangle{
 			X: group.Space.X + (x * instWidth),
 			Y: group.Space.Y + (y * instHeight),
 			W: instWidth,
 			H: instHeight,
 		}
-		m.hitboxes[hitbox] = inst
+		hitbox := hitbox{
+			inst,
+			box,
+			!group.Cosmetic,
+			startZ + idx,
+		}
+		m.hitboxes = append(m.hitboxes, hitbox)
+	}
+}
+
+// layoutObs adjusts the position of each instance on the wall scene according
+// to their positions in queue or in the locked group.
+func (m *MovingWall) layoutObs() {
+	visible := make([]hitbox, len(m.instances))
+	for _, hitbox := range m.hitboxes {
+		visible[hitbox.id] = hitbox
+	}
+	err := m.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
+		for id := range m.instances {
+			// If the hitbox isn't on screen, it won't have been set in the
+			// slice. Thus, it will be the zero value.
+			var h hitbox
+			if visible[id] != h {
+				h = visible[id]
+			} else {
+				h = hitbox{
+					id,
+					cfg.Rectangle{
+						X: uint32(m.proj.BaseWidth),
+						Y: uint32(m.proj.BaseHeight),
+						W: 1,
+						H: 1,
+					},
+					false,
+					-1,
+				}
+			}
+			name := fmt.Sprintf("Wall MC %d", id+1)
+			b.SetItemIndex("Wall", name, 0)
+			b.SetItemBounds("Wall", name, float64(h.box.X), float64(h.box.Y), float64(h.box.W), float64(h.box.H))
+		}
+	})
+	if err != nil {
+		log.Printf("MovingWall: layoutObs failed: %s\n", err)
 	}
 }
 
@@ -306,43 +364,6 @@ func (m *MovingWall) removeFromQueue(id int) {
 	}
 }
 
-// render updates the layout of the wall that the user sees on the projector.
-// It uses the current set of hitboxes, so layout must be called between any
-// queue/lock changes and render.
-func (m *MovingWall) render() {
-	// Make sure to move invisible instances offscreen.
-	visible := make(map[int]cfg.Rectangle)
-	for hitbox, id := range m.hitboxes {
-		visible[id] = hitbox
-	}
-
-	err := m.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
-		for id := range m.instances {
-			var hitbox cfg.Rectangle
-			if box, ok := visible[id]; ok {
-				hitbox = box
-			} else {
-				hitbox = cfg.Rectangle{
-					X: uint32(m.proj.BaseWidth),
-					Y: uint32(m.proj.BaseHeight),
-					W: 1, H: 1,
-				}
-			}
-			b.SetItemBounds(
-				"Wall",
-				fmt.Sprintf("Wall MC %d", id+1),
-				float64(hitbox.X),
-				float64(hitbox.Y),
-				float64(hitbox.W),
-				float64(hitbox.H),
-			)
-		}
-	})
-	if err != nil {
-		log.Printf("MovingWall: render failed: %s\n", err)
-	}
-}
-
 // resetIngame resets the active instance.
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
@@ -354,7 +375,6 @@ func (m *MovingWall) resetIngame() {
 		return
 	}
 	m.layout()
-	m.render()
 	if err := m.proj.Focus(); err != nil {
 		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
 	}

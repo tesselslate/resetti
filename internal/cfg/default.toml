@@ -157,6 +157,10 @@ use_gaps = true
 # The position on the projector.
 position = "1920x880+0,0"
 
+# Whether instances in the group can be clicked on. Set to true to disable
+# interacting with instances in this group.
+cosmetic = false
+
 # The size of the group (in instances.)
 width = 2
 height = 2
@@ -166,6 +170,10 @@ height = 2
 [wall.moving.locks]
 # The position on the projector.
 position = "1920x200+0,880"
+
+# Whether instances in the group can be clicked on. Set to true to disable
+# interacting with this group.
+cosmetic = false
 
 # The size of the group (in instances.)
 width = 6

@@ -137,6 +137,9 @@ type Group struct {
 	// The space this group occupies on the wall scene.
 	Space Rectangle `toml:"position"`
 
+	// Whether instances in this group can be clicked on.
+	Cosmetic bool `toml:"cosmetic"`
+
 	Width  uint32 `toml:"width"`  // Width of the group, in instances.
 	Height uint32 `toml:"height"` // Height of the group, in instances.
 }
@@ -279,6 +282,7 @@ func validateProfile(conf *Profile) error {
 	}
 
 	// Check moving settings.
+	// TODO: Check z index and clickable
 	if conf.Wall.Moving.Enabled {
 		if len(conf.Wall.Moving.Groups) < 1 {
 			return errors.New("need at least one moving group")
