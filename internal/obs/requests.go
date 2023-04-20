@@ -31,6 +31,16 @@ func reqGetSceneItemId(scene, name string) request {
 	}
 }
 
+func reqGetSceneItemIndex(scene string, id int) request {
+	return request{
+		Type: "GetSceneItemIndex",
+		Data: StringMap{
+			"sceneName":   scene,
+			"sceneItemId": id,
+		},
+	}
+}
+
 func reqGetSceneItemTransform(scene string, id int) request {
 	return request{
 		Type: "GetSceneItemTransform",
@@ -46,6 +56,17 @@ func reqSetScene(scene string) request {
 		Type: "SetCurrentProgramScene",
 		Data: StringMap{
 			"sceneName": scene,
+		},
+	}
+}
+
+func reqSetSceneItemIndex(scene string, id int, index int) request {
+	return request{
+		Type: "SetSceneItemIndex",
+		Data: StringMap{
+			"sceneName":      scene,
+			"sceneItemId":    id,
+			"sceneItemIndex": index,
 		},
 	}
 }

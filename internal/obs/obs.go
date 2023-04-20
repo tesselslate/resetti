@@ -130,7 +130,7 @@ func (c *Client) batchCreate(fn func(*Batch)) (b Batch, err error) {
 	defer func() {
 		result := recover()
 		if res, ok := result.(batchError); ok {
-			err = res
+			err = res.err
 		} else if result != nil {
 			panic(result)
 		}
@@ -369,6 +369,24 @@ func (c *Client) GetCanvasSize() (width, height int, err error) {
 	}{}
 	err = json.Unmarshal(data, &res)
 	return int(res.Width), int(res.Height), err
+}
+
+// GetSceneItemIndex returns the index of the given scene item.
+func (c *Client) GetSceneItemIndex(scene, name string) (int, error) {
+	id, err := c.getSceneItemId(scene, name)
+	if err != nil {
+		return 0, err
+	}
+	req := reqGetSceneItemIndex(scene, id)
+	data, err := c.sendRequest(req)
+	if err != nil {
+		return 0, err
+	}
+	res := struct {
+		Index int `json:"sceneItemIndex"`
+	}{}
+	err = json.Unmarshal(data, &res)
+	return res.Index, err
 }
 
 // GetSceneItemTransform returns the size and position of the given scene item.
