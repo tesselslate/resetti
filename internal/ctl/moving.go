@@ -310,33 +310,32 @@ func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 // layoutObs adjusts the position of each instance on the wall scene according
 // to their positions in queue or in the locked group.
 func (m *MovingWall) layoutObs() {
-	visible := make([]hitbox, len(m.instances))
-	for _, hitbox := range m.hitboxes {
-		visible[hitbox.id] = hitbox
-	}
 	err := m.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
-		for id := range m.instances {
-			// If the hitbox isn't on screen, it won't have been set in the
-			// slice. Thus, it will be the zero value.
-			var h hitbox
-			if visible[id] != h {
-				h = visible[id]
-			} else {
-				h = hitbox{
-					id,
-					cfg.Rectangle{
-						X: uint32(m.proj.BaseWidth),
-						Y: uint32(m.proj.BaseHeight),
-						W: 1,
-						H: 1,
-					},
-					false,
-					-1,
-				}
-			}
-			name := fmt.Sprintf("Wall MC %d", id+1)
+		visible := make([]bool, len(m.instances))
+		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
+			h := m.hitboxes[i]
+			visible[h.id] = true
+			name := fmt.Sprintf("Wall MC %d", h.id+1)
 			b.SetItemIndex("Wall", name, 0)
-			b.SetItemBounds("Wall", name, float64(h.box.X), float64(h.box.Y), float64(h.box.W), float64(h.box.H))
+			b.SetItemBounds(
+				"Wall",
+				name,
+				float64(h.box.X),
+				float64(h.box.Y),
+				float64(h.box.W),
+				float64(h.box.H),
+			)
+		}
+		for i, visible := range visible {
+			if visible {
+				continue
+			}
+			name := fmt.Sprintf("Wall MC %d", i+1)
+			b.SetItemBounds(
+				"Wall",
+				name,
+				float64(m.proj.BaseWidth), float64(m.proj.BaseHeight), 1, 1,
+			)
 		}
 	})
 	if err != nil {
