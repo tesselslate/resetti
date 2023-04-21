@@ -439,15 +439,17 @@ func (m *MovingWall) wallPlay(id int) {
 
 // wallReset resets the given instance.
 func (m *MovingWall) wallReset(id int) {
-	if slices.Contains(m.locks, id) {
+	if slices.Contains(m.locks, id) || m.states[id].Type == mc.StIngame {
 		return
 	}
-	if m.states[id].Type != mc.StIngame && m.host.ResetInstance(id) {
+	m.removeFromQueue(id)
+	if m.host.ResetInstance(id) {
 		if m.freezer != nil {
 			m.freezer.Unfreeze(id)
 		}
-		m.removeFromQueue(id)
 		m.host.RunHook(HookWallReset)
+	} else {
+		m.queue = append(m.queue, id)
 	}
 }
 
