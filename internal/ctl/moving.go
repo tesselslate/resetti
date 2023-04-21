@@ -310,7 +310,7 @@ func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 // layoutObs adjusts the position of each instance on the wall scene according
 // to their positions in queue or in the locked group.
 func (m *MovingWall) layoutObs() {
-	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
+	m.obs.BatchAsync(obs.SerialFrame, func(b *obs.Batch) {
 		visible := make([]bool, len(m.instances))
 		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
 			h := m.hitboxes[i]
