@@ -28,6 +28,7 @@ type Client struct {
 
 	err map[uuid.UUID]chan error
 	rcv map[uuid.UUID]chan json.RawMessage
+	req chan request
 }
 
 // StringMap represents a JSON object.
@@ -97,6 +98,7 @@ func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan er
 	c.idCache = idCache{sync.RWMutex{}, make(map[[2]string]int)}
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
+	c.req = make(chan request, 64)
 	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:%d", port), nil)
 	if err != nil {
 		return nil, err
@@ -104,13 +106,13 @@ func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan er
 	c.ws = conn
 
 	// Respond to the hello message.
-	if err = c.respondHello(ctx, pw); err != nil {
+	if err = c.authHello(ctx, pw); err != nil {
 		c.ws.Close(websocket.StatusInternalError, "")
 		return nil, err
 	}
 
 	// Wait for the Identified response.
-	if err = c.identified(ctx); err != nil {
+	if err = c.authIdentified(ctx); err != nil {
 		c.ws.Close(websocket.StatusInternalError, "")
 		return nil, err
 	}
@@ -121,56 +123,8 @@ func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan er
 	return errch, nil
 }
 
-func (c *Client) batchCreate(fn func(*Batch)) (b Batch, err error) {
-	batch := newBatch(c)
-
-	// Some of Batch's methods will panic when a scene item ID can not be
-	// found to remove the need for tedious error handling code. Those
-	// panics must be handled here.
-	defer func() {
-		result := recover()
-		if res, ok := result.(batchError); ok {
-			err = res.err
-		} else if result != nil {
-			panic(result)
-		}
-	}()
-
-	// Run the closure to fill the batch with requests.
-	fn(&batch)
-	if len(batch.requests) == 0 {
-		return batch, errors.New("batch has no requests")
-	}
-	return batch, nil
-}
-
-func (c *Client) batchSubmit(mode BatchMode, batch *Batch) error {
-	id := uuid.New()
-	rawBatch := StringMap{
-		"op": 8,
-		"d": StringMap{
-			"requestId":     id,
-			"haltOnFailure": true,
-			"executionType": mode,
-			"requests":      batch.requests,
-		},
-	}
-	errch := make(chan error, 1)
-	c.mu.Lock()
-	c.err[id] = errch
-	c.mu.Unlock()
-	err := wsjson.Write(context.Background(), c.ws, &rawBatch)
-	if err != nil {
-		c.mu.Lock()
-		delete(c.err, id)
-		c.mu.Unlock()
-		return err
-	}
-
-	return <-errch
-}
-
-func (c *Client) identified(ctx context.Context) error {
+// authIdentified reads the Identified message for the authentication flow.
+func (c *Client) authIdentified(ctx context.Context) error {
 	type identifiedMessage struct {
 		Data struct {
 			RpcVersion int `json:"negotiatedRpcVersion"`
@@ -187,7 +141,8 @@ func (c *Client) identified(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) respondHello(ctx context.Context, pw string) error {
+// authHello responds to the Hello message for the authentication flow.
+func (c *Client) authHello(ctx context.Context, pw string) error {
 	type helloMessage struct {
 		Data struct {
 			WsVersion  string `json:"obsWebSocketVersion"`
@@ -238,9 +193,74 @@ func (c *Client) respondHello(ctx context.Context, pw string) error {
 	return nil
 }
 
+// batchCreate runs the provided closure to create a request batch.
+func (c *Client) batchCreate(fn func(*Batch)) (b Batch, err error) {
+	batch := newBatch(c)
+
+	// Some of Batch's methods will panic when a scene item ID can not be
+	// found to remove the need for tedious error handling code. Those
+	// panics must be handled here.
+	defer func() {
+		result := recover()
+		if res, ok := result.(batchError); ok {
+			err = res.err
+		} else if result != nil {
+			panic(result)
+		}
+	}()
+
+	// Run the closure to fill the batch with requests.
+	fn(&batch)
+	if len(batch.requests) == 0 {
+		return batch, errors.New("batch has no requests")
+	}
+	return batch, nil
+}
+
+// batchSubmit submits a request batch to OBS and waits for a response.
+func (c *Client) batchSubmit(mode BatchMode, batch *Batch) error {
+	id := uuid.New()
+	rawBatch := StringMap{
+		"op": 8,
+		"d": StringMap{
+			"requestId":     id,
+			"haltOnFailure": true,
+			"executionType": mode,
+			"requests":      batch.requests,
+		},
+	}
+	errch := make(chan error, 1)
+	c.mu.Lock()
+	c.err[id] = errch
+	c.mu.Unlock()
+	err := wsjson.Write(context.Background(), c.ws, &rawBatch)
+	if err != nil {
+		c.mu.Lock()
+		delete(c.err, id)
+		c.mu.Unlock()
+		return err
+	}
+
+	return <-errch
+}
+
+// handleRequests runs in a loop, sending all asynchronous (write-only) requests
+// and logging any errors which occur.
+func (c *Client) handleRequests() {
+	for req := range c.req {
+		_, err := c.sendRequest(req)
+		if err != nil {
+			log.Printf("%s error: %s\n", req.Type, err)
+		}
+	}
+}
+
+// run handles the websocket connection, receiving any messages from OBS and
+// relaying them to the appropriate callers.
 func (c *Client) run(ctx context.Context, errch chan<- error) {
 	defer c.ws.Close(websocket.StatusNormalClosure, "")
 	defer close(errch)
+	go c.handleRequests()
 	for {
 		// Check if the context has been cancelled.
 		select {
@@ -301,6 +321,7 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 	}
 }
 
+// sendRequest sends a request to OBS and waits for a response.
 func (c *Client) sendRequest(data request) (res json.RawMessage, err error) {
 	// Prepare the request.
 	id := uuid.New()
@@ -332,8 +353,6 @@ func (c *Client) sendRequest(data request) (res json.RawMessage, err error) {
 	}
 	return
 }
-
-// Requests
 
 // getSceneItemId returns the ID of the given scene item if it exists.
 func (c *Client) getSceneItemId(scene, name string) (int, error) {
@@ -412,57 +431,36 @@ func (c *Client) GetSceneItemTransform(scene, name string) (x, y, w, h float64, 
 	return res.T.X, res.T.Y, res.T.Width, res.T.Height, err
 }
 
-// SetScene sets the current scene in a new goroutine and logs any errors
-// that occur.
+// SetScene sets the current scene and logs any errors that occur.
 func (c *Client) SetScene(name string) {
-	go func() {
-		req := reqSetScene(name)
-		if _, err := c.sendRequest(req); err != nil {
-			log.Printf("SetScene error: %s\n", err)
-		}
-	}()
+	c.req <- reqSetScene(name)
 }
 
-// SetSceneItemBounds moves and resizes the given scene item in a new
-// goroutine and logs any errors that occur.
+// SetSceneItemBounds moves and resizes the given scene item and logs any
+// errors that occur.
 func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) {
-	go func() {
-		id, err := c.getSceneItemId(scene, name)
-		if err != nil {
-			log.Printf("SetSceneItemBounds error: %s\n", err)
-		}
-		req := reqSetSceneItemTransform(scene, id, x, y, w, h)
-		if _, err = c.sendRequest(req); err != nil {
-			log.Printf("SetSceneItemBounds error: %s\n", err)
-		}
-	}()
+	id, err := c.getSceneItemId(scene, name)
+	if err != nil {
+		log.Printf("Failed to get scene item ID: %s\n", err)
+	}
+	c.req <- reqSetSceneItemTransform(scene, id, x, y, w, h)
 }
 
-// SetSceneItemVisible hides or shows the given scene item in a new
-// goroutine and logs any errors that occur.
+// SetSceneItemVisible hides or shows the given scene item and logs any errors
+// that occur.
 func (c *Client) SetSceneItemVisible(scene, name string, visible bool) {
-	go func() {
-		id, err := c.getSceneItemId(scene, name)
-		if err != nil {
-			log.Printf("SetSceneItemVisible error: %s\n", err)
-		}
-		req := reqSetSceneItemVisible(scene, id, visible)
-		if _, err = c.sendRequest(req); err != nil {
-			log.Printf("SetSceneItemVisible error: %s\n", err)
-		}
-	}()
+	id, err := c.getSceneItemId(scene, name)
+	if err != nil {
+		log.Printf("Failed to get scene item ID: %s\n", err)
+		return
+	}
+	c.req <- reqSetSceneItemVisible(scene, id, visible)
 }
 
-// SetSourceFilterEnabled enables or disables a given filter in a new goroutine
-// and logs any errors that occur.
+// SetSourceFilterEnabled enables or disables a given filter and logs any
+// errors that occur.
 func (c *Client) SetSourceFilterEnabled(source, filter string, enabled bool) {
-	go func() {
-		req := reqSetSourceFilterEnabled(source, filter, enabled)
-		_, err := c.sendRequest(req)
-		if err != nil {
-			log.Printf("SetSourceFilterEnabled error: %s\n", err)
-		}
-	}()
+	c.req <- reqSetSourceFilterEnabled(source, filter, enabled)
 }
 
 // Get returns the ID of the given scene/source pair if it exists.
