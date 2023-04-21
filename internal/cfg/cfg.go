@@ -282,7 +282,6 @@ func validateProfile(conf *Profile) error {
 	}
 
 	// Check moving settings.
-	// TODO: Check z index and clickable
 	if conf.Wall.Moving.Enabled {
 		if len(conf.Wall.Moving.Groups) < 1 {
 			return errors.New("need at least one moving group")
