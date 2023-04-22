@@ -13,6 +13,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/exp/slices"
 )
 
 // TODO: Pre 1.14 support
@@ -114,6 +115,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 		_ = m.watcher.Close()
 	}()
 
+	var deadInstances []int
 	for {
 		select {
 		case <-ctx.Done():
@@ -122,8 +124,22 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 			for id, inst := range m.instances {
 				_, err := os.Stat(fmt.Sprintf("/proc/%d/", inst.info.Pid))
 				if err != nil {
-					errch <- fmt.Errorf("instance %d (%s) died. reboot it", id, inst.info.Dir)
-					return
+					if !slices.Contains(deadInstances, id) {
+						log.Printf("Instance %d (%s) died. Reboot it and restart resetti.", id, inst.info.Dir)
+						deadInstances = append(deadInstances, id)
+					}
+
+					// Return once all instances are paused.
+					c := 0
+					for _, inst := range m.instances {
+						if inst.state.Type == StIdle || inst.state.LastPreview.Equal(time.Time{}) {
+							c += 1
+						}
+					}
+					if c+len(deadInstances) >= len(m.instances) {
+						errch <- fmt.Errorf("%d dead instance(s)", len(deadInstances))
+						return
+					}
 				}
 			}
 		case id := <-m.pause:
