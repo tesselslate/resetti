@@ -135,24 +135,33 @@ function create_wall_scene()
             O.obs_source_release(freeze)
             O.obs_data_release(data)
         end
+    end
 
-        local data = O.obs_data_create_from_json('{"file": "' .. locks_path .. '"}')
-        local lock = O.obs_source_create(
-            "image_source",
-            "Lock " .. tostring(i),
-            data,
-            nil
-        )
-        item = O.obs_scene_add(scene, lock)
-        O.obs_sceneitem_set_locked(item, true)
-        O.obs_sceneitem_set_pos(item, vec2)
-        vec2.x = locks_width
-        vec2.y = locks_height
-        O.obs_sceneitem_set_bounds(item, vec2)
-        O.obs_sceneitem_set_bounds_type(item, O.OBS_BOUNDS_STRETCH)
-        O.obs_data_release(data)
-        O.obs_source_release(lock)
-        O.obs_source_release(source)
+    -- Create lock sources
+    if locks_path then
+        for i = 1, instance_count do
+            local data = O.obs_data_create_from_json('{"file": "' .. locks_path .. '"}')
+            local lock = O.obs_source_create(
+                "image_source",
+                "Lock " .. tostring(i),
+                data,
+                nil
+            )
+
+            item = O.obs_scene_add(scene, lock)
+            O.obs_sceneitem_set_locked(item, true)
+            local vec2 = O.vec2()
+            vec2.x = inst_width * ((i-1) % wall_width)
+            vec2.y = inst_height * math.floor((i-1) / wall_width)
+            O.obs_sceneitem_set_pos(item, vec2)
+            vec2.x = locks_width
+            vec2.y = locks_height
+            O.obs_sceneitem_set_bounds(item, vec2)
+            O.obs_sceneitem_set_bounds_type(item, O.OBS_BOUNDS_STRETCH)
+            O.obs_data_release(data)
+            O.obs_source_release(lock)
+            O.obs_source_release(source)
+        end
     end
 
     O.obs_scene_release(scene)

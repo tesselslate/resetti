@@ -3,7 +3,7 @@
 package res
 
 import (
-	"crypto/sha256"
+	"crypto/sha1"
 	_ "embed"
 	"fmt"
 	"os"
@@ -94,7 +94,7 @@ func WriteResources() error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
-		if sha256.Sum256(contents) == sha256.Sum256(file) {
+		if sha1.Sum(contents) == sha1.Sum(file) {
 			continue
 		}
 
