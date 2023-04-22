@@ -83,6 +83,13 @@ func WriteResources() error {
 		return fmt.Errorf("access data dir: %w", err)
 	}
 
+	_, err = os.Stat(dataDir)
+	if os.IsNotExist(err) {
+		if err := os.Mkdir(dataDir, 0644); err != nil {
+			return fmt.Errorf("failed to create data dir: %w", err)
+		}
+	}
+
 	resources := map[string][]byte{
 		CgroupScriptPath:  CgroupScript,
 		DefaultConfigPath: DefaultConfig,
@@ -90,12 +97,15 @@ func WriteResources() error {
 	}
 	for name, contents := range resources {
 		// Only overwrite if changed.
-		file, err := os.ReadFile(dataDir + name)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", name, err)
-		}
-		if sha1.Sum(contents) == sha1.Sum(file) {
-			continue
+		_, err = os.Stat(dataDir + name)
+		if err == nil {
+			file, err := os.ReadFile(dataDir + name)
+			if err != nil {
+				return fmt.Errorf("read %s: %w", name, err)
+			}
+			if sha1.Sum(contents) == sha1.Sum(file) {
+				continue
+			}
 		}
 
 		if err := os.WriteFile(dataDir+name, contents, 0644); err != nil {
