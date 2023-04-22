@@ -11,13 +11,11 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/woofdoggo/resetti/internal/res"
 )
 
 // The number of CPUs on the user's system.
 var cpuCount int
-
-//go:embed default.toml
-var defaultProfile []byte
 
 // Delays contains various delays to make certain actions more consistent.
 type Delays struct {
@@ -239,7 +237,7 @@ func MakeProfile(name string) error {
 	}
 	return os.WriteFile(
 		dir+name+".toml",
-		[]byte(defaultProfile),
+		[]byte(res.DefaultConfig),
 		0644,
 	)
 }

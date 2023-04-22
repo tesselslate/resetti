@@ -340,7 +340,6 @@ func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
 
 // GetWindowSize returns the size of the given window.
 func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
-	// PERF: cache window size from poll loop?
 	geo, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
 	if err != nil {
 		return 0, 0, err

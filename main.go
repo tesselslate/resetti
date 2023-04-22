@@ -10,6 +10,7 @@ import (
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/ctl"
+	"github.com/woofdoggo/resetti/internal/res"
 )
 
 //go:embed .notice
@@ -19,10 +20,15 @@ var notice string
 var version string
 
 func main() {
+	if err := res.WriteResources(); err != nil {
+		fmt.Println("Failed to write resources:", err)
+		os.Exit(1)
+	}
 	if len(os.Args) < 2 {
 		printHelp()
 		os.Exit(1)
 	}
+
 	switch os.Args[1] {
 	case "--help", "-h", "help":
 		printHelp()
@@ -88,7 +94,6 @@ func printHelp() {
           --force-cgroups       Force the cgroup setup script to run.
           --force-log           Force the latest.log reader to be used.
           --force-wpstate       Force the wpstateout.txt reader to be used.
-          --keep-script         Do not overwrite the cgroup script.
 
     SUBCOMMANDS:
         resetti new [PROFILE]   Create a new profile named PROFILE with

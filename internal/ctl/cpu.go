@@ -14,17 +14,12 @@ import (
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/mc"
+	"github.com/woofdoggo/resetti/internal/res"
 	"golang.org/x/exp/slices"
 )
 
 // Affinity arguments
-var (
-	forceCgroups  = slices.Contains(os.Args, "--force-cgroups")
-	dontOverwrite = slices.Contains(os.Args, "--keep-script")
-)
-
-//go:embed cgroup_setup.sh
-var cgroupScript []byte
+var forceCgroups = slices.Contains(os.Args, "--force-cgroups")
 
 // A list of common setuid binaries. Used for getting root privileges to run
 // the cgroup setup script.
@@ -220,17 +215,7 @@ func prepareCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 
 	// Run the cgroup script if necessary.
 	if shouldRun || forceCgroups {
-		path, err := cfg.GetDirectory()
-		if err != nil {
-			return fmt.Errorf("get config directory: %w", err)
-		}
-		path += "/cgroup_setup.sh"
-		_, err = os.Stat(path)
-		if !dontOverwrite || err != nil {
-			if err := os.WriteFile(path, cgroupScript, 0644); err != nil {
-				return fmt.Errorf("write cgroup script: %w", err)
-			}
-		}
+		path := res.GetDataDirectory() + res.CgroupScriptPath
 		var suidBin string
 		for _, bin := range suidBinaries {
 			cmd := exec.Command(bin)
