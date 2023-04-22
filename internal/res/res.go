@@ -3,6 +3,7 @@
 package res
 
 import (
+	"crypto/sha256"
 	_ "embed"
 	"fmt"
 	"os"
@@ -88,6 +89,15 @@ func WriteResources() error {
 		ObsScriptPath:     ObsScript,
 	}
 	for name, contents := range resources {
+		// Only overwrite if changed.
+		file, err := os.ReadFile(dataDir + name)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		if sha256.Sum256(contents) == sha256.Sum256(file) {
+			continue
+		}
+
 		if err := os.WriteFile(dataDir+name, contents, 0644); err != nil {
 			return fmt.Errorf("write %s: %w", name, err)
 		}
