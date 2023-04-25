@@ -239,9 +239,9 @@ func (m *Manager) Focus(id int) {
 // resolution and returns whether or not it is now on the alternate resolution.
 func (m *Manager) ToggleResolution(id int) bool {
 	if m.instances[id].altRes {
-		m.setResolution(id, m.conf.Wall.UnstretchRes)
+		m.setResolution(id, m.conf.NormalRes)
 	} else {
-		m.setResolution(id, m.conf.Wall.AltRes)
+		m.setResolution(id, m.conf.AltRes)
 	}
 	m.instances[id].altRes = !m.instances[id].altRes
 	m.Focus(id)
@@ -267,7 +267,7 @@ func (m *Manager) Play(id int) {
 		if m.conf.Delay.Stretch > 0 {
 			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
 		}
-		m.setResolution(id, m.conf.Wall.UnstretchRes)
+		m.setResolution(id, m.conf.NormalRes)
 		if m.conf.UnpauseFocus && m.conf.Wall.UseF1 {
 			m.sendKeyPress(id, x11.KeyF1)
 		}
@@ -303,6 +303,8 @@ func (m *Manager) Reset(id int) bool {
 
 	// Reset.
 	if m.active == id {
+		m.active = -1
+
 		// Ghost pie fix.
 		m.sendKeyUp(id, x11.KeyShift)
 		m.sendKeyPress(id, x11.KeyF3)
@@ -311,12 +313,15 @@ func (m *Manager) Reset(id int) bool {
 		}
 
 		// Unstretch.
-		m.instances[id].altRes = false
-		m.active = -1
-		m.setResolution(id, m.conf.Wall.StretchRes)
-		if m.conf.Delay.Stretch > 0 {
-			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
+		if m.conf.Wall.Enabled {
+			m.setResolution(id, m.conf.Wall.StretchRes)
+			if m.conf.Delay.Stretch > 0 {
+				time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
+			}
+		} else if m.instances[id].altRes {
+			m.setResolution(id, m.conf.NormalRes)
 		}
+		m.instances[id].altRes = false
 	}
 	var key xproto.Keycode
 	if state.Type == StPreview && state.Progress < 80 {
@@ -345,7 +350,7 @@ func (m *Manager) sendKeyUp(id int, key xproto.Keycode) {
 
 // setResolution sets the window geometry of an instance.
 func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
-	if rect == nil || !m.conf.Wall.Enabled {
+	if rect == nil {
 		return
 	}
 	m.x.MoveWindow(

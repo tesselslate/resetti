@@ -61,6 +61,8 @@ func (m *Multi) Input(input Input) {
 				m.updateObs()
 				m.host.RunHook(HookReset)
 			}
+		case cfg.ActionIngameRes:
+			m.host.ToggleResolution(m.active)
 		}
 	}
 }

@@ -56,10 +56,8 @@ type Wall struct {
 	ResetUnlock    bool `toml:"reset_unlock"`    // Reset on unlock
 	GracePeriod    int  `toml:"grace_period"`    // Milliseconds to wait after preview before a reset can occur
 
-	StretchRes   *Rectangle `toml:"stretch_res"` // Inactive resolution
-	UnstretchRes *Rectangle `toml:"play_res"`    // Active resolution
-	AltRes       *Rectangle `toml:"alt_res"`     // Alternate ingame resolution
-	UseF1        bool       `toml:"use_f1"`
+	StretchRes *Rectangle `toml:"stretch_res"` // Inactive resolution
+	UseF1      bool       `toml:"use_f1"`
 
 	// Preview percentage to freeze instances at.
 	FreezeAt int `toml:"freeze_at"`
@@ -119,9 +117,11 @@ type Wall struct {
 
 // Profile contains an entire configuration profile.
 type Profile struct {
-	ResetCount   string `toml:"reset_count"` // Reset counter path
-	UnpauseFocus bool   `toml:"unpause_focus"`
-	PollRate     int    `toml:"poll_rate"`
+	ResetCount   string     `toml:"reset_count"`   // Reset counter path
+	UnpauseFocus bool       `toml:"unpause_focus"` // Whether to unpause on focus
+	PollRate     int        `toml:"poll_rate"`     // Polling rate for input handling
+	NormalRes    *Rectangle `toml:"play_res"`      // Normal resolution
+	AltRes       *Rectangle `toml:"alt_res"`       // Alternate ingame resolution
 
 	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`
@@ -267,16 +267,20 @@ func validateProfile(conf *Profile) error {
 	if !validateRectangle(conf.Wall.StretchRes) {
 		return errors.New("invalid stretched resolution")
 	}
-	if !validateRectangle(conf.Wall.UnstretchRes) {
-		return errors.New("invalid active resolution")
+	if !validateRectangle(conf.NormalRes) {
+		return errors.New("invalid playing resolution")
 	}
-	if !validateRectangle(conf.Wall.AltRes) {
+	if !validateRectangle(conf.AltRes) {
 		return errors.New("invalid alternate resolution")
 	}
+	alt := conf.AltRes != nil
+	normal := conf.NormalRes != nil
 	stretch := conf.Wall.StretchRes != nil
-	unstretch := conf.Wall.UnstretchRes != nil
-	if (stretch || unstretch) && (!stretch || !unstretch) {
-		return errors.New("need both stretched and active resolution")
+	if stretch && !normal {
+		return errors.New("need both stretched and playing resolution")
+	}
+	if alt && !normal {
+		return errors.New("need both alternate and playing resolution")
 	}
 
 	// Check moving settings.
