@@ -402,11 +402,17 @@ func (i *inputManager) Run(inputs chan<- Input) {
 		var pressed []cfg.Bind
 		for bind := range i.conf.Keybinds {
 			var mask [32]byte
-			for _, key := range bind.Keys[:bind.KeyCount] {
+			if bind.Key != nil {
+				key := *bind.Key
 				mask[key/8] |= (1 << (key % 8))
 			}
-			if keymap.HasPressed(mask) && pointer.HasPressed(bind.Buttons[:bind.ButtonCount]) {
-				pressed = append(pressed, bind)
+			for _, key := range bind.Mods[:bind.ModCount] {
+				mask[key/8] |= (1 << (key % 8))
+			}
+			if keymap.HasPressed(mask) {
+				if bind.Button == nil || pointer.HasPressed(*bind.Button) {
+					pressed = append(pressed, bind)
+				}
 			}
 		}
 		if len(pressed) == 0 {
@@ -414,19 +420,10 @@ func (i *inputManager) Run(inputs chan<- Input) {
 			continue
 		}
 
-		// TODO: This is kinda jank but it works (mostly).
-		// (thanks boyenn for the suggestion)
-		//
-		// TODO: This should probably be made better (or more config restrictions
-		// should be put in place.) Right now, you can trigger essentially random
-		// keybind behavior by having e.g. (A+B, B+C, C+D) and holding down all
-		// of A, B, C, and D at once. This is caused by Go's non-deterministic
-		// map iteration order.
+		// Sort so that the most specific keybind (the one with the most
+		// modifiers) is the one picked.
 		slices.SortFunc(pressed, func(a, b cfg.Bind) bool {
-			if b.KeyCount < a.KeyCount {
-				return true
-			}
-			return b.ButtonCount < a.ButtonCount
+			return b.ModCount < a.ModCount
 		})
 		bind := pressed[0]
 		inputs <- Input{

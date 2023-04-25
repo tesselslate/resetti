@@ -60,13 +60,10 @@ type ActionList struct {
 
 // Bind represents a single keybinding.
 type Bind struct {
-	// Any keys for this keybind.
-	Keys     [4]xproto.Keycode
-	KeyCount int
-
-	// Any buttons for this keybind.
-	Buttons     [4]xproto.Button
-	ButtonCount int
+	Button   *xproto.Button    // The button for this keybind (if any.)
+	Key      *xproto.Keycode   // The key for this keybind (if any.)
+	Mods     [4]xproto.Keycode // The list of key modifiers for this keybind (if any.)
+	ModCount int               // The number of modifiers in use.
 
 	// String representation.
 	str string
@@ -144,31 +141,37 @@ func (b *Bind) UnmarshalTOML(value any) error {
 	for _, split := range strings.Split(str, "-") {
 		split = strings.ToLower(split)
 		if key, ok := x11.Keycodes[split]; ok {
-			if b.KeyCount == 4 {
-				return errors.New("too many keys")
+			if b.Key != nil {
+				return errors.New("more than one key")
 			}
-			b.Keys[b.KeyCount] = key
-			b.KeyCount += 1
+			b.Key = &key
+		} else if mod, ok := x11.Modifiers[split]; ok {
+			if b.ModCount == 4 {
+				return errors.New("too many modifiers (max of 4)")
+			}
+			b.Mods[b.ModCount] = mod
+			b.ModCount += 1
 		} else if button, ok := x11.Buttons[split]; ok {
-			if b.ButtonCount == 4 {
-				return errors.New("too many buttons")
+			if b.Button != nil {
+				return errors.New("more than one button")
 			}
-			b.Buttons[b.ButtonCount] = button
-			b.ButtonCount += 1
+			b.Button = &button
 		} else if keyRegexp.MatchString(split) {
 			num, err := strconv.Atoi(split[4:])
 			if err != nil {
 				return fmt.Errorf("failed to parse code in %q", split)
 			}
-			if b.KeyCount == 4 {
-				return errors.New("too many keys")
+			if b.Key != nil {
+				return errors.New("more than one key")
 			}
 			keycode := xproto.Keycode(num)
-			b.Keys[b.KeyCount] = keycode
-			b.KeyCount += 1
+			b.Key = &keycode
 		} else {
 			return fmt.Errorf("unrecognized keybind element %q", split)
 		}
+	}
+	if b.Key != nil && b.Button != nil {
+		return errors.New("can only use one key or button per bind")
 	}
 	b.str = str
 	return nil

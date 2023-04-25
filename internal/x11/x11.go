@@ -649,13 +649,8 @@ func (k *Keymap) HasPressed(mask [32]byte) bool {
 
 // HasPressed determines whether all of the given buttons are pressed in the
 // keymap.
-func (p *Pointer) HasPressed(buttons []xproto.Button) bool {
-	for _, button := range buttons {
-		if p.buttons&masks[button] == 0 {
-			return false
-		}
-	}
-	return true
+func (p *Pointer) HasPressed(button xproto.Button) bool {
+	return p.buttons&masks[button] != 0
 }
 
 // approximateOffset attempts to find the offset between the system clock and

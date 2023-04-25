@@ -27,19 +27,6 @@ var Buttons = map[string]xproto.Button{
 
 // Keycodes is a list of keycodes used for config parsing.
 var Keycodes = map[string]xproto.Keycode{
-	// Modifier keys
-	"ctrl":     37,
-	"control":  37,
-	"lctrl":    37,
-	"lcontrol": 37,
-	"shift":    50,
-	"lshift":   50,
-	"rshift":   62,
-	"alt":      64,
-	"lalt":     64,
-	"rctrl":    105,
-	"rcontrol": 105,
-
 	// Keys
 	"0":            19,
 	"1":            10,
@@ -213,4 +200,19 @@ var KeycodesMc = map[string]xproto.Keycode{
 	"pause":           127,
 	"menu":            135,
 	"print.screen":    107,
+}
+
+// Keycodes is a list of modifier keycodes used for config parsing.
+var Modifiers = map[string]xproto.Keycode{
+	"ctrl":     37,
+	"control":  37,
+	"lctrl":    37,
+	"lcontrol": 37,
+	"shift":    50,
+	"lshift":   50,
+	"rshift":   62,
+	"alt":      64,
+	"lalt":     64,
+	"rctrl":    105,
+	"rcontrol": 105,
 }
