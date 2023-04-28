@@ -67,10 +67,11 @@ type Wall struct {
 
 	// Instance moving settings.
 	Moving struct {
-		Enabled bool    `toml:"enabled"`
-		Gaps    bool    `toml:"use_gaps"`
-		Locks   *Group  `toml:"locks"`  // Locked group
-		Groups  []Group `toml:"groups"` // Normal groups
+		Enabled         bool    `toml:"enabled"`
+		ResetBeforePlay bool    `toml:"force_reset_before_play"` // Force user to keep all but first group empty
+		Gaps            bool    `toml:"use_gaps"`                // Whether to leave gaps when instances are locked
+		Locks           *Group  `toml:"locks"`                   // Locked group
+		Groups          []Group `toml:"groups"`                  // Normal groups
 	} `toml:"moving"`
 
 	// Performance settings.
@@ -81,7 +82,7 @@ type Wall struct {
 		// Whether or not to use affinity.
 		Affinity string `toml:"affinity"`
 
-		// Seq affinity settings.
+		// Sequential affinity settings.
 		Seq struct {
 			// The number of CPUs to give to the active instance.
 			ActiveCpus int `toml:"active_cpus"`
@@ -93,7 +94,7 @@ type Wall struct {
 			LockCpus int `toml:"lock_cpus"`
 		} `toml:"sequence"`
 
-		// Adv affinity settings.
+		// Advanced affinity settings.
 		Adv struct {
 			CcxSplit int `toml:"ccx_split"`
 

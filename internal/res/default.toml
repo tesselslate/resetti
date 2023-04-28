@@ -144,6 +144,11 @@ show_at = 5
 # Whether or not to use moving.
 enabled = false
 
+# If enabled, you can only have instances visible in the first group when
+# attempting to play an instance from the wall. This forces you to reset your
+# instances before playing.
+force_reset_before_play = false
+
 # Whether to create gaps in the queue when locking instances. If you have a
 # smaller layout, you will likely want to disable this.
 use_gaps = true

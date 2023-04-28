@@ -131,6 +131,12 @@ func (m *MovingWall) Input(input Input) {
 				if input.Held {
 					continue
 				}
+				if m.conf.Wall.Moving.ResetBeforePlay {
+					g := m.conf.Wall.Moving.Groups[0]
+					if len(m.queue) > int(g.Width*g.Height) {
+						continue
+					}
+				}
 				m.playFirstLocked()
 				m.collapseEmpty()
 			case cfg.ActionWallLock, cfg.ActionWallPlay, cfg.ActionWallReset, cfg.ActionWallResetOthers:
@@ -173,6 +179,12 @@ func (m *MovingWall) Input(input Input) {
 					m.wallLock(id)
 				case cfg.ActionWallPlay:
 					if m.states[id].Type == mc.StIdle {
+						if m.conf.Wall.Moving.ResetBeforePlay {
+							g := m.conf.Wall.Moving.Groups[0]
+							if len(m.queue) > int(g.Width*g.Height) {
+								continue
+							}
+						}
 						m.wallPlay(id)
 						m.collapseEmpty()
 					}
