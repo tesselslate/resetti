@@ -17,61 +17,8 @@ type request struct {
 	Data StringMap `json:"requestData"`
 }
 
-func reqAddSceneItem(scene, name string) request {
-	return request{
-		Type: "CreateSceneItem",
-		Data: StringMap{
-			"sceneName":  scene,
-			"sourceName": name,
-		},
-	}
-}
-
-func reqCreateSceneCollection(name string) request {
-	return request{
-		Type: "CreateSceneCollection",
-		Data: StringMap{
-			"sceneCollectionName": name,
-		},
-	}
-}
-
-func reqCreateScene(name string) request {
-	return request{
-		Type: "CreateScene",
-		Data: StringMap{
-			"sceneName": name,
-		},
-	}
-}
-
-func reqCreateSource(scene, name, kind string, settings StringMap) request {
-	return request{
-		Type: "CreateInput",
-		Data: StringMap{
-			"sceneName":     scene,
-			"inputName":     name,
-			"inputKind":     kind,
-			"inputSettings": settings,
-		},
-	}
-}
-
-func reqDeleteScene(name string) request {
-	return request{
-		Type: "RemoveScene",
-		Data: StringMap{
-			"sceneName": name,
-		},
-	}
-}
-
 func reqGetCanvasSize() request {
 	return request{Type: "GetVideoSettings"}
-}
-
-func reqGetSceneCollectionList() request {
-	return request{Type: "GetSceneCollectionList"}
 }
 
 func reqGetSceneItemId(scene, name string) request {
@@ -80,6 +27,16 @@ func reqGetSceneItemId(scene, name string) request {
 		Data: StringMap{
 			"sceneName":  scene,
 			"sourceName": name,
+		},
+	}
+}
+
+func reqGetSceneItemIndex(scene string, id int) request {
+	return request{
+		Type: "GetSceneItemIndex",
+		Data: StringMap{
+			"sceneName":   scene,
+			"sceneItemId": id,
 		},
 	}
 }
@@ -94,10 +51,6 @@ func reqGetSceneItemTransform(scene string, id int) request {
 	}
 }
 
-func reqGetSceneList() request {
-	return request{Type: "GetSceneList"}
-}
-
 func reqSetScene(scene string) request {
 	return request{
 		Type: "SetCurrentProgramScene",
@@ -107,22 +60,13 @@ func reqSetScene(scene string) request {
 	}
 }
 
-func reqSetSceneCollection(collection string) request {
+func reqSetSceneItemIndex(scene string, id int, index int) request {
 	return request{
-		Type: "SetCurrentSceneCollection",
+		Type: "SetSceneItemIndex",
 		Data: StringMap{
-			"sceneCollectionName": collection,
-		},
-	}
-}
-
-func reqSetSceneItemLocked(scene string, id int, locked bool) request {
-	return request{
-		Type: "SetSceneItemLocked",
-		Data: StringMap{
-			"sceneName":       scene,
-			"sceneItemId":     id,
-			"sceneItemLocked": locked,
+			"sceneName":      scene,
+			"sceneItemId":    id,
+			"sceneItemIndex": index,
 		},
 	}
 }
@@ -151,6 +95,17 @@ func reqSetSceneItemVisible(scene string, id int, visible bool) request {
 			"sceneName":        scene,
 			"sceneItemId":      id,
 			"sceneItemEnabled": visible,
+		},
+	}
+}
+
+func reqSetSourceFilterEnabled(source, filter string, enabled bool) request {
+	return request{
+		Type: "SetSourceFilterEnabled",
+		Data: StringMap{
+			"sourceName":    source,
+			"filterName":    filter,
+			"filterEnabled": enabled,
 		},
 	}
 }

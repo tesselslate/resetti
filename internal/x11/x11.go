@@ -1,165 +1,471 @@
+// Package x11 provides a simple client for interacting with the X server to do
+// things like sending input events.
 package x11
 
+// Good luck to anyone who needs to modify this file. X is a minefield. Have fun.
+
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"log"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
-	"github.com/pkg/errors"
 )
 
-// NewClient attempts to create a new X client.
-func NewClient() (*Client, error) {
-	xc, err := xgb.NewConn()
+// Atom names
+const (
+	netActiveWindow   = "_NET_ACTIVE_WINDOW"
+	netCurrentDesktop = "_NET_CURRENT_DESKTOP"
+	netWmDesktop      = "_NET_WM_DESKTOP"
+	netWmPid          = "_NET_WM_PID"
+	utf8String        = "UTF8_STRING"
+	wmClass           = "WM_CLASS"
+	wmName            = "WM_NAME"
+)
+
+// Key/button states
+const (
+	StateDown InputState = iota
+	StateUp
+)
+
+// Event masks
+const (
+	maskButton uint32 = xproto.EventMaskButtonPress |
+		xproto.EventMaskButtonRelease
+
+	maskEnterLeave uint32 = xproto.EventMaskEnterWindow |
+		xproto.EventMaskLeaveWindow
+
+	maskKeyPress uint32 = xproto.EventMaskKeyPress |
+		xproto.EventMaskKeyRelease
+
+	maskPointer uint16 = xproto.EventMaskPointerMotion |
+		xproto.EventMaskButtonPress | xproto.EventMaskButtonRelease
+
+	maskProperty uint32 = xproto.EventMaskPropertyChange |
+		xproto.EventMaskSubstructureNotify
+
+	maskSubstructure uint32 = xproto.EventMaskSubstructureNotify |
+		xproto.EventMaskSubstructureRedirect
+
+	maskWindow uint16 = xproto.ConfigWindowX |
+		xproto.ConfigWindowY |
+		xproto.ConfigWindowHeight |
+		xproto.ConfigWindowWidth
+)
+
+// Important keys
+var (
+	KeyEsc   = xproto.Keycode(9)
+	KeyF1    = xproto.Keycode(67)
+	KeyF3    = xproto.Keycode(69)
+	KeyF6    = xproto.Keycode(72)
+	KeyH     = xproto.Keycode(43)
+	KeyShift = xproto.Keycode(50)
+)
+
+// Error types
+var (
+	ErrConnectionDied = errors.New("connection with X server closed")
+	errInvalidLength  = errors.New("invalid response length")
+)
+
+// Button -> mask mappings
+var masks = map[xproto.Button]uint16{
+	xproto.ButtonIndex1: xproto.ButtonMask1,
+	xproto.ButtonIndex2: xproto.ButtonMask2,
+	xproto.ButtonIndex3: xproto.ButtonMask3,
+	xproto.ButtonIndex4: xproto.ButtonMask4,
+	xproto.ButtonIndex5: xproto.ButtonMask5,
+}
+
+// Pointer grab error names
+var pointerGrabErrors = []string{
+	"Success",
+	"Already grabbed",
+	"Invalid time",
+	"Not viewable",
+	"Frozen",
+}
+
+// Client maintains a connection with the X server and performs tasks like
+// sending fake inputs and receiving user input.
+type Client struct {
+	atoms atomCache     // Atom cache
+	conn  *xgb.Conn     // The X server connection
+	root  xproto.Window // Root window
+
+	// The active window.
+	active xproto.Window
+
+	// The offset between the system clock and X server time, in milliseconds.
+	timeOffset uint64
+
+	// Information about the last key events sent for each window. This is used
+	// to ensure that resetti's inputs don't get dropped by GLFW.
+	lastKeyState map[xproto.Window]keyState
+
+	// The mutex guards lastKeyState and active.
+	mu sync.Mutex
+}
+
+// Event represents an event from the X server to be processed by resetti.
+type Event any
+
+// FocusEvent represents a window focus change.
+type FocusEvent xproto.Window
+
+// InputState represents the state of a button or key (up or down.)
+type InputState int
+
+// Keymap contains information about the state of the user's keyboard.
+type Keymap struct {
+	// Keyboard data. 256-bit bitfield.
+	data [32]byte
+}
+
+// Point represents a point on the X screen.
+type Point struct {
+	X int16
+	Y int16
+}
+
+// Pointer contains information about the state of the mouse pointer.
+type Pointer struct {
+	RootX, RootY, EventX, EventY int
+	Window                       xproto.Window
+
+	// Modmask (contains keyboard modifiers)
+	buttons uint16
+}
+
+// ResizeEvent contains information about a change to a window's geometry.
+type ResizeEvent struct {
+	Window     xproto.Window
+	X, Y, W, H int
+}
+
+// atomCache maintains a mapping of strings to X11 atoms to avoid re-requesting
+// atoms from the X server repeatedly.
+type atomCache struct {
+	mu sync.RWMutex
+
+	conn *xgb.Conn
+	data map[string]xproto.Atom
+}
+
+// keyState contains state about the last key event sent to a given window.
+// This is used to ensure that resetti's inputs don't get dropped by GLFW.
+type keyState struct {
+	time uint32
+	code xproto.Keycode
+}
+
+// rawEvent represents an event which is to be sent to another window.
+type rawEvent interface {
+	Bytes() []byte
+}
+
+// NewClient attempts to create a new Client.
+func NewClient() (Client, error) {
+	conn, err := xgb.NewConn()
 	if err != nil {
-		return nil, err
+		return Client{}, err
 	}
-	return &Client{
-		conn: xc,
-		atoms: atomMap{
-			atoms: make(map[string]xproto.Atom),
-			mu:    &sync.RWMutex{},
+	root := xproto.Setup(conn).DefaultScreen(conn).Root
+	err = xproto.ChangeWindowAttributesChecked(
+		conn,
+		root,
+		xproto.CwEventMask,
+		[]uint32{maskProperty},
+	).Check()
+	if err != nil {
+		return Client{}, err
+	}
+	offset, err := approximateOffset(conn)
+	if err != nil {
+		return Client{}, err
+	}
+	return Client{
+		atomCache{
+			conn: conn,
+			data: make(map[string]xproto.Atom),
 		},
-		root: xproto.Setup(xc).DefaultScreen(xc).Root,
+		conn,
+		root,
+		0,
+		offset,
+		make(map[xproto.Window]keyState),
+		sync.Mutex{},
 	}, nil
 }
 
-// Get returns the atom with the given name if it has already been queried,
-// otherwise it asks the X server for the atom and caches it.
-func (a *atomMap) Get(c *Client, name string) (xproto.Atom, error) {
-	// Check to see if this atom has already been queried for.
-	a.mu.RLock()
-	if atom, ok := a.atoms[name]; ok {
-		a.mu.RUnlock()
+// Get returns the atom with the associated name.
+func (c *atomCache) Get(name string) (xproto.Atom, error) {
+	// Try to retrieve the atom from the cache.
+	c.mu.RLock()
+	if atom, ok := c.data[name]; ok {
+		c.mu.RUnlock()
 		return atom, nil
 	}
-	a.mu.RUnlock()
+	c.mu.RUnlock()
 
-	// Get the atom from the X server and cache it for future queries.
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	// Request the atom from the X server.
 	reply, err := xproto.InternAtom(c.conn, false, uint16(len(name)), name).Reply()
 	if err != nil {
 		return 0, err
 	}
-	a.atoms[name] = reply.Atom
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[name] = reply.Atom
 	return reply.Atom, nil
 }
 
-// Click fakes a mouse click on the given window.
-func (c *Client) Click(win xproto.Window) error {
-	send := func(evt string) error {
-		return xproto.SendEventChecked(
-			c.conn,
-			true,
-			win,
-			xproto.EventMaskButtonPress|xproto.EventMaskButtonRelease,
-			evt,
-		).Check()
+// Click clicks the top left corner (0, 0) of the given window.
+func (c *Client) Click(win xproto.Window) {
+	// Send an EnterNotify event to get GLFW to update the cursor position.
+	// Then send a LeaveNotify to stop tracking cursor movement.
+	// Then send a ButtonPress to click the window.
+	//
+	// Reference:
+	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1465
+	evt := xproto.EnterNotifyEvent{
+		Root:  win,
+		Event: win,
+		Child: win,
 	}
-	move := xproto.MotionNotifyEvent{
-		Sequence:   0,
-		Detail:     0,
-		Time:       xproto.TimeCurrentTime,
-		Root:       win,
-		Event:      win,
-		Child:      win,
-		RootX:      0,
-		RootY:      0,
-		EventX:     0,
-		EventY:     0,
-		State:      0,
-		SameScreen: true,
+	c.sendEvent(evt, maskEnterLeave, win)
+	evt2 := xproto.LeaveNotifyEvent(evt)
+	c.sendEvent(evt2, maskEnterLeave, win)
+	evt3 := xproto.ButtonPressEvent{
+		Detail: 1,
+		Root:   win,
+		Event:  win,
+		Child:  win,
 	}
-	raw := move.Bytes()
-	if err := send(string(raw)); err != nil {
-		return err
-	}
-	evt := xproto.ButtonPressEvent{
-		Sequence:   0,
-		Detail:     1,
-		Time:       xproto.TimeCurrentTime,
-		Root:       win,
-		Event:      win,
-		Child:      win,
-		RootX:      0,
-		RootY:      0,
-		EventX:     0,
-		EventY:     0,
-		SameScreen: true,
-	}
-	raw = evt.Bytes()
-	if err := send(string(raw)); err != nil {
-		return err
-	}
-	raw[0] = 5
-	return send(string(raw))
+	c.sendEvent(evt3, maskButton, win)
+	evt4 := xproto.ButtonReleaseEvent(evt3)
+	c.sendEvent(evt4, maskButton, win)
 }
 
-// FocusWindow switches input focus to the given window. It does so by sending
-// a message to the root window indicating that it should update the
-// _NET_ACTIVE_WINDOW property.
-// See: https://specifications.freedesktop.org/wm-spec/1.3/ar01s03.html
+// FocusWindow activates the given window.
 func (c *Client) FocusWindow(win xproto.Window) error {
-	// If possible, update the _NET_CURRENT_DESKTOP property.
-	setDesktop := func() {
-		currentDesktop, err := c.atoms.Get(c, "_NET_CURRENT_DESKTOP")
-		if err != nil {
-			return
+	winDesktop, err := c.getPropertyInt(c.root, netWmDesktop, xproto.AtomCardinal)
+	switch err {
+	case errInvalidLength:
+		break
+	case nil:
+		if err = c.setCurrentDesktop(winDesktop); err != nil {
+			return fmt.Errorf("set current desktop: %w", err)
 		}
-		desktop, err := c.getPropertyInt(win, "_NET_WM_DESKTOP", xproto.AtomCardinal)
-		if err != nil {
-			return
-		}
-		data := make([]uint32, 5)
-		data[0] = desktop
-		evt := xproto.ClientMessageEvent{
-			Format: 32,
-			Window: c.root,
-			Type:   currentDesktop,
-			Data:   xproto.ClientMessageDataUnionData32New(data),
-		}
-		xproto.SendEvent(
-			c.conn,
-			true,
-			c.root,
-			xproto.EventMaskSubstructureNotify|xproto.EventMaskSubstructureRedirect,
-			string(evt.Bytes()),
-		)
+	default:
+		return fmt.Errorf("get window desktop: %w", err)
 	}
-	setDesktop()
-	// Switch active window.
-	activeWindow, err := c.atoms.Get(c, "_NET_ACTIVE_WINDOW")
+	activeWindow, err := c.atoms.Get(netActiveWindow)
 	if err != nil {
-		return err
+		return fmt.Errorf("get _NET_ACTIVE_WINDOW atom: %w", err)
 	}
 	data := make([]uint32, 5)
-	// Source indication (1 = application)
-	data[0] = 1
+	data[0] = 1 // Source indicator (1 = application)
 	evt := xproto.ClientMessageEvent{
 		Format: 32,
 		Window: win,
 		Type:   activeWindow,
 		Data:   xproto.ClientMessageDataUnionData32New(data),
 	}
-	return xproto.SendEventChecked(
-		c.conn,
-		true,
-		c.root,
-		xproto.EventMaskSubstructureNotify|xproto.EventMaskSubstructureRedirect,
-		string(evt.Bytes()),
-	).Check()
+	c.sendEvent(evt, maskSubstructure, c.root)
+	return nil
 }
 
-// getProperty gets a property from a window and returns it in the form of a byte
-// slice. See the getPropertyX functions.
+// GetActiveWindow returns the active window.
+func (c *Client) GetActiveWindow() xproto.Window {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.active
+}
+
+// GetCurrentTime returns the approximate current X server time.
+func (c *Client) GetCurrentTime() uint32 {
+	return uint32(time.Now().UnixMilli() - int64(c.timeOffset))
+}
+
+// GetRootWindow returns the ID of the root window.
+func (c *Client) GetRootWindow() xproto.Window {
+	return c.root
+}
+
+// GetWindowList returns a list of all open windows.
+func (c *Client) GetWindowList() []xproto.Window {
+	return c.GetWindowChildren(c.root)
+}
+
+// GetWindowChildren returns a list of all child windows (and their children,
+// and so on) for the given window.
+func (c *Client) GetWindowChildren(win xproto.Window) []xproto.Window {
+	// Traverse the window tree in an iterative fashion.
+	queue := []xproto.Window{win}
+	for ptr := 0; ptr < len(queue); ptr += 1 {
+		next := queue[ptr]
+		tree, err := xproto.QueryTree(c.conn, next).Reply()
+
+		// Windows may be closed while we traverse the tree. Ignore any errors
+		// during the traversal.
+		if err != nil {
+			continue
+		}
+		queue = append(queue, tree.Children...)
+	}
+	return queue
+}
+
+// GetWindowClass returns the class of the given window.
+func (c *Client) GetWindowClass(win xproto.Window) (string, error) {
+	class, err := c.getPropertyString(win, wmClass)
+	if err != nil {
+		return "", err
+	}
+	return strings.Split(class, "\x00")[0], nil
+}
+
+// GetWindowPid returns the PID of the process that owns the given window.
+func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
+	return c.getPropertyInt(win, netWmPid, xproto.AtomCardinal)
+}
+
+// GetWindowSize returns the size of the given window.
+func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
+	geo, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
+	if err != nil {
+		return 0, 0, err
+	}
+	return geo.Width, geo.Height, nil
+}
+
+// GetWindowTitle returns the title of the given window.
+func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
+	return c.getPropertyString(win, wmName)
+}
+
+// GrabPointer grabs the mouse pointer, diverting all mouse events to resetti.
+func (c *Client) GrabPointer(win xproto.Window, confine bool) error {
+	confineTo := c.root
+	if confine {
+		confineTo = win
+	}
+	reply, err := xproto.GrabPointer(
+		c.conn,
+		true,
+		win,
+		maskPointer,
+		xproto.GrabModeAsync,
+		xproto.GrabModeAsync,
+		confineTo,
+		xproto.CursorNone,
+		xproto.TimeCurrentTime,
+	).Reply()
+	if err != nil {
+		return err
+	}
+	if reply.Status == xproto.GrabStatusSuccess {
+		return nil
+	} else {
+		return errors.New(pointerGrabErrors[reply.Status])
+	}
+}
+
+// MoveWindow moves and resizes the given window.
+func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
+	xproto.ConfigureWindow(
+		c.conn,
+		win,
+		maskWindow,
+		[]uint32{x, y, w, h},
+	)
+}
+
+// Poll starts listening for window focus changes in the background.
+func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
+	ch := make(chan Event, 256)
+	errch := make(chan error, 8)
+	go c.poll(ctx, ch, errch)
+	return ch, errch, nil
+}
+
+// QueryKeymap queries the state of the keyboard.
+func (c *Client) QueryKeymap() (Keymap, error) {
+	reply, err := xproto.QueryKeymap(c.conn).Reply()
+	if err != nil {
+		return Keymap{}, err
+	}
+	if len(reply.Keys) > 32 {
+		return Keymap{}, errors.New("keymap greater than 32 bytes")
+	}
+	return Keymap{*(*[32]byte)(reply.Keys)}, nil
+}
+
+// QueryPointer queries the state of the pointer.
+func (c *Client) QueryPointer(win xproto.Window) (Pointer, error) {
+	reply, err := xproto.QueryPointer(c.conn, win).Reply()
+	if err != nil {
+		return Pointer{}, err
+	}
+	p := Pointer{
+		int(reply.RootX), int(reply.RootY),
+		int(reply.WinX), int(reply.WinY),
+		reply.Child,
+		reply.Mask,
+	}
+	return p, nil
+}
+
+// SendKeyDown sends a key down event to the given window with the given key.
+func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window) {
+	c.sendKeyEvent(code, StateDown, win)
+}
+
+// SendKeyPress sends a key press (key down and key up event) to the given
+// window with the given key.
+func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window) {
+	c.sendKeyEvent(code, StateDown, win)
+	c.sendKeyEvent(code, StateUp, win)
+}
+
+// SendKeyUp sends a key up event to the given window with the given key.
+func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window) {
+	c.sendKeyEvent(code, StateUp, win)
+}
+
+// UngrabPointer ungrabs the mouse pointer.
+func (c *Client) UngrabPointer() error {
+	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
+}
+
+// getActiveWindow returns the currently focused window.
+func (c *Client) getActiveWindow() (xproto.Window, error) {
+	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
+	if err != nil {
+		// The _NET_ACTIVE_WINDOW property might not exist depending on the
+		// window manager.
+		if err == errInvalidLength {
+			return 0, nil
+		}
+		return 0, err
+	}
+	c.mu.Lock()
+	c.active = xproto.Window(win)
+	c.mu.Unlock()
+	return xproto.Window(win), nil
+}
+
+// getProperty retrieves a raw window property.
 func (c *Client) getProperty(win xproto.Window, name string, typ xproto.Atom) ([]byte, error) {
-	atom, err := c.atoms.Get(c, name)
+	atom, err := c.atoms.Get(name)
 	if err != nil {
 		return nil, err
 	}
@@ -178,20 +484,20 @@ func (c *Client) getProperty(win xproto.Window, name string, typ xproto.Atom) ([
 	return reply.Value, nil
 }
 
-// getPropertyInt gets an unsigned 32-bit integer property from a window.
+// getPropertyInt retrieves a 32-bit window property.
 func (c *Client) getPropertyInt(win xproto.Window, name string, typ xproto.Atom) (uint32, error) {
 	reply, err := c.getProperty(win, name, typ)
 	if err != nil {
 		return 0, err
 	}
 	if len(reply) != 4 {
-		return 0, fmt.Errorf("invalid response length %d (%d, %s)", len(reply), win, name)
+		return 0, errInvalidLength
 	}
 	return binary.LittleEndian.Uint32(reply), nil
 }
 
-// getPropertyString gets a string property from a window. The string is
-// returned as is and may contain null bytes.
+// getPropertyString retrieves a string window property. The returned string
+// may conatin null bytes.
 func (c *Client) getPropertyString(win xproto.Window, name string) (string, error) {
 	reply, err := c.getProperty(win, name, xproto.AtomString)
 	if err != nil {
@@ -200,340 +506,192 @@ func (c *Client) getPropertyString(win xproto.Window, name string) (string, erro
 	return string(reply), nil
 }
 
-// GetActiveWindow returns the currently focused window.
-func (c *Client) GetActiveWindow() (xproto.Window, error) {
-	win, err := c.getPropertyInt(c.root, "_NET_ACTIVE_WINDOW", xproto.AtomWindow)
-	if err != nil {
-		// The _NET_ACTIVE_WINDOW property might not exist depending on the
-		// window manager.
-		if !strings.HasPrefix(err.Error(), "invalid response length") {
-			return 0, err
-		}
-		return 0, nil
-	}
-	return xproto.Window(win), nil
-}
-
-// GetAllWindows returns a list of all windows.
-func (c *Client) GetAllWindows() ([]xproto.Window, error) {
-	return c.GetChildWindows(c.root)
-}
-
-// GetChildWindows returns a list of all children of the given window (and their
-// children, and so on.)
-func (c *Client) GetChildWindows(win xproto.Window) ([]xproto.Window, error) {
-	// Traverse the window tree starting from the root window in an iterative fashion.
-	queue := []xproto.Window{win}
-	windows := make([]xproto.Window, 0)
-	for len(queue) > 0 {
-		win := queue[0]
-		queue = queue[1:]
-		windows = append(windows, win)
-		reply, err := xproto.QueryTree(c.conn, win).Reply()
-		// It's possible that a window is closed while we traverse the window
-		// tree, so just continue querying the window tree incase of an error.
-		if err != nil {
-			continue
-		}
-		queue = append(queue, reply.Children...)
-	}
-	return windows, nil
-}
-
-// GetWindowClass returns the WM_CLASS property of the given window.
-func (c *Client) GetWindowClass(win xproto.Window) (string, error) {
-	class, err := c.getPropertyString(win, "WM_CLASS")
-	if err != nil {
-		return "", err
-	}
-	// The WM_CLASS property consists of two null-separated values.
-	// We take the first.
-	return strings.Split(class, "\x00")[0], nil
-}
-
-// GetWindowPid returns the process ID of the given window.
-func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
-	pid, err := c.getPropertyInt(win, "_NET_WM_PID", xproto.AtomCardinal)
-	if err != nil {
-		return 0, err
-	}
-	return pid, nil
-}
-
-// GetWindowSize returns the size of the given window.
-func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
-	geom, err := xproto.GetGeometry(c.conn, xproto.Drawable(win)).Reply()
-	if err != nil {
-		return 0, 0, err
-	}
-	return geom.Width, geom.Height, nil
-}
-
-// GetWindowTitle returns the title of the given window.
-func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
-	title, err := c.getPropertyString(win, "WM_NAME")
-	if err != nil {
-		return "", err
-	}
-	return title, nil
-}
-
-// GetWmName returns the name of the window manager, if available.
-func (c *Client) GetWmName() string {
-	supporting, err := c.getPropertyInt(c.root, "_NET_SUPPORTING_WM_CHECK", xproto.AtomWindow)
-	if err != nil {
-		supporting, err = c.getPropertyInt(c.root, "_NET_SUPPORTING_WM_CHECK", xproto.AtomCardinal)
-		if err != nil {
-			return "failed _NET_SUPPORTING_WM_CHECK"
-		}
-	}
-	var nameUtf8 string
-	utf8, err := c.atoms.Get(c, "UTF8_STRING")
-	if err == nil {
-		rawName, err := c.getProperty(
-			xproto.Window(supporting),
-			"_NET_WM_NAME",
-			utf8,
-		)
-		if err == nil {
-			nameUtf8 = string(rawName)
-		}
-	}
-	rawName, _ := c.getProperty(
-		xproto.Window(supporting),
-		"_NET_WM_NAME",
-		xproto.AtomString,
+// sendEvent sends an event to another window.
+func (c *Client) sendEvent(evt rawEvent, mask uint32, win xproto.Window) {
+	_ = xproto.SendEvent(
+		c.conn,
+		true,
+		win,
+		mask,
+		string(evt.Bytes()),
 	)
-	return string(rawName) + " | " + nameUtf8
 }
 
-// GetWmSupported returns a list of the window manager's supported properties
-// as defined by _NET_SUPPORTED.
-func (c *Client) GetWmSupported() ([]string, error) {
-	raw, err := c.getProperty(c.root, "_NET_SUPPORTED", xproto.AtomAtom)
-	if err != nil {
-		return nil, err
-	}
-	supported := make([]string, 0)
-	for i := 0; i < len(raw); i += 4 {
-		reply, err := xproto.GetAtomName(
-			c.conn,
-			xproto.Atom(binary.LittleEndian.Uint32(raw[i:i+4])),
-		).Reply()
-		if err != nil {
-			continue
+// sendKeyEvent sends a key event to the given window.
+func (c *Client) sendKeyEvent(key xproto.Keycode, state InputState, win xproto.Window) {
+	// Here, we have to deal with two hackfixes in GLFW.
+	// The first is that key events must always have a timestamp greater than
+	// the last event with the same keycode. So, we always increment, regardless
+	// of keycode, just to keep things simpler.
+	// The second is that a key release and key press event with the same code
+	// can not occur directly after each other unless they have a timestamp
+	// difference of >=20ms.
+	//
+	// So, we always ensure the timestamp we are sending will not cause the
+	// event to get dropped by GLFW. Additionally, we always ensure that the
+	// timestamp is a few (15, this is arbitrary) milliseconds ahead of the
+	// *actual* X server time, so that inputs from the user never cause
+	// resetti's inputs to get dropped.
+	//
+	// Reference:
+	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1260
+	// https://github.com/glfw/glfw/blob/3.3.8/src/x11_window.c#L1359
+
+	c.mu.Lock()
+	lastState, ok := c.lastKeyState[win]
+	time := c.GetCurrentTime() + 15
+	if ok {
+		if lastState.time >= time {
+			time = lastState.time + 1
 		}
-		supported = append(supported, reply.Name)
-	}
-	return supported, nil
-}
-
-// GrabKey grabs a keyboard key from a window, diverting keypress events
-// to resetti.
-func (c *Client) GrabKey(key Key, win xproto.Window) error {
-	return xproto.GrabKeyChecked(
-		c.conn,
-		true,
-		win,
-		uint16(key.Mod),
-		key.Code,
-		xproto.GrabModeAsync,
-		xproto.GrabModeAsync,
-	).Check()
-}
-
-// GrabPointer grabs the mouse pointer from the given window.
-func (c *Client) GrabPointer(win xproto.Window) error {
-	reply, err := xproto.GrabPointer(
-		c.conn,
-		true,
-		win,
-		xproto.EventMaskPointerMotion|xproto.EventMaskButtonPress,
-		xproto.GrabModeAsync,
-		xproto.GrabModeAsync,
-		c.root,
-		xproto.CursorNone,
-		xproto.TimeCurrentTime,
-	).Reply()
-	if err != nil {
-		return err
-	}
-	if reply.Status != xproto.GrabStatusSuccess {
-		var msg = []string{
-			"success",
-			"already grabbed",
-			"invalid time",
-			"not viewable",
-			"frozen",
+		if lastState.code == key {
+			time = lastState.time + 20
 		}
-		return errors.Errorf("status: %s", msg[reply.Status])
 	}
-	return nil
-}
+	c.lastKeyState[win] = keyState{time, key}
+	c.mu.Unlock()
 
-// MoveWindow moves and resizes the given window.
-func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) error {
-	return xproto.ConfigureWindowChecked(
-		c.conn,
-		win,
-		xproto.ConfigWindowX|
-			xproto.ConfigWindowY|
-			xproto.ConfigWindowWidth|
-			xproto.ConfigWindowHeight,
-		[]uint32{x, y, w, h},
-	).Check()
-}
-
-// RootWindow returns the ID of the root window.
-func (c *Client) RootWindow() xproto.Window {
-	return c.root
-}
-
-// sendKey sends a key event with the given parameters.
-func (c *Client) sendKey(state bool, code xproto.Keycode, win xproto.Window, timestamp xproto.Timestamp) {
 	evt := xproto.KeyPressEvent{
-		Sequence:   0,
-		Detail:     code,
-		Time:       timestamp,
+		Detail:     key,
+		Time:       xproto.Timestamp(time),
 		Root:       win,
 		Event:      win,
 		Child:      win,
-		RootX:      0,
-		RootY:      0,
-		EventX:     0,
-		EventY:     0,
 		SameScreen: true,
 	}
-	// To send it as an event, convert the event to its byte form first.
-	// Additionally, if it is a key release, set the first byte (signifying the
-	// event type) to 3.
-	raw := evt.Bytes()
-	if !state {
-		raw[0] = 3
+	if state == StateDown {
+		c.sendEvent(evt, maskKeyPress, win)
+	} else {
+		c.sendEvent(xproto.KeyReleaseEvent(evt), maskKeyPress, win)
 	}
-	err := xproto.SendEventChecked(
-		c.conn,
-		true,
-		win,
-		xproto.EventMaskKeyPress|xproto.EventMaskKeyRelease,
-		string(raw),
-	).Check()
+}
+
+// setCurrentDesktop attempts to upadte the current desktop by setting the
+// _NET_CURRENT_DESKTOP property of the root window to the given desktop.
+func (c *Client) setCurrentDesktop(desktop uint32) error {
+	// Get the _NET_CURRENT_DESKTOP atom.
+	currentDesktop, err := c.atoms.Get(netCurrentDesktop)
 	if err != nil {
-		log.Printf("X11 sendKey error: %s\n", err)
+		return fmt.Errorf("get _NET_CURRENT_DESKTOP atom: %w", err)
 	}
-}
 
-// SendKeyDown sends a key-down event with the given parameters. It increments
-// the timestamp parameter by one to deal with a quirk of how GLFW handles key
-// events.
-//
-// See:
-// https://github.com/glfw/glfw/blob/c18851f52ec9704eb06464058a600845ec1eada1/src/x11_window.c#L1250
-func (c *Client) SendKeyDown(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) {
-	c.sendKey(true, code, win, *timestamp)
-	*timestamp += 1
-}
-
-// SendKeyUp sends a key-up event with the given parameters.
-//
-// Unlike SendKeyDown, it does *not* increment the timestamp parameter as
-// GLFW's input handling does not require the timestamp to increase on key
-// release events.
-func (c *Client) SendKeyUp(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) {
-	c.sendKey(false, code, win, *timestamp)
-}
-
-// SendKeyPress sends a key-down and key-up event with the given parameters.
-// It increments the timestamp parameter by one to deal with a quirk of how
-// GLFW handles key events (as described in SendKeyDown.)
-//
-// In addition to the timestamp difference check, repeated presses of the same
-// key must circumvent another check - the timestamp must have at least a 20ms
-// difference. In cases where this is necessary, send an alternating sequence
-// of the key you want to press and a dummy key (such as Control) that will
-// trick GLFW.
-//
-// See:
-// https://github.com/glfw/glfw/blob/c18851f52ec9704eb06464058a600845ec1eada1/src/x11_window.c#L1321
-func (c *Client) SendKeyPress(code xproto.Keycode, win xproto.Window, timestamp *xproto.Timestamp) {
-	c.sendKey(true, code, win, *timestamp)
-	*timestamp += 1
-	c.sendKey(false, code, win, *timestamp)
-}
-
-// UngrabKey releases a grabbed key and returns it back to the X server.
-func (c *Client) UngrabKey(key Key, win xproto.Window) error {
-	return xproto.UngrabKeyChecked(
-		c.conn,
-		key.Code,
-		win,
-		uint16(key.Mod),
-	).Check()
-}
-
-// UngrabPointer returns the mouse pointer to the X server.
-func (c *Client) UngrabPointer() error {
-	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
-}
-
-func (k *Key) UnmarshalTOML(value interface{}) error {
-	str, ok := value.(string)
-	if !ok {
-		return errors.New("not a string")
+	// Send the property change event.
+	data := make([]uint32, 5)
+	data[0] = desktop
+	evt := xproto.ClientMessageEvent{
+		Format: 32,
+		Window: c.root,
+		Type:   currentDesktop,
+		Data:   xproto.ClientMessageDataUnionData32New(data),
 	}
-	substrs := strings.Split(str, "-")
-	for _, s := range substrs {
-		if val, ok := keys[strings.ToLower(s)]; ok {
-			k.Code = val
-		} else if val, ok := mods[strings.ToLower(s)]; ok {
-			k.Mod |= val
-		} else if strings.HasPrefix(strings.ToLower(s), "code") {
-			num, err := strconv.Atoi(s[4:])
+	c.sendEvent(evt, maskSubstructure, c.root)
+	return nil
+}
+
+// poll listens for user inputs in the background.
+func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) {
+	defer close(ch)
+	defer close(errch)
+	activeWindow, err := c.atoms.Get(netActiveWindow)
+	if err != nil {
+		errch <- err
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		evt, err := c.conn.WaitForEvent()
+		if evt == nil && err == nil {
+			errch <- ErrConnectionDied
+			return
+		}
+		if err != nil {
+			errch <- err
+			continue
+		}
+		switch evt := evt.(type) {
+		case xproto.ConfigureNotifyEvent:
+			ch <- ResizeEvent{
+				evt.Window,
+				int(evt.X),
+				int(evt.Y),
+				int(evt.Width),
+				int(evt.Height),
+			}
+		case xproto.PropertyNotifyEvent:
+			if activeWindow != evt.Atom {
+				continue
+			}
+			win, err := c.getActiveWindow()
 			if err != nil {
-				return fmt.Errorf("invalid key component: %s", s)
+				errch <- err
+				continue
 			}
-			if num > 255 || num < 0 {
-				return fmt.Errorf("invalid key code: %d", num)
-			}
-			k.Code = xproto.Keycode(num)
-		} else {
-			return fmt.Errorf("invalid key component: %s", s)
+			ch <- FocusEvent(win)
 		}
 	}
-	return nil
 }
 
-func (m *Keymod) UnmarshalTOML(value interface{}) error {
-	str, ok := value.(string)
-	if !ok {
-		return errors.New("not a string")
-	}
-	substrs := strings.Split(str, "-")
-	for _, s := range substrs {
-		if s == "" {
-			return nil
-		}
-		if val, ok := mods[strings.ToLower(s)]; ok {
-			*m |= val
-		} else {
-			return fmt.Errorf("invalid key component: %s", s)
+// HasPressed determines whether all of the given keys are pressed in the
+// keymap.
+func (k *Keymap) HasPressed(mask [32]byte) bool {
+	for i, v := range mask {
+		if k.data[i]&v != v {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
-func (e ButtonEvent) Timestamp() xproto.Timestamp {
-	return e.Time
+// HasPressed determines whether all of the given buttons are pressed in the
+// keymap.
+func (p *Pointer) HasPressed(button xproto.Button) bool {
+	return p.buttons&masks[button] != 0
 }
 
-func (e FocusEvent) Timestamp() xproto.Timestamp {
-	return e.Time
-}
+// approximateOffset attempts to find the offset between the system clock and
+// the X server time.
+func approximateOffset(c *xgb.Conn) (uint64, error) {
+	reply, err := xproto.InternAtom(c, false, uint16(len(wmName)), wmName).Reply()
+	if err != nil {
+		return 0, fmt.Errorf("get WM_NAME atom: %w", err)
+	}
+	atom := reply.Atom
 
-func (e KeyEvent) Timestamp() xproto.Timestamp {
-	return e.Time
-}
-
-func (e MoveEvent) Timestamp() xproto.Timestamp {
-	return e.Time
+	// Try to get the time offset 10 times and take the average.
+	offsetSum := uint64(0)
+	root := xproto.Setup(c).DefaultScreen(c).Root
+	for i := 0; i < 10; i += 1 {
+		// Send a no-op property change request and take note of the timestamp
+		// sent back by the X server. This method is recommended by the ICCCM
+		// spec:
+		// https://x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#acquiring_selection_ownership
+		send := time.Now().UnixMilli()
+		xproto.ChangeProperty(
+			c,
+			xproto.PropModeAppend,
+			root,
+			atom,
+			xproto.AtomString,
+			8,
+			0,
+			[]byte{},
+		)
+		rawEvt, err := c.WaitForEvent()
+		if rawEvt == nil && err == nil {
+			return 0, ErrConnectionDied
+		} else if err != nil {
+			return 0, fmt.Errorf("receive response: %w", err)
+		}
+		evt, ok := rawEvt.(xproto.PropertyNotifyEvent)
+		if !ok {
+			return 0, fmt.Errorf("invalid event type (%T)", rawEvt)
+		}
+		offsetSum += uint64(send - int64(evt.Time))
+	}
+	return offsetSum / 10, nil
 }

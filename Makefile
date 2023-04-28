@@ -1,5 +1,6 @@
 build:
 	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w"
+	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" ./contrib/bench.go
 
 check:
 	# go install github.com/kisielk/errcheck@latest

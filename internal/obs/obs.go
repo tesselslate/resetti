@@ -10,10 +10,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -21,11 +23,12 @@ import (
 // Client manages an OBS websocket connection.
 type Client struct {
 	ws      *websocket.Conn
-	mx      *sync.Mutex
+	mu      sync.Mutex
 	idCache idCache
 
 	err map[uuid.UUID]chan error
 	rcv map[uuid.UUID]chan json.RawMessage
+	req chan request
 }
 
 // StringMap represents a JSON object.
@@ -36,6 +39,12 @@ type StringMap map[string]any
 type batchResponse struct {
 	Id      uuid.UUID         `json:"requestID"`
 	Results []requestResponse `json:"results"`
+}
+
+// idCache is used to keep a cache of scene item IDs.
+type idCache struct {
+	mu    sync.RWMutex
+	cache map[[2]string]int
 }
 
 // requestResponse contains data sent back from OBS as a result of a request.
@@ -56,81 +65,54 @@ type websocketResponse struct {
 	Op   int             `json:"op"`
 }
 
+// BatchAsync creates and submits a new request batch in another goroutine. If
+// the batch errors, the error will be logged.
+func (c *Client) BatchAsync(mode BatchMode, fn func(*Batch)) {
+	batch, err := c.batchCreate(fn)
+	if err != nil {
+		log.Printf("BatchAsync creation failed: %s\n", err)
+		return
+	}
+	go func() {
+		if err := c.batchSubmit(mode, &batch); err != nil {
+			log.Printf("BatchAsync submission failed: %s\n", err)
+		}
+	}()
+}
+
 // Batch creates and *synchronously* submits a new request batch. The provided
 // closure can be used to add requests to the batch. If the closure returns an
 // error or panics, the batch will not be submitted.
-func (c *Client) Batch(mode BatchMode, fn func(*Batch) error) (err error) {
-	batch := newBatch(c)
-
-	// Some of Batch's methods will panic when a scene item ID can not be
-	// found to remove the need for tedious error handling code. Those
-	// panics must be handled here.
-	defer func() {
-		result := recover()
-		if res, ok := result.(error); ok {
-			err = res
-		} else if result != nil {
-			err = errors.Errorf("%+v", result)
-		}
-	}()
-
-	// Run the closure to fill the batch with requests.
-	err = fn(&batch)
+func (c *Client) Batch(mode BatchMode, fn func(*Batch)) error {
+	batch, err := c.batchCreate(fn)
 	if err != nil {
 		return err
 	}
-	if len(batch.requests) == 0 {
-		return errors.New("batch has no requests")
-	}
-
-	// Submit the batch.
-	id := uuid.New()
-	rawBatch := StringMap{
-		"op": 8,
-		"d": StringMap{
-			"requestId":     id,
-			"haltOnFailure": true,
-			"executionType": mode,
-			"requests":      batch.requests,
-		},
-	}
-	errch := make(chan error, 1)
-	c.mx.Lock()
-	c.err[id] = errch
-	c.mx.Unlock()
-	err = wsjson.Write(context.Background(), c.ws, &rawBatch)
-	if err != nil {
-		c.mx.Lock()
-		delete(c.err, id)
-		c.mx.Unlock()
-		return err
-	}
-
-	return <-errch
+	return c.batchSubmit(mode, &batch)
 }
 
 // Connect attempts to connect to an OBS instance at the given address. If
 // authentication is required, the given password will be used.
-func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan error, error) {
+func (c *Client) Connect(ctx context.Context, port uint16, pw string) (<-chan error, error) {
 	// Setup websocket connection.
-	c.mx = &sync.Mutex{}
-	c.idCache = newIdCache()
+	c.idCache = idCache{sync.RWMutex{}, make(map[[2]string]int)}
 	c.err = make(map[uuid.UUID]chan error)
 	c.rcv = make(map[uuid.UUID]chan json.RawMessage)
-	conn, _, err := websocket.Dial(ctx, "ws://"+addr, nil)
+	c.req = make(chan request, 64)
+	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:%d", port), nil)
 	if err != nil {
 		return nil, err
 	}
 	c.ws = conn
 
 	// Respond to the hello message.
-	if err = c.respondHello(ctx, pw); err != nil {
+	if err = c.authHello(ctx, pw); err != nil {
 		c.ws.Close(websocket.StatusInternalError, "")
 		return nil, err
 	}
 
 	// Wait for the Identified response.
-	if err = c.identified(ctx); err != nil {
+	if err = c.authIdentified(ctx); err != nil {
 		c.ws.Close(websocket.StatusInternalError, "")
 		return nil, err
 	}
@@ -141,7 +123,8 @@ func (c *Client) Connect(ctx context.Context, addr string, pw string) (<-chan er
 	return errch, nil
 }
 
-func (c *Client) identified(ctx context.Context) error {
+// authIdentified reads the Identified message for the authentication flow.
+func (c *Client) authIdentified(ctx context.Context) error {
 	type identifiedMessage struct {
 		Data struct {
 			RpcVersion int `json:"negotiatedRpcVersion"`
@@ -158,7 +141,8 @@ func (c *Client) identified(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) respondHello(ctx context.Context, pw string) error {
+// authHello responds to the Hello message for the authentication flow.
+func (c *Client) authHello(ctx context.Context, pw string) error {
 	type helloMessage struct {
 		Data struct {
 			WsVersion  string `json:"obsWebSocketVersion"`
@@ -209,8 +193,74 @@ func (c *Client) respondHello(ctx context.Context, pw string) error {
 	return nil
 }
 
+// batchCreate runs the provided closure to create a request batch.
+func (c *Client) batchCreate(fn func(*Batch)) (b Batch, err error) {
+	batch := newBatch(c)
+
+	// Some of Batch's methods will panic when a scene item ID can not be
+	// found to remove the need for tedious error handling code. Those
+	// panics must be handled here.
+	defer func() {
+		result := recover()
+		if res, ok := result.(batchError); ok {
+			err = res.err
+		} else if result != nil {
+			panic(result)
+		}
+	}()
+
+	// Run the closure to fill the batch with requests.
+	fn(&batch)
+	if len(batch.requests) == 0 {
+		return batch, errors.New("batch has no requests")
+	}
+	return batch, nil
+}
+
+// batchSubmit submits a request batch to OBS and waits for a response.
+func (c *Client) batchSubmit(mode BatchMode, batch *Batch) error {
+	id := uuid.New()
+	rawBatch := StringMap{
+		"op": 8,
+		"d": StringMap{
+			"requestId":     id,
+			"haltOnFailure": true,
+			"executionType": mode,
+			"requests":      batch.requests,
+		},
+	}
+	errch := make(chan error, 1)
+	c.mu.Lock()
+	c.err[id] = errch
+	c.mu.Unlock()
+	err := wsjson.Write(context.Background(), c.ws, &rawBatch)
+	if err != nil {
+		c.mu.Lock()
+		delete(c.err, id)
+		c.mu.Unlock()
+		return err
+	}
+
+	return <-errch
+}
+
+// handleRequests runs in a loop, sending all asynchronous (write-only) requests
+// and logging any errors which occur.
+func (c *Client) handleRequests() {
+	for req := range c.req {
+		_, err := c.sendRequest(req)
+		if err != nil {
+			log.Printf("%s error: %s\n", req.Type, err)
+		}
+	}
+}
+
+// run handles the websocket connection, receiving any messages from OBS and
+// relaying them to the appropriate callers.
 func (c *Client) run(ctx context.Context, errch chan<- error) {
 	defer c.ws.Close(websocket.StatusNormalClosure, "")
+	defer close(errch)
+	go c.handleRequests()
 	for {
 		// Check if the context has been cancelled.
 		select {
@@ -222,7 +272,7 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 		// Read websocket message.
 		res := websocketResponse{}
 		if err := wsjson.Read(ctx, c.ws, &res); err != nil {
-			errch <- errors.Wrap(err, "read json")
+			errch <- fmt.Errorf("read json: %w", err)
 			return
 		}
 
@@ -232,45 +282,46 @@ func (c *Client) run(ctx context.Context, errch chan<- error) {
 			data := requestResponse{}
 			err := json.Unmarshal(res.Data, &data)
 			if err != nil {
-				errch <- errors.Wrap(err, "read request response")
+				errch <- fmt.Errorf("read request response: %w", err)
 				return
 			}
 
 			// Process the response.
-			c.mx.Lock()
+			c.mu.Lock()
 			if !data.Status.Result {
-				c.err[data.Id] <- errors.Errorf("code %d: %s", data.Status.Code, data.Status.Comment)
+				c.err[data.Id] <- fmt.Errorf("code %d: %s", data.Status.Code, data.Status.Comment)
 			} else {
 				c.rcv[data.Id] <- data.Data
 			}
 			delete(c.err, data.Id)
 			delete(c.rcv, data.Id)
-			c.mx.Unlock()
+			c.mu.Unlock()
 		case 9:
 			// Request batch response.
 			data := batchResponse{}
 			err := json.Unmarshal(res.Data, &data)
 			if err != nil {
-				errch <- errors.Wrap(err, "read batch response")
+				errch <- fmt.Errorf("read batch response: %w", err)
 				return
 			}
 
 			// Check for any errors.
 			for _, result := range data.Results {
 				if !result.Status.Result {
-					err = errors.Errorf("code %d: %s", result.Status.Code, result.Status.Comment)
+					err = fmt.Errorf("code %d: %s", result.Status.Code, result.Status.Comment)
 				}
 			}
 
 			// Send the result to whatever submitted the batch.
-			c.mx.Lock()
+			c.mu.Lock()
 			c.err[data.Id] <- err
 			delete(c.err, data.Id)
-			c.mx.Unlock()
+			c.mu.Unlock()
 		}
 	}
 }
 
+// sendRequest sends a request to OBS and waits for a response.
 func (c *Client) sendRequest(data request) (res json.RawMessage, err error) {
 	// Prepare the request.
 	id := uuid.New()
@@ -283,15 +334,15 @@ func (c *Client) sendRequest(data request) (res json.RawMessage, err error) {
 	}
 
 	// Send the request.
-	c.mx.Lock()
+	c.mu.Lock()
 	c.rcv[id] = resch
 	c.err[id] = errch
-	c.mx.Unlock()
+	c.mu.Unlock()
 	if err := wsjson.Write(context.Background(), c.ws, req); err != nil {
-		c.mx.Lock()
+		c.mu.Lock()
 		delete(c.rcv, id)
 		delete(c.err, id)
-		c.mx.Unlock()
+		c.mu.Unlock()
 		return nil, err
 	}
 
@@ -302,8 +353,6 @@ func (c *Client) sendRequest(data request) (res json.RawMessage, err error) {
 	}
 	return
 }
-
-// Requests
 
 // getSceneItemId returns the ID of the given scene item if it exists.
 func (c *Client) getSceneItemId(scene, name string) (int, error) {
@@ -325,44 +374,6 @@ func (c *Client) getSceneItemId(scene, name string) (int, error) {
 	return res.Id, nil
 }
 
-// AddSceneItem adds the source with the given name to the given scene.
-func (c *Client) AddSceneItem(scene, name string) error {
-	req := reqAddSceneItem(scene, name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// CreateSceneCollection creates a new scene collection with the given name
-// if one does not already exist.
-func (c *Client) CreateSceneCollection(name string) error {
-	req := reqCreateSceneCollection(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// CreateScene creates a new scene with the given name in the current scene
-// collection.
-func (c *Client) CreateScene(name string) error {
-	req := reqCreateScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// CreateSource creates a new source with the given name and settings on the
-// given scene.
-func (c *Client) CreateSource(scene, name string, kind SourceKind, settings StringMap) error {
-	req := reqCreateSource(scene, name, string(kind), settings)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// DeleteScene deletes the given scene.
-func (c *Client) DeleteScene(name string) error {
-	req := reqDeleteScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
 // GetCanvasSize returns the base resolution (canvas size) of the current OBS
 // profile.
 func (c *Client) GetCanvasSize() (width, height int, err error) {
@@ -379,20 +390,22 @@ func (c *Client) GetCanvasSize() (width, height int, err error) {
 	return int(res.Width), int(res.Height), err
 }
 
-// GetSceneCollectionList returns a list of the existing scene collections and
-// which one is currently active.
-func (c *Client) GetSceneCollectionList() (collections []string, active string, err error) {
-	req := reqGetSceneCollectionList()
+// GetSceneItemIndex returns the index of the given scene item.
+func (c *Client) GetSceneItemIndex(scene, name string) (int, error) {
+	id, err := c.getSceneItemId(scene, name)
+	if err != nil {
+		return 0, err
+	}
+	req := reqGetSceneItemIndex(scene, id)
 	data, err := c.sendRequest(req)
 	if err != nil {
-		return nil, "", err
+		return 0, err
 	}
 	res := struct {
-		Collections []string `json:"sceneCollections"`
-		Active      string   `json:"currentSceneCollectionName"`
+		Index int `json:"sceneItemIndex"`
 	}{}
 	err = json.Unmarshal(data, &res)
-	return res.Collections, res.Active, err
+	return res.Index, err
 }
 
 // GetSceneItemTransform returns the size and position of the given scene item.
@@ -418,78 +431,49 @@ func (c *Client) GetSceneItemTransform(scene, name string) (x, y, w, h float64, 
 	return res.T.X, res.T.Y, res.T.Width, res.T.Height, err
 }
 
-// GetSceneList returns a list of the existing scenes.
-func (c *Client) GetSceneList() ([]string, error) {
-	req := reqGetSceneList()
-	data, err := c.sendRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	res := struct {
-		Scenes []struct {
-			Name string `json:"sceneName"`
-		} `json:"scenes"`
-	}{}
-	if err = json.Unmarshal(data, &res); err != nil {
-		return nil, err
-	}
-	list := make([]string, 0)
-	for _, scene := range res.Scenes {
-		list = append(list, scene.Name)
-	}
-	return list, nil
+// SetScene sets the current scene and logs any errors that occur.
+func (c *Client) SetScene(name string) {
+	c.req <- reqSetScene(name)
 }
 
-// SetScene sets the current scene.
-func (c *Client) SetScene(name string) error {
-	req := reqSetScene(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// SetSceneCollection sets the current scene collection.
-func (c *Client) SetSceneCollection(name string) error {
-	req := reqSetSceneCollection(name)
-	_, err := c.sendRequest(req)
-	return err
-}
-
-// SetSceneItemBounds moves and resizes the given scene item.
-func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) error {
+// SetSceneItemBounds moves and resizes the given scene item and logs any
+// errors that occur.
+func (c *Client) SetSceneItemBounds(scene, name string, x, y, w, h float64) {
 	id, err := c.getSceneItemId(scene, name)
 	if err != nil {
-		return err
+		log.Printf("Failed to get scene item ID: %s\n", err)
 	}
-	req := reqSetSceneItemTransform(scene, id, x, y, w, h)
-	_, err = c.sendRequest(req)
-	return err
+	c.req <- reqSetSceneItemTransform(scene, id, x, y, w, h)
 }
 
-// SetSceneItemLocked locks or unlocks the given scene item.
-func (c *Client) SetSceneItemLocked(scene, name string, locked bool) error {
+// SetSceneItemVisible hides or shows the given scene item and logs any errors
+// that occur.
+func (c *Client) SetSceneItemVisible(scene, name string, visible bool) {
 	id, err := c.getSceneItemId(scene, name)
 	if err != nil {
-		return err
+		log.Printf("Failed to get scene item ID: %s\n", err)
+		return
 	}
-	req := reqSetSceneItemLocked(scene, id, locked)
-	_, err = c.sendRequest(req)
-	return err
+	c.req <- reqSetSceneItemVisible(scene, id, visible)
 }
 
-// SetSceneItemVisible hides or shows the given scene item.
-func (c *Client) SetSceneItemVisible(scene, name string, visible bool) error {
-	id, err := c.getSceneItemId(scene, name)
-	if err != nil {
-		return err
-	}
-	req := reqSetSceneItemVisible(scene, id, visible)
-	_, err = c.sendRequest(req)
-	return err
+// SetSourceFilterEnabled enables or disables a given filter and logs any
+// errors that occur.
+func (c *Client) SetSourceFilterEnabled(source, filter string, enabled bool) {
+	c.req <- reqSetSourceFilterEnabled(source, filter, enabled)
 }
 
-// SetSourceSettings configures the given source's settings.
-func (c *Client) SetSourceSettings(name string, settings StringMap, overlay bool) error {
-	req := reqSetSourceSettings(name, settings, overlay)
-	_, err := c.sendRequest(req)
-	return err
+// Get returns the ID of the given scene/source pair if it exists.
+func (i *idCache) Get(scene string, name string) (int, bool) {
+	i.mu.RLock()
+	id, ok := i.cache[[2]string{scene, name}]
+	i.mu.RUnlock()
+	return id, ok
+}
+
+// Set inserts the given scene/source pair into the cache.
+func (i *idCache) Set(scene string, name string, id int) {
+	i.mu.Lock()
+	i.cache[[2]string{scene, name}] = id
+	i.mu.Unlock()
 }

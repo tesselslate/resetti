@@ -1,0 +1,243 @@
+# This is the default configuration profile for resetti.
+# You can delete or ignore any sections which are not applicable.
+
+# The path to the file to count your resets in. Leave blank to disable
+# reset counting.
+reset_count = ""
+
+# Whether or not instances should automatically unpause when you tab in.
+unpause_focus = true
+
+# The rate (in Hz) to poll for hotkey inputs.
+poll_rate = 100
+
+# The delay section contains delays (in milliseconds) before performing various
+# actions. These defaults are completely arbitrary. Increase relevant delays if
+# you have issues, decrease for lower latency. Depending on your setup, you may
+# be able to set all of these (except for unpause) to 0.
+[delay]
+wp_pause = 20
+idle_pause = 20
+unpause = 20
+stretch = 20
+ghost_pie_fix = 20
+
+# The hooks section allows you to specify various commands which are run
+# upon certain actions. Any blank hooks will be ignored.
+[hooks]
+# Run when a reset occurs from ingame.
+reset = ""
+
+# Run when the user switches to their alternate resolution.
+alt_res = ""
+
+# Run when the user switches to their normal resolution.
+normal_res = ""
+
+# Run when an instance is locked on the wall.
+wall_lock = ""
+
+# Run when an instance is unlocked on the wall.
+wall_unlock = ""
+
+# Run when an instance is played on the wall.
+wall_play = ""
+
+# Run when an instance is reset on the wall.
+wall_reset = ""
+
+# The keybinds section lets you specify keybindings for various actions you
+# may want to perform.
+#
+# The provided keybinds simply serve as examples. You can specify one or more
+# actions for each keybind. When the keybind is pressed, all of the valid
+# actions will occur (e.g. specifying both a wall and ingame action for a single
+# key will only perform one of them, depending on where you are.)
+#
+# Bind syntax:
+# - Specify either a key or mouse button and 0 or more modifiers.
+# - You can use the syntax `codeNUM` for a key with code NUM.
+# - Most common keys, buttons, and modifiers are supported by name.
+#
+# Available actions:
+# - ingame_focus            Focus active instance.
+# - ingame_reset            Reset active instance.
+# - ingame_toggle_res       Toggle the resolution for active instance.
+# - wall_focus              Focus wall projector.
+# - wall_reset_all          Reset all unlocked instances.
+# - wall_lock               Lock hovered instance.
+# - wall_lock(n)            Lock instance N.
+# - wall_play               Play hovered instance.
+# - wall_play(n)            Play instance N.
+# - wall_reset              Reset hovered instance.
+# - wall_reset(n)           Reset instance N.
+# - wall_reset_others       Focus reset hovered instance.
+# - wall_reset_others(n)    Focus reset instance N.
+# - wall_play_next_locked   Plays the first locked and idle instance.
+[keybinds]
+"Ctrl-Shift-D"      = ["wall_reset_all", "ingame_reset"]
+"Ctrl-Shift-F"      = ["ingame_focus", "wall_focus"]
+"LMB"               = ["wall_reset"]
+"LMB-Shift"         = ["wall_play"]
+"LMB-Ctrl"          = ["wall_lock"]
+"LMB-Ctrl-Shift"    = ["wall_reset_others"]
+"1"                 = ["wall_reset(1)"]
+"Shift-1"           = ["wall_play(1)"]
+
+# The obs section lets you specify connection information for OBS websocket.
+# This can be disabled if you are not using wall and are not recording;
+# otherwise, you must provide connection information.
+#
+# The password field can be left blank if you have authentication off.
+[obs]
+enabled = true
+port = 4440
+password = ""
+
+# The wall section lets you configure your wall experience. If you only want
+# the classic multi experience, you can delete everything from this point on.
+[wall]
+enabled = false
+
+# Whether or not to confine the mouse pointer to the OBS projector when on the
+# wall.
+confine_pointer = false
+
+# Also known as "wall bypass" on other macros. If enabled, resetting from
+# ingame will immediately bring you to the next locked instance which has
+# finished generating a world (if any.)
+goto_locked = false
+
+# If enabled, instances will be automatically reset when they are unlocked.
+reset_unlock = false
+
+# The number of milliseconds to prevent you from resetting an instance after it
+# starts previewing. Set to 0 to disable.
+grace_period = 250
+
+# The resolution to set your instances to while they are on the wall, in
+# the format "W,H+X,Y" (e.g. 960x360+0,0). Delete or comment out to disable
+# instance stretching.
+stretch_res = "960x360+0,0"
+
+# The resolution to set your instances to while they are being played, in the
+# format "W,H+X,Y" (e.g. 1920x1080+0,0). Delete or comment out to disable
+# instance stretching.
+play_res = "1920x1080+0,0"
+
+# An alternate resolution that can be toggled to while ingame. Delete this if
+# you do not want to use e.g. thin or tall window.
+alt_res = "400x1080+810,0"
+
+# Whether or not to hide the hotbar and hand while on the wall scene. If
+# enabled, make sure to set "f1:true" in your StandardSettings configuration.
+use_f1 = false
+
+# The percentage to show freeze at on preview. Set to 0 or below to disable.
+freeze_at = 0
+
+# The percentage to show instances at on preview. Set below 0 to disable.
+show_at = 5
+
+# Instance moving settings.
+[wall.moving]
+# Whether or not to use moving.
+enabled = false
+
+# If enabled, you can only have instances visible in the first group when
+# attempting to play an instance from the wall. This forces you to reset your
+# instances before playing.
+force_reset_before_play = false
+
+# Whether to create gaps in the queue when locking instances. If you have a
+# smaller layout, you will likely want to disable this.
+use_gaps = true
+
+# The list of main instance groups. Instances enter the last group and move
+# towards the first group as you reset. You do not need enough groups to show
+# all instances on screen at once.
+#
+# Refer to the documentation for examples on various moving setups. TODO
+[[wall.moving.groups]]
+# The position on the projector.
+position = "1920x880+0,0"
+
+# Whether instances in the group can be clicked on. Set to true to disable
+# interacting with instances in this group.
+cosmetic = false
+
+# The size of the group (in instances.)
+width = 2
+height = 2
+
+# The locked instance group. You can delete this if you want to have no locked
+# instances on the projector.
+[wall.moving.locks]
+# The position on the projector.
+position = "1920x200+0,880"
+
+# Whether instances in the group can be clicked on. Set to true to disable
+# interacting with this group.
+cosmetic = false
+
+# The size of the group (in instances.)
+width = 6
+height = 1
+
+# This section contains settings for optimizing CPU utilization while resetting.
+[wall.performance]
+# The path to write sleepbg.lock to. If left blank, it will default to the
+# usual ($HOME.) Only use this if you change the sleepbg.lock path of your
+# instances with Java's USER.HOME property.
+sleepbg_path = ""
+
+# The CPU affinity method to use. Leave blank to disable affinity. Options:
+# - sequence        Each instance gets one CPU core (SMT is assumed, so 2
+#                   threads.) When instances are locked, active, or in the
+#                   background, they are given a set amount of CPUs.
+# - advanced        Advanced affinity, where each instance is moved between
+#                   affinity groups. Configure below.
+affinity = ""
+
+# Sequence affinity settings.
+[wall.performance.sequence]
+# The number of CPUs to give to the active instance. Set to 0 to disable.
+active_cpus = 12
+
+# The number of CPUs to give to instances in the background. Set to 0 to
+# disable.
+background_cpus = 8
+
+# The number of CPUs to give to locked instances. Set to 0 to disable.
+lock_cpus = 10
+
+# Advanced affinity settings.
+[wall.performance.advanced]
+# How many groups to subdivide affinity groups into. Set this to the number of
+# CCXs your CPU has. If you don't know what this means, leave it at 1.
+ccx_split = 1
+
+# The number of CPUs (cores, or threads if you have SMT) to allocate to each
+# affinity group.
+#
+# - Idle        Instances which have finished generating a world.
+# - Low         Instances which are on preview and have crossed low_threshold.
+# - Mid         Instances which have not crossed low_threshold and while the
+#               user is not on the wall.
+# - High        Instances which have not crossed low_threshold and while the
+#               user is on the wall.
+# - Active      The instance being played by the user.
+affinity_idle = 2
+affinity_low = 4
+affinity_mid = 8
+affinity_high = 12
+affinity_active = 12
+
+# If enabled (n > 0), instances will remain in the mid affinity group for this
+# many milliseconds after finishing generating. This gives extra CPU time to
+# allow for chunks to load in faster.
+burst_length = 0
+
+# The world generation percentage at which instances are moved from the high
+# group to the low group.
+low_threshold = 20

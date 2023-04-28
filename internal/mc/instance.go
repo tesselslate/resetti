@@ -1,152 +1,360 @@
 package mc
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log"
+	"os"
+	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/x11"
+	"golang.org/x/exp/slices"
 )
 
-// The set of possible states an instance can be in.
-const (
-	StMenu    int = iota // Main menu
-	StDirt               // Dirt world generation screen
-	StPreview            // World preview
-	StIdle               // World generation finished
-	StIngame             // Currently being played
-)
+// TODO: Pre 1.14 support
 
-// InstanceInfo contains information about how to interact with a Minecraft
-// instance, such as its game directory and window ID.
-type InstanceInfo struct {
-	Id       int           // Instance number
-	Pid      uint32        // Process ID
-	Wid      xproto.Window // Window ID
-	Dir      string        // .minecraft directory
-	Version  int           // Minecraft version
-	ResetKey x11.Key       // Atum reset key
+// An instance contains all of the relevant information for an instance, such
+// as its game directory and current state.
+type instance struct {
+	info   InstanceInfo
+	reader StateReader
+	state  State
+	altRes bool
 }
 
-// InstanceState contains information about the current state of the instance.
-type InstanceState struct {
-	State    int // Current state of the instance
-	Progress int // World generation progress (0 to 100)
-}
+// A Manager controls several Minecraft instances. It keeps track of each
+// instance's state and communicates with a frontend to operate on the
+// instances for the user.
+type Manager struct {
+	// The mutex is only needed to guard access to the active instance ID and
+	// instance states.
+	mu sync.Mutex
 
-// Instance represents a single Minecraft instance and takes care of reading its
-// log file and performing actions on it.
-type Instance struct {
-	InstanceInfo
+	active    int               // Active instance ID. -1 signals no active instance.
+	instances []instance        // List of instances
+	paths     map[string]int    // State file -> instance ID mapping
+	watcher   *fsnotify.Watcher // State file watcher
+	pause     chan int          // Instances to pause
+
 	conf *cfg.Profile
-	time xproto.Timestamp // the last time a key event was sent
 	x    *x11.Client
 }
 
-// NewInstance creates a new Instance from the given instance information.
-func NewInstance(info InstanceInfo, conf *cfg.Profile, x *x11.Client) Instance {
-	return Instance{
-		InstanceInfo: info,
-		conf:         conf,
-		x:            x,
+// NewManager attempts to create a new Manager for the given instances.
+func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manager, error) {
+	// Create instances.
+	instances := make([]instance, 0, len(infos))
+	for _, info := range infos {
+		reader, state, err := createStateReader(info)
+		if err != nil {
+			return nil, err
+		}
+		if state.Type == stWorld {
+			state.Type = StIdle
+		}
+		instance := instance{info, reader, state, false}
+		instances = append(instances, instance)
+	}
+
+	// Setup state watcher.
+	watcher, err := fsnotify.NewWatcher()
+	paths := make(map[string]int)
+	if err != nil {
+		return nil, fmt.Errorf("open watcher: %w", err)
+	}
+	for idx, inst := range instances {
+		path := inst.reader.Path()
+		paths[path] = idx
+		if err := watcher.Add(path); err != nil {
+			_ = watcher.Close()
+			return nil, fmt.Errorf("watch instance %d: %w", idx, err)
+		}
+	}
+
+	m := Manager{
+		sync.Mutex{},
+		-1,
+		instances,
+		paths,
+		watcher,
+		make(chan int, len(instances)*2),
+		conf,
+		x,
+	}
+
+	// Warmup instances.
+	for _, inst := range infos {
+		x.Click(inst.Wid)
+	}
+
+	return &m, nil
+}
+
+// GetStates returns a list of all instance states.
+func (m *Manager) GetStates() []State {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []State
+	for _, inst := range m.instances {
+		out = append(out, inst.state)
+	}
+	return out
+}
+
+// Run starts managing instances in the background. Any non-fatal errors are
+// logged, any fatal errors are returned via the provided error channel.
+func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- error) {
+	instanceCheckup := time.NewTicker(time.Second)
+	defer func() {
+		instanceCheckup.Stop()
+		_ = m.watcher.Close()
+	}()
+
+	var deadInstances []int
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-instanceCheckup.C:
+			for id, inst := range m.instances {
+				_, err := os.Stat(fmt.Sprintf("/proc/%d/", inst.info.Pid))
+				if err != nil {
+					if !slices.Contains(deadInstances, id) {
+						log.Printf("Instance %d (%s) died. Reboot it and restart resetti.", id, inst.info.Dir)
+						deadInstances = append(deadInstances, id)
+					}
+
+					// Return once all instances are paused.
+					c := 0
+					for _, inst := range m.instances {
+						if inst.state.Type == StIdle || inst.state.LastPreview.Equal(time.Time{}) {
+							c += 1
+						}
+					}
+					if c+len(deadInstances) >= len(m.instances) {
+						errch <- fmt.Errorf("%d dead instance(s)", len(deadInstances))
+						return
+					}
+				}
+			}
+		case id := <-m.pause:
+			state := m.instances[id].state.Type
+			if state == StPreview || state == StIdle {
+				m.sendKeyDown(id, x11.KeyF3)
+				m.sendKeyPress(id, x11.KeyEsc)
+				m.sendKeyUp(id, x11.KeyF3)
+			}
+		case evt, ok := <-m.watcher.Events:
+			if !ok {
+				errch <- errors.New("watcher events closed")
+				return
+			}
+			id := m.paths[evt.Name]
+			switch evt.Op {
+			case fsnotify.Write:
+				// Process any updates to the state file.
+				state, updated, err := m.instances[id].reader.Process()
+				if err != nil {
+					log.Printf("process log (%d) failed: %s", id, err)
+					continue
+				}
+				if !updated {
+					continue
+				}
+
+				// Only modify the fields that the state reader knows about.
+				m.mu.Lock()
+				lastType := m.instances[id].state.Type
+				m.instances[id].state.Type = state.Type
+				m.instances[id].state.Progress = state.Progress
+				m.instances[id].state.Menu = state.Menu
+
+				// The stWorld state should only ever be handled internally.
+				// Update it to the appropriate public state before notifying
+				// the frontend.
+				switch state.Type {
+				case stWorld:
+					if m.active == id {
+						m.instances[id].state.Type = StIngame
+					} else {
+						m.instances[id].state.Type = StIdle
+						if lastType != StIdle {
+							if m.conf.Delay.IdlePause > 0 {
+								time.AfterFunc(time.Millisecond*time.Duration(m.conf.Delay.IdlePause), func() {
+									m.pause <- id
+								})
+							} else {
+								m.sendKeyDown(id, x11.KeyF3)
+								m.sendKeyPress(id, x11.KeyEsc)
+								m.sendKeyUp(id, x11.KeyF3)
+							}
+						}
+					}
+				case StPreview:
+					if lastType != StPreview {
+						m.instances[id].state.LastPreview = time.Now()
+						if m.conf.Delay.WpPause > 0 {
+							time.AfterFunc(time.Millisecond*time.Duration(m.conf.Delay.WpPause), func() {
+								m.pause <- id
+							})
+						} else {
+							m.sendKeyDown(id, x11.KeyF3)
+							m.sendKeyPress(id, x11.KeyEsc)
+							m.sendKeyUp(id, x11.KeyF3)
+						}
+					}
+				}
+				evtch <- Update{m.instances[id].state, id}
+				m.mu.Unlock()
+			default:
+				err := m.instances[id].reader.ProcessEvent(evt.Op)
+				if err != nil {
+					errch <- fmt.Errorf("process event (%d) failed: %w", id, err)
+					return
+				}
+			}
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				errch <- fmt.Errorf("watcher died: %w", err)
+			}
+			log.Printf("Manager: watcher error: %s\n", err)
+		}
 	}
 }
 
-// Click clicks on the instance's window.
-func (i *Instance) Click() error {
-	return i.x.Click(i.Wid)
-}
-
-// Focus focuses the instance's window. If an error occurs, it will be logged.
-func (i *Instance) Focus() {
-	if err := i.x.FocusWindow(i.Wid); err != nil {
-		log.Printf("Instance %d failed to focus: %s\n", i.Id, err)
-	}
-}
-
-// FocusAndUnpause focuses the instance's window and then unpauses if the user
-// has set `unpause_on_focus` in their config. If an error occurs, it will be
-// logged.
-func (i *Instance) FocusAndUnpause(timestamp xproto.Timestamp, idle bool) {
-	i.Focus()
-
-	time.Sleep(time.Millisecond * time.Duration(i.conf.Reset.Delay))
-	if i.conf.Reset.UnpauseFocus && idle {
-		i.x.SendKeyPress(
-			x11.KeyEscape,
-			i.Wid,
-			i.lastTime(timestamp),
-		)
-	}
-	if i.conf.Wall.HideGui && i.conf.General.ResetType == "wall" {
-		i.x.SendKeyPress(
-			x11.KeyF1,
-			i.Wid,
-			i.lastTime(timestamp),
-		)
-	}
-}
-
-// PressEsc presses escape to [un]pause the instance. If an error occurs, it will
+// Focus attempts to focus the window of the given instance. Any errors will
 // be logged.
-func (i *Instance) PressEsc(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
-}
-
-// PressF3Esc presses F3+Escape to pause the instance without the pause menu.
-// If an error occurs, it will be logged.
-func (i *Instance) PressF3Esc(timestamp xproto.Timestamp) {
-	i.x.SendKeyDown(x11.KeyF3, i.Wid, i.lastTime(timestamp))
-	i.x.SendKeyPress(x11.KeyEscape, i.Wid, i.lastTime(timestamp))
-	i.x.SendKeyUp(x11.KeyF3, i.Wid, i.lastTime(timestamp))
-}
-
-// PressF3 presses F3 to hide the pie chart.
-func (i *Instance) PressF3(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(x11.KeyF3, i.Wid, i.lastTime(timestamp))
-}
-
-// Reset presses the instance's reset key. If an error occurs, it will be
-// logged.
-func (i *Instance) Reset(timestamp xproto.Timestamp) {
-	i.x.SendKeyPress(i.ResetKey.Code, i.Wid, i.lastTime(timestamp))
-}
-
-// Stretch stretches the instance's window.
-func (i *Instance) Stretch(conf cfg.Profile) error {
-	if !conf.Wall.StretchWindows {
-		return nil
+func (m *Manager) Focus(id int) {
+	if err := m.x.FocusWindow(m.instances[id].info.Wid); err != nil {
+		log.Printf("Focus %d failed: %s\n", id, err)
 	}
-	return i.x.MoveWindow(
-		i.Wid,
-		conf.Wall.ResizeX,
-		conf.Wall.ResizeY,
-		conf.Wall.StretchWidth,
-		conf.Wall.StretchHeight,
+}
+
+// ToggleResolution switches the given instance between the normal and alternate
+// resolution and returns whether or not it is now on the alternate resolution.
+func (m *Manager) ToggleResolution(id int) bool {
+	if m.instances[id].altRes {
+		m.setResolution(id, m.conf.NormalRes)
+	} else {
+		m.setResolution(id, m.conf.AltRes)
+	}
+	m.instances[id].altRes = !m.instances[id].altRes
+	m.Focus(id)
+	return m.instances[id].altRes
+}
+
+// Play attempts to play the given instance.
+//
+// If there is a currently active instance, the given instance will supersede it.
+// Any additional actions which should happen before playing (e.g. stretching,
+// unpausing, F1) will be handled by this function. Any errors will be logged.
+func (m *Manager) Play(id int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Focus(id)
+	m.active = id
+	m.instances[id].state.Type = StIngame
+
+	if m.conf.UnpauseFocus {
+		m.sendKeyPress(id, x11.KeyEsc)
+	}
+	if m.conf.Wall.Enabled {
+		if m.conf.Delay.Stretch > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
+		}
+		m.setResolution(id, m.conf.NormalRes)
+		if m.conf.UnpauseFocus && m.conf.Wall.UseF1 {
+			m.sendKeyPress(id, x11.KeyF1)
+		}
+	}
+
+	if m.conf.UnpauseFocus {
+		// Pause and unpause again to let the cursor position update for the next
+		// time a menu is opened.
+		if m.conf.Delay.Unpause > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Unpause))
+		}
+		m.sendKeyPress(id, x11.KeyEsc)
+		m.sendKeyPress(id, x11.KeyEsc)
+	}
+}
+
+// Reset attempts to reset the given instance. The return value will indicate
+// whether or not the instance was in a legal state for resetting. If an actual
+// error occurs, it will be logged.
+func (m *Manager) Reset(id int) bool {
+	// Check if the reset can occur.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state := m.instances[id].state
+	if state.Type == StDirt {
+		return false
+	}
+	if m.conf.Wall.Enabled {
+		if time.Since(state.LastPreview) < time.Duration(m.conf.Wall.GracePeriod) {
+			return false
+		}
+	}
+
+	// Reset.
+	if m.active == id {
+		m.active = -1
+
+		// Ghost pie fix.
+		m.sendKeyUp(id, x11.KeyShift)
+		m.sendKeyPress(id, x11.KeyF3)
+		if m.conf.Delay.GhostPie > 0 {
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.GhostPie))
+		}
+
+		// Unstretch.
+		if m.conf.Wall.Enabled {
+			m.setResolution(id, m.conf.Wall.StretchRes)
+			if m.conf.Delay.Stretch > 0 {
+				time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
+			}
+		} else if m.instances[id].altRes {
+			m.setResolution(id, m.conf.NormalRes)
+		}
+		m.instances[id].altRes = false
+	}
+	var key xproto.Keycode
+	if state.Type == StPreview && state.Progress < 80 {
+		key = m.instances[id].info.PreviewKey
+	} else {
+		key = m.instances[id].info.ResetKey
+	}
+	m.sendKeyPress(id, key)
+	return true
+}
+
+// sendKeyDown sends a key down event to the given instance.
+func (m *Manager) sendKeyDown(id int, key xproto.Keycode) {
+	m.x.SendKeyDown(key, m.instances[id].info.Wid)
+}
+
+// sendKeyPress sends a key down and key up event to the given instance.
+func (m *Manager) sendKeyPress(id int, key xproto.Keycode) {
+	m.x.SendKeyPress(key, m.instances[id].info.Wid)
+}
+
+// sendKeyUp sends a key up event to the given instance.
+func (m *Manager) sendKeyUp(id int, key xproto.Keycode) {
+	m.x.SendKeyUp(key, m.instances[id].info.Wid)
+}
+
+// setResolution sets the window geometry of an instance.
+func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
+	if rect == nil {
+		return
+	}
+	m.x.MoveWindow(
+		m.instances[id].info.Wid,
+		rect.X, rect.Y, rect.W, rect.H,
 	)
-}
-
-// Unstretch resizes the window back to its normal dimensions.
-func (i *Instance) Unstretch(conf cfg.Profile) error {
-	if !conf.Wall.StretchWindows {
-		return nil
-	}
-	return i.x.MoveWindow(
-		i.Wid,
-		conf.Wall.ResizeX,
-		conf.Wall.ResizeY,
-		conf.Wall.UnstretchWidth,
-		conf.Wall.UnstretchHeight,
-	)
-}
-
-// lastTime returns the maximum of the given timestamp and the last stored
-// timestamp. If the given timestamp is later, then the last stored timestamp
-// is set to that value.
-func (i *Instance) lastTime(timestamp xproto.Timestamp) *xproto.Timestamp {
-	if timestamp > i.time {
-		i.time = timestamp
-	}
-	return &i.time
 }

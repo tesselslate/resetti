@@ -3,11 +3,14 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"strings"
 
-	"github.com/woofdoggo/resetti/cmd"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/ctl"
+	"github.com/woofdoggo/resetti/internal/res"
 )
 
 //go:embed .notice
@@ -17,10 +20,15 @@ var notice string
 var version string
 
 func main() {
+	if err := res.WriteResources(); err != nil {
+		fmt.Println("Failed to write resources:", err)
+		os.Exit(1)
+	}
 	if len(os.Args) < 2 {
 		printHelp()
 		os.Exit(1)
 	}
+
 	switch os.Args[1] {
 	case "--help", "-h", "help":
 		printHelp()
@@ -31,8 +39,6 @@ func main() {
 			" - Minecraft resetting macro\n",
 			notice,
 		)
-	case "obs":
-		cmd.ObsSetup()
 	case "new":
 		if len(os.Args) < 3 {
 			printHelp()
@@ -45,7 +51,38 @@ func main() {
 			fmt.Println("Created profile!")
 		}
 	default:
-		cmd.Run()
+		Run()
+	}
+}
+
+func Run() {
+	// Setup logger output.
+	logPath, ok := os.LookupEnv("RESETTI_LOG_PATH")
+	if !ok {
+		logPath = "/tmp/resetti.log"
+	}
+	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println("Failed to open log:", err)
+		os.Exit(1)
+	}
+	defer func() {
+		_ = logFile.Close()
+	}()
+	logWriter := io.MultiWriter(logFile, os.Stdout)
+	log.SetFlags(log.Ltime | log.Lmicroseconds)
+	log.SetOutput(logWriter)
+
+	// Get configuration and run.
+	profileName := os.Args[1]
+	profile, err := cfg.GetProfile(profileName)
+	if err != nil {
+		fmt.Println("Failed to get profile:", err)
+		os.Exit(1)
+	}
+	if err = ctl.Run(&profile); err != nil {
+		fmt.Println("Failed to run:", err)
+		os.Exit(1)
 	}
 }
 
@@ -54,13 +91,14 @@ func printHelp() {
     resetti - Minecraft resetting macro
     USAGE:
         resetti [PROFILE]       Run resetti with the given profile.
+          --force-cgroups       Force the cgroup setup script to run.
+          --force-log           Force the latest.log reader to be used.
+          --force-wpstate       Force the wpstateout.txt reader to be used.
 
     SUBCOMMANDS:
         resetti new [PROFILE]   Create a new profile named PROFILE with
                                 the default configuration.
         resetti help            Print this message.
         resetti version         Get the version of resetti installed.
-        resetti obs [ARGUMENTS] Setup OBS for resetti. Run the command with
-                                no arguments to see help.
     `)
 }
