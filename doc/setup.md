@@ -3,107 +3,189 @@
 This document contains instructions on how to set up resetti. Refer to the main
 README for details on how to install resetti.
 
-## Table of Contents
-
-- [Setting up Minecraft](#setting-up-minecraft)
-- [Setting up OBS](#setting-up-obs)
-- [Configuration](#configuration)
-- [Usage](#usage)
+Click the icon in the upper left to view the table of contents.
 
 ## Setting up Minecraft
 
-You will first need to setup your Minecraft instances. resetti has only been
-tested with [MultiMC](https://multimc.org/) and forks such as [Prism Launcher](https://prismlauncher.org).
-It is highly recommend that you use MultiMC or a derivative, as it is much
-better for managing multiple instances than the vanilla Minecraft launcher.
+resetti has only been tested with [MultiMC](https://multimc.org) and forks such
+as [PrismLauncher](https://prismlauncher.org). No functionality is guaranteed
+when using the vanilla launcher or any other launcher.
 
-> *Tip:* MultiMC will allow you to duplicate instances. You can create one
-> with your desired mods and settings and then copy it multiple times.
+### Java
 
-Once you have created your Minecraft instances, you will have to place a text
-file in each one to let resetti know about their existence. Go to the `.minecraft`
-folder of each instance and create a text file named `instance_num` within.
-They should have contents like so:
+You'll need a relatively recent version of Java for certain mods to work
+correctly. OpenJDK 19 currently appears to have the best performance with
+Minecraft (benchmarks show OpenJDK 20 to be slower), so get it if available.
+
+### Minecraft
+
+We will create a single instance, and then duplicate it as many times as
+needed. Start by creating an instance in MultiMC (or your fork) with the desired
+version (e.g. 1.16.1). Launch and close the game once; then, install Fabric by
+going to `Edit Instance` -> `Version`.
+
+#### Mods
+
+You can use [ModCheck](https://github.com/RedLime/ModCheck) to download any
+mods you would like. Atum and Fast Reset are mandatory. The following are
+*heavily recommended* if they are available for the version you are playing:
+
+- Sodium
+- Starlight
+- Lithium
+- SpeedRunIGT
+- WorldPreview
+- LazyDFU
+- Voyager
+- LazyStronghold
+- SleepBackground
+- antiresourcereload
+- StandardSettings
+
+> ServerSideRNG can be installed to make verifying your runs easier. However,
+> it still has some issues (as of April 2023) that may impact your experience.
+
+> Force Port can be installed if you plan on doing co-op runs.
+
+#### Configuration
+
+- Disable "pause on lost focus." To do so, enter a world and press F3+P. Verify
+  that the chat message says it is disabled.
+- You'll want to disable `syncChunkWrites` in `options.txt`, which can be found in
+  the instance's `.minecraft` folder.
+- You may want to enable `Use Global Options` in the SpeedRunIGT options from
+  ingame.
+- If using StandardSettings, you may want to read the documentation (available [here](https://github.com/KingContaria/StandardSettings#standardsettings)).
+  - In particular, you may want to use a global configuration file. This is
+    mentioned in the documentation.
+- If using SleepBackground, the default configuration is suboptimal. You can add
+  the below configuration to `.minecraft/config/sleepbg.json`.
+  - You may have a better experience by tweaking some of these values, but they
+    are a better starting point than the defaults.
+
+<details>
+
+<summary>sleepbg.json</summary>
+
+```json
+{
+  "world_preview": {
+    "_description": "config for world preview, every time (loading_screen) is rendered (render_times) times, will be render a preview. ex) if (loading_screen.fps_limit) is 30 and this value is 2, preview fps will be 15 (as 30 / 2).",
+    "enable": true,
+    "render_times": 1
+  },
+  "background": {
+    "_description": "It works when instance is in the background after joined the world.",
+    "enable": true,
+    "fps_limit": 1
+  },
+  "world_setup": {
+    "_description": "same with (background) config but for (max_ticks) ticks after the joined the world.",
+    "enable": true,
+    "fps_limit": 30,
+    "max_ticks": 20
+  },
+  "log_interval": {
+    "_description": "Changes how often the game prints the worldgen progress to the log file, may be useful for macros (minimum: 50ms, max/default: 500ms)",
+    "enable": true,
+    "log_interval": 500
+  },
+  "loading_screen": {
+    "_description": "It works when instance is in the world loading screen. minimum (fps_limit) is 15.",
+    "enable": true,
+    "fps_limit": 30
+  },
+  "lock_instance": {
+    "_description": "It works when instance is in the background with sleepbg.lock file is exist in user directory at every interval ticks. (for macros option)",
+    "enable": true,
+    "fps_limit": 1,
+    "tick_interval": 10,
+    "wp_render_times_enable": true,
+    "wp_render_times": 10
+  }
+}
+```
+</details>
+
+#### Instance Numbers
+
+Once you've created one instance, duplicate it as needed to reach the desired
+number of instances. Once all of your instances have been created, they will
+each need their own `instance_num` file to let resetti know their ID. Here is
+an example of how that looks:
 
 ```
 instances
 ├─ 16_MULTI1
 │  └─ .minecraft
 │     └─ instance_num
-│        └─ contents: 0
+│        └─ contents: "0"
 ├─ 16_MULTI2
 │  └─ .minecraft
 │     └─ instance_num
-│        └─ contents: 1
+│        └─ contents: "1"
 └─ 16_MULTI3
    └─ .minecraft
       └─ instance_num
-         └─ contents: 2
+         └─ contents: "2"
 ```
 
-> *Note:* The names of your instances do not matter here, just that they have
-> the `instance_num` file.
+> The instance names are not important, although a consistent format like this
+> makes it easier to run shell commands to operate on all of your instances at
+> once.
 
-resetti will only detect instances with the `instance_num` file. It will only
-start up if the instances it detects have numbers starting from 0 and
-increasing sequentially (e.g. 0, 1, 2, ...) as in the above example.
-
-You may be able to eliminate the tedium of creating these files with a simple
-shell one-liner. For example, with the fish shell:
+You can use a shell one-liner to create the `instance_num` files, if you'd like.
+Here's an example in [fish](https://fishshell.com); adjust it for your shell.
 
 ```sh
-for i in seq (1 3); echo (math $i - 1) | tee 16_MULTI$i/.minecraft/instance_num > /dev/null; end
+for i in (seq 1 3); echo (math $i - 1) | tee 16_MULTI$i/.minecraft/instance_num; end
 ```
 
-> You will have to update this based on the shell you use and how you have your
-> instances named.
-
-Lastly, you will have to ensure that all of your instances have *pause on lost
-focus* disabled. To do so, you can press F3+P while ingame on each instance.
+When running resetti, it will only detect instances with an `instance_num`
+file. resetti will refuse to start if it cannot detect a set of instances whose
+IDs start at 0 and increase sequentially (0, 1, 2, .. n).
 
 ## Setting up OBS
 
-If you want to record your speedruns, then you should setup OBS. If you want to
-use either the wall or set-seed resetters, then OBS is *required.*
+If using OBS, you will need to perform some additional setup. Refer to the
+[OBS document](https://github.com/woofdoggo/resetti/blob/main/doc/obs.md) for
+more information.
 
-Ensure that you have both OBS and [obs-websocket](https://github.com/obsproject/obs-websocket)
-installed. On newer versions of OBS (28 and up), obs-websocket *may* come bundled
-with OBS (depends on your distribution.) If your distribution's OBS build does not
-have obs-websocket bundled, you can compile OBS from source yourself or get it
-from somewhere that does have obs-websocket (e.g. flatpak.)
+## Optimization and Fixes
 
-With OBS and `obs-websocket`, you can run `resetti obs` to automatically
-generate a scene collection for the amount of instances you are running.
+On most distributions, the out-of-the-box experience playing Minecraft is quite
+subpar. Refer to the [optimization document](https://github.com/woofdoggo/resetti/blob/main/doc/optimization.md)
+and [common issues](https://github.com/woofdoggo/resetti/blob/main/doc/common-issues.md)
+for more information.
 
-### Notes
+## Configuring resetti
 
-After generating a scene collection, you can make edits to it if you would like
-(e.g. adding a stream overlay or creating a magnifier scene for using
-Ninjabrain Bot.) Leave the existing scene items and scenes untouched, or
-resetti may not work.
+To start, create a new configuration profile. You can create as many as you
+would like and are able to choose which to use whenever you launch resetti.
 
-If you change your base/canvas resolution, you will have to delete
-and recreate your scene collection(s).
+```sh
+resetti new PROFILE_NAME
+```
 
-## Configuration
+The above command will create a new profile at `$XDG_CONFIG_HOME/resetti/PROFILE_NAME.toml`,
+or `$HOME/.config/resetti/PROFILE_NAME.toml` if `$XDG_CONFIG_HOME` is unset.
 
-resetti allows you to have multiple different profiles with different settings.
-To begin, you can create a new profile with `resetti new PROFILE_NAME`. This
-will place the default configuration at `~/.config/resetti/PROFILE_NAME.toml`.
+The generated configuration profile will contain all of the available options
+with some documentation comments to explain their purpose. You may find the
+[configuration document](https://github.com/woofdoggo/resetti/blob/main/doc/configuration.md)
+helpful for more detailed information on certain settings.
 
-You can edit the values as needed. You can delete sections irrelevant to your
-configuration.
+## Running
 
-## Usage
+Congratulations! Once you've set everything up, you can get started by simply
+running `resetti PROFILE_NAME`. Refer to the [usage document](https://github.com/woofdoggo/resetti/blob/main/doc/usage.md)
+for more information on how to use resetti once you've started it.
 
-Once your configuration profile has been setup, you can launch your instances
-and run resetti. Run `resetti PROFILE_NAME` to get started.
+- If you've configured affinity, it may prompt you for root privileges to
+  perform the necessary setup.
+- If you're using OBS, you'll need to switch to the correct scene collection
+  and may need to open up a projector for your wall scene.
 
-Refer to the documentation for your reset style for more detailed information
-on how to use resetti from this point onward.
-
-> *Note:* Caps Lock and Num Lock are considered as modifiers. If enabled, they
-> will prevent your keybinds from being registered. If you would like to keep
-> them on, use `xmodmap` to figure out what modifiers they correspond to and
-> add them to your keybinds (e.g. if Num_Lock is present under `mod2`, add
-> `mod2` as a modifier to your keybind.)
+If you encounter any issues or think this documentation could be improved, feel
+free to join the [Discord](https://discord.gg/fwZA2VJh7k) or open an issue.
+Happy resetting!

@@ -4,26 +4,30 @@ resetti is a Linux-compatible reset macro for Minecraft speedruns. It supports
 a variety of different resetting styles, categories, and Minecraft versions.
 
 ## Installation
-Distribution specific packages are currently only limited to **Arch Linux**. More distros are planned for later.
+
+Distribution specific packages are currently only limited to **Arch Linux**.
+More distributions are planned for later.
+
+- [From the AUR](#from-the-aur)
+- [From source](#from-source)
+- [From binary](#from-binary)
 
 ### From the AUR
-#### Stable release
-```
-git clone https://aur.archlinux.org/resetti
+
+There are two AUR packages available: `resetti` and `resetti-git`.
+Install with your AUR helper of choice, or manually:
+
+```sh
+git clone https://aur.archlinux.org/{resetti,resetti-git}
 cd resetti
 makepkg -si
 ```
-#### Development release
-```
-git clone https://aur.archlinux.org/resetti-git
-cd resetti-git
-makepkg -si
-```
+
 ### From source
 
 If you have [Go](https://go.dev) installed, you can install from source:
 
-```
+```sh
 env CGO_ENABLED=0 go install github.com/woofdoggo/resetti@latest -ldflags="-s -w"
 ```
 
@@ -35,12 +39,8 @@ and built for AMD64 (x86-64) systems.
 
 ## Usage
 
-You can refer to the documentation for detailed usage instructions:
-
-- [Setup](https://github.com/woofdoggo/resetti/blob/main/doc/setup.md)
-- [Troubleshooting](https://github.com/woofdoggo/resetti/blob/main/doc/troubleshooting.md)
-- [Traditional](https://github.com/woofdoggo/resetti/blob/main/doc/traditional.md)
-- [Wall](https://github.com/woofdoggo/resetti/blob/main/doc/wall.md)
+You can refer to the [documentation](https://github.com/woofdoggo/resetti/blob/main/doc/README.md)
+for detailed usage instructions.
 
 Please report any bugs which you encounter. resetti is still beta software and
 is not guaranteed to work.
@@ -54,8 +54,11 @@ is not guaranteed to work.
   - Play an instance and reset all others
   - Play an instance
   - Lock an instance
-  - Instance stretching for better visibility
-  - Mouse support for quicker resetting
+  - Instance stretching, hiding, and preview freezing
+  - Mouse support
+  - Moving wall
+    - Define one or more "groups" of instances to interact with
+- Flexible keybind and "hook" system for running commands
 - Lock instances to specific cores (affinity) for performance
 - Supports 1.14+ (Atum required)
 - Run with or without WorldPreview
@@ -67,10 +70,12 @@ is not guaranteed to work.
 
 ## Contributing
 
-Contributions are welcome.
+Contributions are welcome. Join the [Discord](https://discord.gg/fwZA2VJh7k) or
+open an issue to discuss the changes you'd like to make.
 - Please use proper English for documentation and code comments.
 - Ensure that code changes are properly formatted with `go fmt ./...`.
 - Perform at least some testing before submitting code changes within a PR.
+- Use `make check`.
 - Try to keep lines wrapped at roughly 80 columns where possible.
 
 ## License
@@ -82,4 +87,5 @@ version. You can view the full license [here](https://raw.githubusercontent.com/
 
 - Wall
   - jojoe, for creating the wall
+  - boyenn's moving wall ideas
   - [MultiResetWall](https://github.com/specnr/multiresetwall) by Specnr and contributors

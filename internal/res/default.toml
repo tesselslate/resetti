@@ -11,6 +11,15 @@ unpause_focus = true
 # The rate (in Hz) to poll for hotkey inputs.
 poll_rate = 100
 
+# The resolution to set your instances to while they are being played, in the
+# format "W,H+X,Y" (e.g. 1920x1080+0,0). Delete or comment out to disable
+# instance stretching.
+play_res = "1920x1080+0,0"
+
+# An alternate resolution that can be toggled to while ingame. Delete this if
+# you do not want to use e.g. thin or tall window.
+alt_res = "400x1080+810,0"
+
 # The delay section contains delays (in milliseconds) before performing various
 # actions. These defaults are completely arbitrary. Increase relevant delays if
 # you have issues, decrease for lower latency. Depending on your setup, you may
@@ -120,15 +129,6 @@ grace_period = 250
 # instance stretching.
 stretch_res = "960x360+0,0"
 
-# The resolution to set your instances to while they are being played, in the
-# format "W,H+X,Y" (e.g. 1920x1080+0,0). Delete or comment out to disable
-# instance stretching.
-play_res = "1920x1080+0,0"
-
-# An alternate resolution that can be toggled to while ingame. Delete this if
-# you do not want to use e.g. thin or tall window.
-alt_res = "400x1080+810,0"
-
 # Whether or not to hide the hotbar and hand while on the wall scene. If
 # enabled, make sure to set "f1:true" in your StandardSettings configuration.
 use_f1 = false
@@ -157,7 +157,7 @@ use_gaps = true
 # towards the first group as you reset. You do not need enough groups to show
 # all instances on screen at once.
 #
-# Refer to the documentation for examples on various moving setups. TODO
+# Refer to the documentation for examples on various moving setups.
 [[wall.moving.groups]]
 # The position on the projector.
 position = "1920x880+0,0"
