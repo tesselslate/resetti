@@ -9,7 +9,7 @@ If you are using OBS 28 or newer, `obs-websocket` *may* come pre-installed -
 Some distributions, such as [Arch Linux](https://bugs.archlinux.org/task/76710),
 do not bundle it. In this case, you'll want to install OBS via the
 [Flatpak](https://flathub.org/apps/com.obsproject.Studio) or
-[build it from source].(https://obsproject.com/wiki/Build-Instructions-For-Linux)
+[build it from source](https://obsproject.com/wiki/Build-Instructions-For-Linux).
 
 ## Setup
 

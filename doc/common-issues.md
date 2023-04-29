@@ -23,7 +23,7 @@ than what Minecraft uses.
 This is a [known issue](https://github.com/glfw/glfw/pull/1472) which was fixed
 in version 3.3.3 of GLFW.
 
-- [Fix commit](https://github.com/glfw/glfw/commit/606c0fc03e05d8260aceec188fb1d9074527de0cZ)
+- [Fix commit](https://github.com/glfw/glfw/commit/606c0fc03e05d8260aceec188fb1d9074527de0c)
 - [Mojang bug](https://bugs.mojang.com/browse/MC-122421)
 
 ### Weird cursor warping and broken mouse movement
@@ -32,7 +32,13 @@ Setting your mouse sensitivity with libinput's `Coordinate Transformation Matrix
 property causes cursor warping to break entirely. There is no upstream fix
 yet, but the issue [is known.](https://github.com/glfw/glfw/issues/1860) You can
 fix it by applying [this patch](https://github.com/woofdoggo/resetti/blob/main/contrib/glfw-xinput.patch)
-and [building GLFW from source](#build-from-source).
+and [building GLFW from source](#building-glfw-from-source).
+
+#### Building GLFW from source
+
+You can follow the instructions [here](https://www.glfw.org/docs/latest/compile.html)
+for compiling GLFW from source. 3.3.8 is the latest version compatible with Minecraft,
+so do not build from master. Checkout the 3.3.8 tag.
 
 ## Minecraft issues
 
