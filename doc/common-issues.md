@@ -49,6 +49,11 @@ If you use glibc, then your instances will use an egregious amount of memory
 [optimization document](https://github.com/woofdoggo/resetti/blob/main/doc/optimization.md)
 for information on how to reduce memory usage.
 
+### Flickering chunk borders
+
+If you have an AMD GPU, this is an issue with Mesa. I've [filed a bug report](https://gitlab.freedesktop.org/mesa/mesa/-/issues/8950).
+In the mean time, exporting `AMD_DEBUG=nonggc` to your instances should solve the problem.
+
 ### Instances stuck on dirt screen
 
 Sometimes, one or more of your instances may get stuck on the dirt screen while
