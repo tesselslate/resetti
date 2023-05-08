@@ -173,12 +173,11 @@ func (c *Client) authHello(ctx context.Context, pw string) error {
 		// Authentication required.
 		challenge := hello.Data.Auth.Challenge
 		salt := hello.Data.Auth.Salt
-		output := make([]byte, 0)
 		sha := sha256.Sum256([]byte(pw + salt))
-		base64.StdEncoding.Encode(output, sha[:])
+		output := []byte(base64.StdEncoding.EncodeToString(sha[:]))
 		output = append(output, []byte(challenge)...)
 		sha = sha256.Sum256(output)
-		base64.StdEncoding.Encode(output, sha[:])
+		output = []byte(base64.StdEncoding.EncodeToString(sha[:]))
 		err := wsjson.Write(ctx, c.ws, StringMap{
 			"op": 1,
 			"d": StringMap{
