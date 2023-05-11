@@ -303,10 +303,12 @@ func (c *Controller) ResetInstance(id int) bool {
 	ok := c.manager.Reset(id)
 	if ok {
 		c.counter.Increment()
-		c.cpu.Update(mc.Update{
-			State: mc.State{Type: mc.StDirt},
-			Id:    id,
-		})
+		if c.cpu != nil {
+			c.cpu.Update(mc.Update{
+				State: mc.State{Type: mc.StDirt},
+				Id:    id,
+			})
+		}
 	}
 	return ok
 }
@@ -355,7 +357,12 @@ func (c *Controller) run(ctx context.Context) error {
 			return fmt.Errorf("manager: %w", err)
 		case err, ok := <-c.obsErrors:
 			if !ok {
-				return fmt.Errorf("fatal OBS error: %w", err)
+				if err != nil {
+					return fmt.Errorf("fatal OBS error: %w", err)
+				} else {
+					log.Println("OBS closed. Stopping.")
+					return nil
+				}
 			}
 			log.Printf("OBS error: %s\n", err)
 		case err, ok := <-c.x11Errors:
