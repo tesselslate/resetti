@@ -127,9 +127,6 @@ func createStateReader(inst InstanceInfo) (StateReader, State, error) {
 		}
 		return &reader, state, nil
 	} else {
-		if !inst.ModernWp {
-			return nil, State{}, errors.New("cannot force wpstate reader without modern WorldPreview")
-		}
 		reader, state, err := newWpstateReader(inst)
 		if err != nil {
 			return nil, State{}, fmt.Errorf("create wpstateReader %d: %w", inst.Id, err)
