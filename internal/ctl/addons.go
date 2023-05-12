@@ -36,7 +36,6 @@ func newFreezer(conf *cfg.Profile, obs *obs.Client, states []mc.State) *freezer 
 		canFreeze,
 		newStates,
 	}
-	f.unfreezeAll()
 	return &f
 }
 
@@ -98,22 +97,6 @@ func (f *freezer) setFrozen(id int, frozen bool) {
 		fmt.Sprintf("Freeze %d", id+1),
 		frozen,
 	)
-}
-
-// unfreezeAll unfreezes all instances.
-func (f *freezer) unfreezeAll() {
-	err := f.obs.Batch(obs.SerialFrame, func(b *obs.Batch) {
-		for i := 1; i <= len(f.states); i += 1 {
-			b.SetSourceFilterEnabled(
-				fmt.Sprintf("Wall MC %d", i),
-				fmt.Sprintf("Freeze %d", i),
-				false,
-			)
-		}
-	})
-	if err != nil {
-		log.Printf("freezer.unfreezeAll: Batch failed: %s\n", err)
-	}
 }
 
 // ShouldShow processes a single state update and determines whether or not the

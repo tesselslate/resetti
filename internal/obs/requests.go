@@ -51,6 +51,15 @@ func reqGetSceneItemTransform(scene string, id int) request {
 	}
 }
 
+func reqGetSourceFilterList(source string) request {
+	return request{
+		Type: "GetSourceFilterList",
+		Data: StringMap{
+			"sourceName": source,
+		},
+	}
+}
+
 func reqSetScene(scene string) request {
 	return request{
 		Type: "SetCurrentProgramScene",

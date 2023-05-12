@@ -254,7 +254,14 @@ func Run(conf *cfg.Profile) error {
 // prepareObs hides all lock sources and sets the settings for each instance
 // capture.
 func prepareObs(o *obs.Client, instances []mc.InstanceInfo) error {
+	filters, err := o.GetSourceFilterList("Wall MC 1")
+	if err != nil {
+		return err
+	}
+	hasFreeze := slices.Contains(filters, "Freeze 1")
+
 	return o.Batch(obs.SerialRealtime, func(b *obs.Batch) {
+		// Setup the instance sources and locks.
 		for i := 1; i <= len(instances); i += 1 {
 			settings := obs.StringMap{
 				"show_cursor":    true,
@@ -268,6 +275,15 @@ func prepareObs(o *obs.Client, instances []mc.InstanceInfo) error {
 			b.SetItemVisibility("Wall", fmt.Sprintf("Wall MC %d", i), true)
 			b.SetSourceSettings(fmt.Sprintf("Wall MC %d", i), wallSettings, true)
 			b.SetSourceSettings(fmt.Sprintf("MC %d", i), settings, true)
+
+			// Disable freezing if necessary.
+			if hasFreeze {
+				b.SetSourceFilterEnabled(
+					fmt.Sprintf("Wall MC %d", i),
+					fmt.Sprintf("Freeze %d", i),
+					false,
+				)
+			}
 		}
 	})
 }

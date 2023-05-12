@@ -430,6 +430,29 @@ func (c *Client) GetSceneItemTransform(scene, name string) (x, y, w, h float64, 
 	return res.T.X, res.T.Y, res.T.Width, res.T.Height, err
 }
 
+// GetSourceFilterList gets a list of all source filters on a given source.
+func (c *Client) GetSourceFilterList(source string) ([]string, error) {
+	req := reqGetSourceFilterList(source)
+	data, err := c.sendRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	filters := struct {
+		S []struct {
+			Name string `json:"filterName"`
+		} `json:"filters"`
+	}{}
+	err = json.Unmarshal(data, &filters)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, filter := range filters.S {
+		names = append(names, filter.Name)
+	}
+	return names, nil
+}
+
 // SetScene sets the current scene and logs any errors that occur.
 func (c *Client) SetScene(name string) {
 	c.req <- reqSetScene(name)
