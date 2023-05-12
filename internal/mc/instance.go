@@ -16,6 +16,8 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+var ErrInstanceClosed = errors.New("instance closed")
+
 // TODO: Pre 1.14 support
 
 // An instance contains all of the relevant information for an instance, such
@@ -137,7 +139,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 						}
 					}
 					if c+len(deadInstances) >= len(m.instances) {
-						errch <- fmt.Errorf("%d dead instance(s)", len(deadInstances))
+						errch <- fmt.Errorf("%w: %d", ErrInstanceClosed, id)
 						return
 					}
 				}

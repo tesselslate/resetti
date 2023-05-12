@@ -4,6 +4,7 @@ package ctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -354,7 +355,12 @@ func (c *Controller) run(ctx context.Context) error {
 			}
 		case err := <-c.mgrErrors:
 			// All manager errors are fatal.
-			return fmt.Errorf("manager: %w", err)
+			if errors.Is(err, mc.ErrInstanceClosed) {
+				// Don't log the error twice.
+				return nil
+			} else {
+				return fmt.Errorf("manager: %w", err)
+			}
 		case err, ok := <-c.obsErrors:
 			if !ok {
 				if err != nil {
