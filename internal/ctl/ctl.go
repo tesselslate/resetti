@@ -139,15 +139,6 @@ func Run(conf *cfg.Profile) error {
 	}
 	c.x = &x
 
-	c.obs = &obs.Client{}
-	if conf.Obs.Enabled {
-		obsErrors, err := c.obs.Connect(ctx, conf.Obs.Port, conf.Obs.Password)
-		if err != nil {
-			return fmt.Errorf("(init) create OBS client: %w", err)
-		}
-		c.obsErrors = obsErrors
-	}
-
 	c.counter, err = newCounter(conf)
 	if err != nil {
 		return fmt.Errorf("(init) create counter: %w", err)
@@ -167,6 +158,34 @@ func Run(conf *cfg.Profile) error {
 	c.manager, err = mc.NewManager(instances, conf, &x)
 	if err != nil {
 		return fmt.Errorf("(init) create manager: %w", err)
+	}
+
+	c.obs = &obs.Client{}
+	if conf.Obs.Enabled {
+		obsErrors, err := c.obs.Connect(ctx, conf.Obs.Port, conf.Obs.Password)
+		if err != nil {
+			return fmt.Errorf("(init) create OBS client: %w", err)
+		}
+		c.obsErrors = obsErrors
+		if conf.Obs.Port2 != nil {
+			var password string
+			if conf.Obs.Password2 != nil {
+				password = *conf.Obs.Password2
+			}
+
+			client := &obs.Client{}
+			ctx, cancel := context.WithCancel(ctx)
+			_, err := client.Connect(ctx, *conf.Obs.Port2, password)
+			if err != nil {
+				cancel()
+				return fmt.Errorf("(init) create secondary OBS client: %w", err)
+			}
+			if err := prepareObs(client, instances); err != nil {
+				cancel()
+				return fmt.Errorf("(init) prepare 2nd OBS: %w", err)
+			}
+			cancel()
+		}
 	}
 
 	if c.conf.Wall.Enabled {

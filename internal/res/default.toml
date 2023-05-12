@@ -98,10 +98,16 @@ wall_reset = ""
 # otherwise, you must provide connection information.
 #
 # The password field can be left blank if you have authentication off.
+#
+# If you are using 2 OBS instances (one for the verification recording), you
+# can configure port_2 and password_2. Otherwise, they should be deleted.
 [obs]
 enabled = true
 port = 4440
 password = ""
+
+port_2 = 4441
+password_2 = ""
 
 # The wall section lets you configure your wall experience. If you only want
 # the classic multi experience, you can delete everything from this point on.

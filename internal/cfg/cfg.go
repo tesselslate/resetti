@@ -43,9 +43,11 @@ type Keybinds map[Bind]ActionList
 
 // Obs contains the user's OBS websocket connection information.
 type Obs struct {
-	Enabled  bool   `toml:"enabled"`  // Mandatory for wall
-	Port     uint16 `toml:"port"`     // Connection port
-	Password string `toml:"password"` // Password, can be left blank if unused
+	Enabled   bool    `toml:"enabled"`    // Mandatory for wall
+	Port      uint16  `toml:"port"`       // Connection port
+	Password  string  `toml:"password"`   // Password, can be left blank if unused
+	Port2     *uint16 `toml:"port_2"`     // Verification connection port
+	Password2 *string `toml:"password_2"` // Verification connection password
 }
 
 // Wall contains the user's wall settings.
