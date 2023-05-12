@@ -1,0 +1,5 @@
+Package: resetti
+Version: VERSION
+Architecture: amd64
+Maintainer: woofdoggo <woofwoofdoggo@protonmail.com>
+Description: Minecraft multi-instance reset macro for speedrunning
