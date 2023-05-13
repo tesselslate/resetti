@@ -79,15 +79,14 @@ func WriteResources() error {
 	if overrideDataDir != "" {
 		return nil
 	}
-	if err := unix.Access(dataDir, unix.W_OK); err != nil {
-		return fmt.Errorf("access data dir: %w", err)
-	}
-
 	_, err = os.Stat(dataDir)
 	if os.IsNotExist(err) {
-		if err := os.Mkdir(dataDir, 0644); err != nil {
+		if err := os.Mkdir(dataDir, 0755); err != nil {
 			return fmt.Errorf("failed to create data dir: %w", err)
 		}
+	}
+	if err := unix.Access(dataDir, unix.W_OK); err != nil {
+		return fmt.Errorf("access data dir: %w", err)
 	}
 
 	resources := map[string][]byte{
