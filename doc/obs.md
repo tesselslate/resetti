@@ -19,6 +19,8 @@ you. To start, create a new scene collection. Then, import the script by going t
 
 - If you installed from source or from binary, the script can be found at
   `$XDG_DATA_HOME/resetti/scene-setup.lua` (or `$HOME/.local/share/resetti/scene-setup.lua`).
+- If you installed from the Debian package, it can be found at
+  `/usr/local/share/resetti/scene-setup.lua`.
 - If you installed from a package, it may be located elsewhere (such as within
   `/usr`.) Check any documentation for it.
 
