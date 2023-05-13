@@ -1,0 +1,33 @@
+name: Create dev build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20.4"
+
+      - name: Build and package resetti
+        run: make deb
+
+      - name: Upload artifact
+        env:
+          COMMIT: ${{ github.event.head_commit.message }}
+          WEBHOOK: ${{ secrets.DEV_BUILD_WEBHOOK }}
+        run: |
+          export SHA=$(git rev-parse --short HEAD)
+          curl -H 'Content-Type: multipart/form-data' -X POST                               \
+            -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT\"}"  \
+            -F "file1=@out/resetti.deb"                                                     \
+            "$WEBHOOK"
