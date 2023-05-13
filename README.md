@@ -34,7 +34,11 @@ Debian packages or download the latest development builds from the
 If you have [Go](https://go.dev) installed, you can install from source:
 
 ```sh
-env CGO_ENABLED=0 go install github.com/woofdoggo/resetti@latest -ldflags="-s -w"
+# Stable
+env CGO_ENABLED=0 go install -ldflags="-s -w" github.com/woofdoggo/resetti@latest
+
+# Dev
+env CGO_ENABLED=0 go install -ldflags="-s -w" github.com/woofdoggo/resetti@dev
 ```
 
 ### From binary
