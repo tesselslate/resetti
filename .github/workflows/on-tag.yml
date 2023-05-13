@@ -12,6 +12,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          # Fetch history to add correct version in Makefile
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v4

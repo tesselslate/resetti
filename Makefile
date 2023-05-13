@@ -16,14 +16,16 @@ deb: build
 	mkdir -p out/deb/usr/local/share/resetti
 	mkdir -p out/deb/DEBIAN
 	cp .pkg/debian out/deb/DEBIAN/control
-	@if git describe --exact-match HEAD; then 												\
-		sed -i "s/VERSION/$$(cat ../.version)/" out/deb/DEBIAN/control; 					\
-	else 																					\
+	@if git describe --exact-match HEAD; then \
+		sed -i "s/VERSION/$$(cat ../.version)/" out/deb/DEBIAN/control; \
+	else \
 		sed -i "s/VERSION/0.0.0dev-$$(git rev-parse --short HEAD)/" out/deb/DEBIAN/control; \
 	fi
 	cp out/bench out/deb/usr/local/bin
 	cp out/resetti out/deb/usr/local/bin
-	cp internal/res/{cgroup_setup.sh,default.toml,scene-setup.lua} out/deb/usr/local/share/resetti
+	cp internal/res/cgroup_setup.sh out/deb/usr/local/share/resetti
+	cp internal/res/default.toml out/deb/usr/local/share/resetti
+	cp internal/res/scene-setup.lua out/deb/usr/local/share/resetti
 	dpkg-deb --build --root-owner-group out/deb out/resetti.deb
 
 clean:
