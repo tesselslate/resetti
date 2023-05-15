@@ -15,6 +15,7 @@ import (
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/ctl"
 	"github.com/woofdoggo/resetti/internal/mc"
+	"github.com/woofdoggo/resetti/internal/res"
 	"github.com/woofdoggo/resetti/internal/x11"
 )
 
@@ -30,6 +31,9 @@ type Options struct {
 }
 
 func main() {
+	if err := res.WriteResources(); err != nil {
+		fmt.Println("Failed to write resources:", err)
+	}
 	opts := Options{}
 	flag.StringVar(
 		&opts.Affinity,

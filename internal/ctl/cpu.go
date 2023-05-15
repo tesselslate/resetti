@@ -1,6 +1,7 @@
 package ctl
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"errors"
@@ -228,8 +229,10 @@ func prepareCgroups(conf *cfg.Profile, topo *cpuTopology, instances int) error {
 			return errors.New("no suid binary found")
 		}
 		cmd := exec.Command(suidBin, "sh", path, strings.Join(shouldExist, " "))
+		buf := bytes.Buffer{}
+		cmd.Stderr = &buf
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("run cgroup script: %w", err)
+			return fmt.Errorf("run cgroup script: %w (%s)", err, strings.TrimSuffix(buf.String(), "\n"))
 		}
 	}
 
