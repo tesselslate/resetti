@@ -446,6 +446,11 @@ func (c *Client) UngrabPointer() error {
 	return xproto.UngrabPointerChecked(c.conn, xproto.TimeCurrentTime).Check()
 }
 
+// WarpPointer warps the mouse pointer.
+func (c *Client) WarpPointer(x, y int, dest xproto.Window) {
+	xproto.WarpPointer(c.conn, xproto.WindowNone, dest, 0, 0, 0, 0, int16(x), int16(y))
+}
+
 // getActiveWindow returns the currently focused window.
 func (c *Client) getActiveWindow() (xproto.Window, error) {
 	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
