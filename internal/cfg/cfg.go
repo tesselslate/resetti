@@ -24,6 +24,7 @@ type Delays struct {
 	Unpause   int `toml:"unpause"`       // Unpause on focus
 	Stretch   int `toml:"stretch"`       // Resize
 	GhostPie  int `toml:"ghost_pie_fix"` // Ghost pie fix
+	Warp      int `toml:"warp_pointer"`  // Warp pointer fix
 }
 
 // Hooks contains various commands to run whenever the user performs certain

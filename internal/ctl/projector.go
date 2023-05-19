@@ -40,6 +40,10 @@ func (p *ProjectorController) Focus() error {
 	if err := p.x.FocusWindow(p.window); err != nil {
 		return fmt.Errorf("focus projector: %w", err)
 	}
+	if p.conf.Delay.Warp > 0 {
+		time.Sleep(time.Millisecond * time.Duration(p.conf.Delay.Warp))
+		p.x.WarpPointer(p.winWidth/2, p.winHeight/2, p.window)
+	}
 	return nil
 }
 

@@ -24,12 +24,22 @@ alt_res = "400x1080+810,0"
 # actions. These defaults are completely arbitrary. Increase relevant delays if
 # you have issues, decrease for lower latency. Depending on your setup, you may
 # be able to set all of these (except for unpause) to 0.
+#
+# wp_pause      The delay between the preview starting and pressing F3+Esc.
+# idle_pause    The delay between the world generation finishing and pressing F3+Esc.
+# unpause       The delay between each unpause when tabbing in.
+# stretch       The delay between stretching the window and (un)focusing.
+# ghost_pie_fix The delay after pressing F3 to fix ghost pie and resetting.
+# warp          The delay between focusing the projector and warping the pointer.
+#               A delay of 0 should work on most setups, but some window managers
+#               (e.g. i3) may require a delay here.
 [delay]
 wp_pause = 20
 idle_pause = 20
 unpause = 20
 stretch = 20
 ghost_pie_fix = 20
+warp = 0
 
 # The hooks section allows you to specify various commands which are run
 # upon certain actions. Any blank hooks will be ignored.

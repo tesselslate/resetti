@@ -266,9 +266,7 @@ func (m *Manager) Play(id int) {
 		m.sendKeyPress(id, x11.KeyEsc)
 	}
 	if m.conf.Wall.Enabled {
-		if m.conf.Delay.Stretch > 0 {
-			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
-		}
+		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
 		m.setResolution(id, m.conf.NormalRes)
 		if m.conf.UnpauseFocus && m.conf.Wall.UseF1 {
 			m.sendKeyPress(id, x11.KeyF1)
@@ -278,9 +276,7 @@ func (m *Manager) Play(id int) {
 	if m.conf.UnpauseFocus {
 		// Pause and unpause again to let the cursor position update for the next
 		// time a menu is opened.
-		if m.conf.Delay.Unpause > 0 {
-			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Unpause))
-		}
+		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Unpause))
 		m.sendKeyPress(id, x11.KeyEsc)
 		m.sendKeyPress(id, x11.KeyEsc)
 	}
@@ -310,16 +306,12 @@ func (m *Manager) Reset(id int) bool {
 		// Ghost pie fix.
 		m.sendKeyUp(id, x11.KeyShift)
 		m.sendKeyPress(id, x11.KeyF3)
-		if m.conf.Delay.GhostPie > 0 {
-			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.GhostPie))
-		}
+		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.GhostPie))
 
 		// Unstretch.
 		if m.conf.Wall.Enabled {
 			m.setResolution(id, m.conf.Wall.StretchRes)
-			if m.conf.Delay.Stretch > 0 {
-				time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
-			}
+			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
 		} else if m.instances[id].altRes {
 			m.setResolution(id, m.conf.NormalRes)
 		}
