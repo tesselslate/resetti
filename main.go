@@ -3,13 +3,12 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"strings"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/ctl"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/res"
 )
 
@@ -20,6 +19,16 @@ var notice string
 var version string
 
 func main() {
+	// Setup logger output.
+	logPath, ok := os.LookupEnv("RESETTI_LOG_PATH")
+	if !ok {
+		logPath = "/tmp/resetti.log"
+	}
+
+	// TODO: Add log statements throughout.
+	logger := log.NewLogger(log.INFO, logPath, log.DefaultFormatter())
+	logger.Info("Started Logger")
+
 	if err := res.WriteResources(); err != nil {
 		fmt.Println("Failed to write resources:", err)
 		os.Exit(1)
@@ -56,23 +65,6 @@ func main() {
 }
 
 func Run() {
-	// Setup logger output.
-	logPath, ok := os.LookupEnv("RESETTI_LOG_PATH")
-	if !ok {
-		logPath = "/tmp/resetti.log"
-	}
-	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Println("Failed to open log:", err)
-		os.Exit(1)
-	}
-	defer func() {
-		_ = logFile.Close()
-	}()
-	logWriter := io.MultiWriter(logFile, os.Stdout)
-	log.SetFlags(log.Ltime | log.Lmicroseconds)
-	log.SetOutput(logWriter)
-
 	// Get configuration and run.
 	profileName := os.Args[1]
 	profile, err := cfg.GetProfile(profileName)
