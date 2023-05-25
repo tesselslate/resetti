@@ -26,6 +26,7 @@ type Logger struct {
 	level   LogLevel
 	console Sink
 	file    Sink
+	logFile *os.File
 }
 
 // NewLogger creates a fresh instance of Logger and returns it.
@@ -39,7 +40,7 @@ func NewLogger(level LogLevel, filePath string, formatter Formatter) Logger {
 
 	fileSink := &File{logFile: logFile, formatter: formatter}
 	consoleSink := &Console{formatter: formatter}
-	return Logger{level: level, file: fileSink, console: consoleSink}
+	return Logger{level: level, file: fileSink, console: consoleSink, logFile: logFile}
 }
 
 // SetLevel sets the log visibility level of the Logger instance.
@@ -130,5 +131,13 @@ func (l *Logger) Verbose(message string) {
 	if err != nil {
 		fmt.Printf("Failed Log Write: %s\n", err)
 		os.Exit(1)
+	}
+}
+
+// Close is used to close the file pointer.
+func (l *Logger) Close() {
+	err := l.logFile.Close()
+	if err != nil {
+		fmt.Printf("Failed to close log file: %s\n", err)
 	}
 }

@@ -28,6 +28,9 @@ func main() {
 	// TODO: Add log statements throughout.
 	logger := log.NewLogger(log.INFO, logPath, log.DefaultFormatter())
 	logger.Info("Started Logger")
+	defer func() {
+		logger.Close()
+	}()
 
 	if err := res.WriteResources(); err != nil {
 		fmt.Println("Failed to write resources:", err)
