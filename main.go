@@ -26,14 +26,14 @@ func main() {
 	}
 
 	// TODO: Add log statements throughout.
-	logger := log.DefaultLogger(log.INFO, logPath)
+	logger := log.DefaultLogger("resetti", log.INFO, logPath)
 	logger.Info("Started Logger")
 	defer func() {
 		logger.Close()
 	}()
 
 	if err := res.WriteResources(); err != nil {
-		fmt.Println("Failed to write resources:", err)
+		logger.Error("Failed to write resources: %s", err)
 		os.Exit(1)
 	}
 	if len(os.Args) < 2 {
@@ -58,9 +58,9 @@ func main() {
 		}
 		err := cfg.MakeProfile(os.Args[2])
 		if err != nil {
-			fmt.Println("Failed to make profile:", err)
+			logger.Error("Failed to make profile: %s", err)
 		} else {
-			fmt.Println("Created profile!")
+			logger.Info("Created profile!")
 		}
 	default:
 		Run()
@@ -69,14 +69,15 @@ func main() {
 
 func Run() {
 	// Get configuration and run.
+	logger := log.FromName("resetti")
 	profileName := os.Args[1]
 	profile, err := cfg.GetProfile(profileName)
 	if err != nil {
-		fmt.Println("Failed to get profile:", err)
+		logger.Error("Failed to get profile: %s", err)
 		os.Exit(1)
 	}
 	if err = ctl.Run(&profile); err != nil {
-		fmt.Println("Failed to run:", err)
+		logger.Error("Failed to run: %s", err)
 		os.Exit(1)
 	}
 }
