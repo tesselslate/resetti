@@ -19,40 +19,28 @@ type Formatter struct {
 
 // DefaultFormatter creates a simple Formatter instance with a pre-defined `formatStr`.
 func DefaultFormatter() Formatter {
-	return Formatter{
-		formatStr: "{ascTime}: [{level}] - {message}",
-	}
+	return NewFormatter("{ascTime}: [{level}] - {message}")
 }
 
 // NewFormatter creates a Formatter instance with a user-defined `formatStr`.
 func NewFormatter(formatStr string) Formatter {
-	return Formatter{
-		formatStr: formatStr,
-	}
+	return Formatter{formatStr: formatStr}
 }
 
-// AppendField adds a format variable to `formatArgs`.
-// `fieldName` and `fieldValue` are added as two elements in `formatArgs`.
-func AppendField(formatArgs []string, fieldName string, fieldValue string) []string {
-	formatArgs = append(formatArgs, fieldName)
-	formatArgs = append(formatArgs, fieldValue)
-	return formatArgs
-}
-
-// GetArgs makes an array of strings containing all the format fields with their respective values.
+// GetValues makes an array of strings containing all the format fields with their respective values.
 // Used internally to get the recognized format variables in `formatStr`.
-func (f *Formatter) GetArgs(ascTime string, level string, message string) ([]string, error) {
-	formatArgs := []string{}
+func (f *Formatter) GetValues(ascTime string, level string, message string) (map[string]string, error) {
+	formatArgs := map[string]string{}
 	if strings.Contains(f.formatStr, "{ascTime}") {
-		formatArgs = AppendField(formatArgs, "{ascTime}", ascTime)
+		formatArgs["{ascTime}"] = ascTime
 	}
 	if strings.Contains(f.formatStr, "{level}") {
-		formatArgs = AppendField(formatArgs, "{level}", level)
+		formatArgs["{level}"] = level
 	}
 	if !strings.Contains(f.formatStr, "{message}") {
-		return []string{}, fmt.Errorf("Missing `message` parameter in format string.")
+		return map[string]string{}, fmt.Errorf("Missing `message` parameter in format string.")
 	}
-	formatArgs = AppendField(formatArgs, "{message}", message)
+	formatArgs["{message}"] = message
 	return formatArgs, nil
 }
 
@@ -60,10 +48,13 @@ func (f *Formatter) GetArgs(ascTime string, level string, message string) ([]str
 // It replaces all variables with their values in `formatStr`.
 func (f *Formatter) Format(level string, message string) (string, error) {
 	ascTime := time.Now().Format(time.RFC3339)
-	args, err := f.GetArgs(ascTime, level, message)
+	values, err := f.GetValues(ascTime, level, message)
 	if err != nil {
 		return "", fmt.Errorf("Failed Format: %s", err)
 	}
-	replacer := strings.NewReplacer(args...)
-	return replacer.Replace(f.formatStr) + "\n", nil
+	formattedStr := f.formatStr
+	for field, value := range values {
+		formattedStr = strings.ReplaceAll(formattedStr, field, value)
+	}
+	return formattedStr + "\n", nil
 }
