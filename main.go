@@ -26,7 +26,7 @@ func main() {
 	}
 
 	// TODO: Add log statements throughout.
-	logger := log.NewLogger(log.INFO, logPath, log.DefaultFormatter())
+	logger := log.DefaultLogger(log.INFO, logPath)
 	logger.Info("Started Logger")
 	defer func() {
 		logger.Close()
