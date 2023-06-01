@@ -2,11 +2,11 @@ package ctl
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -102,7 +102,8 @@ func (w *Wall) Input(input Input) {
 					continue
 				}
 				if err := w.proj.Focus(); err != nil {
-					log.Printf("Input: Failed to focus projector: %s\n", err)
+					logger := log.FromName("resetti")
+					logger.Error("Input: Failed to focus projector: %s", err)
 				}
 			}
 			if w.active != -1 || !w.proj.Active {
@@ -252,7 +253,8 @@ func (w *Wall) getWallSize() error {
 	if validLayout {
 		w.instWidth = w.proj.BaseWidth / w.wallWidth
 		w.instHeight = w.proj.BaseHeight / w.wallHeight
-		log.Printf("Found wall size: %dx%d\n", w.wallWidth, w.wallHeight)
+		logger := log.FromName("resetti")
+		logger.Info("Found wall size: %dx%d", w.wallWidth, w.wallHeight)
 		return nil
 	} else {
 		return w.promptWallSize()
@@ -318,7 +320,8 @@ func (w *Wall) resetIngame() {
 		return
 	}
 	if err := w.proj.Focus(); err != nil {
-		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
+		logger := log.FromName("resetti")
+		logger.Error("resetIngame: Failed to focus projector: %s", err)
 	}
 	w.host.DeleteSleepbgLock(false)
 	w.obs.SetScene("Wall")
@@ -412,7 +415,9 @@ func (w *Wall) wallResetAll() {
 	for i := 0; i < len(w.instances); i += 1 {
 		w.wallReset(i)
 	}
-	log.Printf("Reset all in %.2f ms\n", float64(time.Since(start).Microseconds())/1000)
+
+	logger := log.FromName("resetti")
+	logger.Info("Reset all in %.2f ms", float64(time.Since(start).Microseconds())/1000)
 }
 
 // wallResetOthers plays an instance and resets all others. It is the caller's

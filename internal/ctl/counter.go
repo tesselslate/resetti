@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 )
 
 // counter keeps track of the number of resets performed and writes them to a
@@ -70,23 +70,25 @@ func (c *counter) increment() {
 
 // write writes the counter.
 func (c *counter) write() {
+	logger := log.FromName("resetti")
 	buf := []byte(strconv.Itoa(c.count))
 	_, err := c.file.Seek(0, 0)
 	if err != nil {
-		log.Printf("Reset counter: seek failed: %s\n", err)
+		logger.Error("Reset counter: seek failed: %s", err)
 		return
 	}
 	n, err := c.file.Write(buf)
 	if err != nil {
-		log.Printf("Reset counter: write failed: %s\n", err)
+		logger.Error("Reset counter: write failed: %s", err)
 	} else if n != len(buf) {
-		log.Printf("Reset counter: write failed: not a full write (%d/%d)\n", n, len(buf))
+		logger.Error("Reset counter: write failed: not a full write (%d/%d)", n, len(buf))
 	}
 	c.lastWrite = time.Now()
 }
 
 // Run starts processing resets in the background.
 func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
+	logger := log.FromName("resetti")
 	// Return immediately if this is a noop counter.
 	if c.inc == nil {
 		return
@@ -95,10 +97,10 @@ func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
 	defer func() {
 		c.write()
 		if err := c.file.Close(); err != nil {
-			log.Printf("Reset counter: close failed: %s\n", err)
-			log.Printf("Here's your reset count! Back it up: %d\n", c.count)
+			logger.Warn("Reset counter: close failed: %s", err)
+			logger.Warn("Here's your reset count! Back it up: %d", c.count)
 		} else {
-			log.Printf("Reset counter stopped (count: %d).\n", c.count)
+			logger.Info("Reset counter stopped (count: %d).", c.count)
 		}
 		wg.Done()
 	}()
@@ -106,7 +108,7 @@ func (c *counter) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			// Drain the channel of any more reset increments.
-			log.Println("Reset counter: waiting for last resets...")
+			logger.Info("Reset counter: waiting for last resets...")
 			time.Sleep(50 * time.Millisecond)
 		outer:
 			for {

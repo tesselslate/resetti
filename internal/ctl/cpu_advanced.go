@@ -3,7 +3,6 @@ package ctl
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 )
 
@@ -211,7 +211,8 @@ func (c *advancedCpuManager) updateAffinity(id int) {
 			0644,
 		)
 		if err != nil {
-			log.Printf("cpuManager: updateAffinity failed: %s\n", err)
+			logger := log.FromName("resetti")
+			logger.Error("cpuManager: updateAffinity failed: %s", err)
 		}
 	}()
 }

@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/res"
 	"golang.org/x/exp/slices"
@@ -174,7 +174,8 @@ func getCpuTopology() (cpuTopology, error) {
 	topo.populateCcx()
 	topo.CcxCount = len(topo.Ccx)
 
-	log.Printf("Found CPU topology: %d CPUs, %d cores, %d CCXs\n", topo.CpuCount, len(topo.Cores), topo.CcxCount)
+	logger := log.FromName("resetti")
+	logger.Info("Found CPU topology: %d CPUs, %d cores, %d CCXs", topo.CpuCount, len(topo.Cores), topo.CcxCount)
 
 	return topo, nil
 }

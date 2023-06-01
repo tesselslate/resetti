@@ -5,12 +5,12 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/res"
 )
 
@@ -256,7 +256,8 @@ func validateProfile(conf *Profile) error {
 		return errors.New("invalid polling rate")
 	}
 	if conf.PollRate <= 10 {
-		log.Println("Warning: Very low poll rate in config. Consider increasing.")
+		logger := log.FromName("resetti")
+		logger.Warn("Very low poll rate in config. Consider increasing.")
 	}
 
 	// Fix up the sleepbg.lock path.

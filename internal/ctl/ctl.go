@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -112,8 +112,8 @@ type inputManager struct {
 
 // Run creates a new controller with the given configuration profile and runs it.
 func Run(conf *cfg.Profile) error {
-	log.Println("Starting up.")
-	defer log.Println("Done!")
+	logger := log.FromName("resetti")
+	defer logger.Info("Done")
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -154,7 +154,7 @@ func Run(conf *cfg.Profile) error {
 			modernWpCount += 1
 		}
 	}
-	log.Printf("Found %d/%d instances with modern WorldPreview\n", modernWpCount, len(instances))
+	logger.Info("Found %d/%d instances with modern WorldPreview", modernWpCount, len(instances))
 	c.manager, err = mc.NewManager(instances, conf, &x)
 	if err != nil {
 		return fmt.Errorf("(init) create manager: %w", err)
@@ -242,7 +242,7 @@ func Run(conf *cfg.Profile) error {
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
 	c.signals = signals
 
-	log.Printf("Ready.")
+	logger.Info("Ready.")
 	go c.dbg.Run()
 	err = c.run(ctx)
 	if err != nil {
@@ -292,7 +292,8 @@ func prepareObs(o *obs.Client, instances []mc.InstanceInfo) error {
 func (c *Controller) CreateSleepbgLock() {
 	file, err := os.Create(c.conf.Wall.Perf.SleepbgPath)
 	if err != nil {
-		log.Printf("Failed to create sleepbg.lock: %s\n", err)
+		logger := log.FromName("resetti")
+		logger.Error("Failed to create sleepbg.lock: %s", err)
 	} else {
 		_ = file.Close()
 	}
@@ -302,7 +303,8 @@ func (c *Controller) CreateSleepbgLock() {
 func (c *Controller) DeleteSleepbgLock(ignoreErrors bool) {
 	err := os.Remove(c.conf.Wall.Perf.SleepbgPath)
 	if err != nil && !ignoreErrors {
-		log.Printf("Failed to delete sleepbg.lock: %s\n", err)
+		logger := log.FromName("resetti")
+		logger.Error("Failed to delete sleepbg.lock: %s", err)
 	}
 }
 
@@ -364,7 +366,8 @@ func (c *Controller) RunHook(hook int) {
 		cmd := exec.Command(bin, args...)
 		err := cmd.Run()
 		if err != nil {
-			log.Printf("RunHook (%d) failed: %s\n", hook, err)
+			logger := log.FromName("resetti")
+			logger.Error("RunHook (%d) failed: %s", hook, err)
 		}
 	}()
 }
@@ -378,12 +381,13 @@ func (c *Controller) SetPriority(id int, prio bool) {
 
 // run runs the main loop for the controller.
 func (c *Controller) run(ctx context.Context) error {
+	logger := log.FromName("resetti")
 	for {
 		select {
 		case sig := <-c.signals:
 			switch sig {
 			case syscall.SIGINT, syscall.SIGTERM:
-				log.Println("Shutting down.")
+				logger.Info("Shutting down.")
 				return nil
 			case syscall.SIGUSR1:
 				c.dbg.printAll()
@@ -391,7 +395,7 @@ func (c *Controller) run(ctx context.Context) error {
 		case err := <-c.mgrErrors:
 			// All manager errors are fatal.
 			if errors.Is(err, mc.ErrInstanceClosed) {
-				// Don't log the error twice.
+				// Don't logger the error twice.
 				return nil
 			} else {
 				return fmt.Errorf("manager: %w", err)
@@ -401,16 +405,16 @@ func (c *Controller) run(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("fatal OBS error: %w", err)
 				} else {
-					log.Println("OBS closed. Stopping.")
+					logger.Info("OBS closed. Stopping.")
 					return nil
 				}
 			}
-			log.Printf("OBS error: %s\n", err)
+			logger.Error("OBS error: %s", err)
 		case err, ok := <-c.x11Errors:
 			if !ok {
 				return fmt.Errorf("fatal X error: %w", err)
 			}
-			log.Printf("X error: %s\n", err)
+			logger.Error("X error: %s", err)
 		case evt := <-c.mgrEvents:
 			c.frontend.Update(evt)
 			if c.cpu != nil {
@@ -425,12 +429,13 @@ func (c *Controller) run(ctx context.Context) error {
 }
 
 func (i *inputManager) Run(inputs chan<- Input) {
+	logger := log.FromName("resetti")
 	for {
 		// Sleep for this polling iteration and query the input devices' state.
 		time.Sleep(time.Second / time.Duration(i.conf.PollRate))
 		keymap, err := i.x.QueryKeymap()
 		if err != nil {
-			log.Printf("inputManager: Query keymap failed: %s\n", err)
+			logger.Error("inputManager: Query keymap failed: %s", err)
 			continue
 		}
 
@@ -440,7 +445,7 @@ func (i *inputManager) Run(inputs chan<- Input) {
 		if window != i.lastFailWindow {
 			pointer, err = i.x.QueryPointer(window)
 			if err != nil {
-				log.Printf("inputManager: Query pointer failed: %s\n", err)
+				logger.Error("inputManager: Query pointer failed: %s", err)
 				i.lastFailWindow = window
 				continue
 			}

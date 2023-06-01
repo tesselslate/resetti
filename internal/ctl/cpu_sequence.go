@@ -3,12 +3,12 @@ package ctl
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"sync"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 )
 
@@ -44,7 +44,8 @@ func (c *sequenceCpuManager) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			if err := c.initGroups(); err != nil {
-				log.Printf("cpuManager: Failed to move instances to consistent state: %s\n", err)
+				logger := log.FromName("resetti")
+				logger.Error("cpuManager: Failed to move instances to consistent state: %s", err)
 			}
 			return
 		case update := <-c.updates:
@@ -125,7 +126,8 @@ func (c *sequenceCpuManager) writeCpus(id int, cpus []int) {
 	// Writing CPU sets can have a latency impact.
 	go func() {
 		if err := writeCpuSet(fmt.Sprintf("inst%d", id), cpus); err != nil {
-			log.Printf("sequenceCpuManager.writeCpus: Failed to write CPU set: %s\n", err)
+			logger := log.FromName("resetti")
+			logger.Error("sequenceCpuManager.writeCpus: Failed to write CPU set: %s", err)
 		}
 	}()
 }
