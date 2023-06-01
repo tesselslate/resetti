@@ -1,7 +1,6 @@
 package log
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -58,13 +57,11 @@ func NewLogger(name string, level LogLevel, filePath string, formatter Formatter
 // FromName loads an existing Logger instance from disk.
 // It parses the conf file in `/tmp/<name>.json` and builds a new Logger instance.
 func FromName(name string) Logger {
-	conf := LogConf{}
-	confFile, err := os.ReadFile(fmt.Sprintf("/tmp/%s.json", name))
+	conf, err := ConfRead(name)
 	if err != nil {
-		fmt.Printf("Couldn't read conf file: %s\n", err)
+		fmt.Printf("Conf error: %s", err)
 		os.Exit(1)
 	}
-	_ = json.Unmarshal(confFile, &conf)
 	logFile, err := os.OpenFile(conf.FilePath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Printf("Couldn't open log file: %s\n", err)
