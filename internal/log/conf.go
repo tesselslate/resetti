@@ -9,6 +9,7 @@ import (
 // LogConf is a middleware that stores the log configuration.
 // Maintains the data that it needs for Logger to reconstruct itself.
 type LogConf struct {
+	Name      string   `json:"name"`
 	LogLevel  LogLevel `json:"log_level"`
 	FilePath  string   `json:"file_path"`
 	FormatStr string   `json:"format_str"`
@@ -25,9 +26,15 @@ func ConfRead(name string) (LogConf, error) {
 	return conf, nil
 }
 
+// Update is used to update a configuration to `/tmp/<name>.json`
+func (c *LogConf) UpdateLevel(level LogLevel) error {
+	c.LogLevel = level
+	return c.Write()
+}
+
 // Write is used to write a configuration to `/tmp/<name>.json`.
-func (c *LogConf) Write(name string) error {
-	logFile, err := os.OpenFile(fmt.Sprintf("/tmp/%s.json", name), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+func (c *LogConf) Write() error {
+	logFile, err := os.OpenFile(fmt.Sprintf("/tmp/%s.json", c.Name), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("Failed to open config: %s", err)
 	}

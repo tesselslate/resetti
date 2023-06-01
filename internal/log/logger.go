@@ -24,7 +24,7 @@ const (
 // Has functions like Error(), Warn() etc. to print the corresponding log message.
 // Logs are printed out to console as well as the log file.
 type Logger struct {
-	name      string
+	conf      LogConf
 	level     LogLevel
 	formatter Formatter
 	logFile   *os.File
@@ -45,13 +45,13 @@ func NewLogger(name string, level LogLevel, filePath string, formatter Formatter
 		os.Exit(1)
 	}
 	logWriter := io.MultiWriter(logFile, os.Stdout)
-	conf := LogConf{LogLevel: level, FilePath: filePath, FormatStr: formatter.formatStr}
-	err = conf.Write(name)
+	conf := LogConf{Name: name, LogLevel: level, FilePath: filePath, FormatStr: formatter.formatStr}
+	err = conf.Write()
 	if err != nil {
 		fmt.Printf("Couldn't create conf file: %s\n", err)
 		os.Exit(1)
 	}
-	return Logger{name: name, level: level, formatter: formatter, logFile: logFile, logWriter: logWriter}
+	return Logger{conf: conf, level: level, formatter: formatter, logFile: logFile, logWriter: logWriter}
 }
 
 // FromName loads an existing Logger instance from disk.
@@ -68,12 +68,17 @@ func FromName(name string) Logger {
 		os.Exit(1)
 	}
 	logWriter := io.MultiWriter(logFile, os.Stdout)
-	return Logger{name: name, level: conf.LogLevel, formatter: NewFormatter(conf.FormatStr), logFile: logFile, logWriter: logWriter}
+	return Logger{conf: conf, level: conf.LogLevel, formatter: NewFormatter(conf.FormatStr), logFile: logFile, logWriter: logWriter}
 }
 
 // SetLevel sets the log visibility level of the Logger instance.
 func (l *Logger) SetLevel(level LogLevel) {
 	l.level = level
+	err := l.conf.UpdateLevel(level)
+	if err != nil {
+		fmt.Printf("Log update error: %s\n", err)
+		os.Exit(1)
+	}
 }
 
 // Write formats the message and flushes it to the Sinks using io.Writer
@@ -158,7 +163,7 @@ func (l *Logger) Close() {
 		fmt.Printf("Failed to close log file: %s\n", err)
 		os.Exit(1)
 	}
-	confFile := fmt.Sprintf("/tmp/%s.json", l.name)
+	confFile := fmt.Sprintf("/tmp/%s.json", l.conf.Name)
 	_, err = os.Stat(confFile)
 	if err != nil {
 		return
