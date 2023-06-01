@@ -25,7 +25,6 @@ func main() {
 		logPath = "/tmp/resetti.log"
 	}
 
-	// TODO: Add log statements throughout.
 	logger := log.DefaultLogger("resetti", log.INFO, logPath)
 	logger.Info("Started Logger")
 	defer func() {
@@ -62,15 +61,31 @@ func main() {
 		} else {
 			logger.Info("Created profile!")
 		}
+	case "-d", "--debug":
+		logger.Info("Running in debug mode.")
+		logger.SetLevel(log.DEBUG)
+		if len(os.Args) < 3 {
+			logger.Error("Expected profile name after -d, --debug.")
+			printHelp()
+			os.Exit(1)
+		}
+		profileName := os.Args[2]
+		Run(profileName)
 	default:
-		Run()
+		if len(os.Args) >= 3 {
+			if os.Args[2] == "-d" || os.Args[2] == "--debug" {
+				logger.Info("Running in debug mode.")
+				logger.SetLevel(log.DEBUG)
+			}
+		}
+		profileName := os.Args[1]
+		Run(profileName)
 	}
 }
 
-func Run() {
+func Run(profileName string) {
 	// Get configuration and run.
 	logger := log.FromName("resetti")
-	profileName := os.Args[1]
 	profile, err := cfg.GetProfile(profileName)
 	if err != nil {
 		logger.Error("Failed to get profile: %s", err)
@@ -90,6 +105,7 @@ func printHelp() {
           --force-cgroups       Force the cgroup setup script to run.
           --force-log           Force the latest.log reader to be used.
           --force-wpstate       Force the wpstateout.txt reader to be used.
+          -d, --debug           Run resetti in debug mode.
 
     SUBCOMMANDS:
         resetti new [PROFILE]   Create a new profile named PROFILE with
