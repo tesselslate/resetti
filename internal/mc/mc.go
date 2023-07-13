@@ -51,9 +51,13 @@ func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
 		}
 
 		// Get the info for this instance.
-		info, err := getInstanceInfo(x, win)
-		if err == nil {
-			instances = append(instances, info)
+		info, was_instance, err := getInstanceInfo(x, win)
+		if was_instance {
+			if err == nil {
+				instances = append(instances, info)
+			} else {
+				return instances, fmt.Errorf("unusable instance: %w", err)
+			}
 		}
 	}
 
@@ -63,34 +67,34 @@ func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
 
 // getInstanceInfo attempts to gather information about the given Minecraft
 // instance.
-func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
+func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, error) {
 	// Get process ID.
 	pid, err := x.GetWindowPid(win)
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, false, err
 	}
 
 	// Get instance directory.
 	rawPwd, err := filepath.EvalSymlinks(fmt.Sprintf("/proc/%d/cwd", pid))
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, false, err
 	}
 	pwd := string(rawPwd)
 
 	// Get instance ID.
 	rawId, err := os.ReadFile(fmt.Sprintf("%s/instance_num", pwd))
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, false, err
 	}
 	id, err := strconv.Atoi(strings.TrimSuffix(string(rawId), "\n"))
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, false, err
 	}
 
 	// Get game version.
 	title, err := x.GetWindowTitle(win)
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, false, err
 	}
 	versionString := strings.Split(
 		strings.Split(title, " ")[1],
@@ -98,22 +102,22 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 	)[1]
 	version, err := strconv.Atoi(versionString)
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, false, err
 	}
 	if version < 14 {
-		return InstanceInfo{}, errors.New("only 1.14 and newer are currently supported")
+		return InstanceInfo{}, false, errors.New("only 1.14 and newer are currently supported")
 	}
 
 	// Determine if the instance has wpstateout.txt.
 	modernWp, err := hasModernWp(pwd)
 	if err != nil {
-		return InstanceInfo{}, fmt.Errorf("has modern wp: %w", err)
+		return InstanceInfo{}, true, fmt.Errorf("has modern wp: %w", err)
 	}
 
 	// Get the Atum and WorldPreview keys from the user's options.
 	options, err := os.ReadFile(pwd + "/options.txt")
 	if err != nil {
-		return InstanceInfo{}, err
+		return InstanceInfo{}, true, fmt.Errorf("couldn't open instance options.txt: %w", err)
 	}
 	resetKey := x11.KeyF6
 	previewKey := x11.KeyH
@@ -129,11 +133,11 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 		splits := strings.Split(line, ".")
 		keyName := splits[len(splits)-1]
 		if keyName == "unknown" {
-			continue
+			return InstanceInfo{}, true, fmt.Errorf("atum's \"Create New World\" and/or world preview's \"Leave Preview\" keybinds were unbound (set them to any key)")
 		}
 		keycode, ok := x11.KeycodesMc[keyName]
 		if !ok {
-			return InstanceInfo{}, fmt.Errorf("unknown keycode %s", keyName)
+			return InstanceInfo{}, true, fmt.Errorf("\"reset\" or \"leave preview\" keybinds were set to an unknown keycode %s", keyName)
 		}
 
 		// Store it.
@@ -153,7 +157,7 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, error) {
 		modernWp,
 		resetKey,
 		previewKey,
-	}, nil
+	}, true, nil
 }
 
 // hasModernWp determines whether or not the instance has a WorldPreview build
