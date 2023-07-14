@@ -89,11 +89,11 @@ func Run(profileName string) {
 	profile, err := cfg.GetProfile(profileName)
 	if err != nil {
 		logger.Error("Failed to get profile: %s", err)
-		os.Exit(1)
+		return
 	}
 	if err = ctl.Run(&profile); err != nil {
 		logger.Error("Failed to run: %s", err)
-		os.Exit(1)
+		return
 	}
 }
 
