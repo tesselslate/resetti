@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 type LogLevel int
@@ -154,6 +155,80 @@ func (l *Logger) Verbose(message string, args ...any) {
 		fmt.Printf("Failed Log Write: %s\n", err)
 		os.Exit(1)
 	}
+}
+
+// GetName is a helper function that reads `/tmp` and gets the name of the current logger and returns it.
+func GetName() (string, error) {
+	listings, err := os.ReadDir("/tmp/")
+	if err != nil {
+		return "", fmt.Errorf("Failed to read directory '/tmp/': %s\n", err)
+	}
+	name := ""
+	for _, listing := range listings {
+		if strings.Contains(listing.Name(), ".json") {
+			name = strings.Split(listing.Name(), ".")[0]
+			break
+		}
+	}
+	if name == "" {
+		return "", fmt.Errorf("Unable to find any log configs in '/tmp/`: %s\n", err)
+	}
+	return name, nil
+}
+
+// Error is a wrapper function that re-creates the logger instance from config and writes to it.
+func Error(message string, args ...any) {
+	name, err := GetName()
+	if err != nil {
+		fmt.Printf("Failed to get name: %s\n", err)
+		os.Exit(1)
+	}
+	logger := FromName(name)
+	logger.Error(message, args...)
+}
+
+// Warn is a wrapper function that re-creates the logger instance from config and writes to it.
+func Warn(message string, args ...any) {
+	name, err := GetName()
+	if err != nil {
+		fmt.Printf("Failed to get name: %s\n", err)
+		os.Exit(1)
+	}
+	logger := FromName(name)
+	logger.Warn(message, args...)
+}
+
+// Info is a wrapper function that re-creates the logger instance from config and writes to it.
+func Info(message string, args ...any) {
+	name, err := GetName()
+	if err != nil {
+		fmt.Printf("Failed to get name: %s\n", err)
+		os.Exit(1)
+	}
+	logger := FromName(name)
+	logger.Info(message, args...)
+}
+
+// Debug is a wrapper function that re-creates the logger instance from config and writes to it.
+func Debug(message string, args ...any) {
+	name, err := GetName()
+	if err != nil {
+		fmt.Printf("Failed to get name: %s\n", err)
+		os.Exit(1)
+	}
+	logger := FromName(name)
+	logger.Debug(message, args...)
+}
+
+// Verbose is a wrapper function that re-creates the logger instance from config and writes to it.
+func Verbose(message string, args ...any) {
+	name, err := GetName()
+	if err != nil {
+		fmt.Printf("Failed to get name: %s\n", err)
+		os.Exit(1)
+	}
+	logger := FromName(name)
+	logger.Verbose(message, args...)
 }
 
 // Close is used to close the file pointer and deletes the conf file.
