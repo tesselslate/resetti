@@ -174,8 +174,7 @@ func getCpuTopology() (cpuTopology, error) {
 	topo.populateCcx()
 	topo.CcxCount = len(topo.Ccx)
 
-	logger := log.FromName("resetti")
-	logger.Info("Found CPU topology: %d CPUs, %d cores, %d CCXs", topo.CpuCount, len(topo.Cores), topo.CcxCount)
+	log.Info("Found CPU topology: %d CPUs, %d cores, %d CCXs", topo.CpuCount, len(topo.Cores), topo.CcxCount)
 
 	return topo, nil
 }

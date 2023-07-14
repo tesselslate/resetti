@@ -211,8 +211,7 @@ func (c *advancedCpuManager) updateAffinity(id int) {
 			0644,
 		)
 		if err != nil {
-			logger := log.FromName("resetti")
-			logger.Error("cpuManager: updateAffinity failed: %s", err)
+			log.Error("cpuManager: updateAffinity failed: %s", err)
 		}
 	}()
 }

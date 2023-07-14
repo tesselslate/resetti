@@ -29,7 +29,6 @@ type debugLogger struct {
 
 // Run starts reading stdin and printing debug information as the user requests.
 func (d *debugLogger) Run() {
-	logger := log.FromName("resetti")
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		line, err := reader.ReadString('\n')
@@ -37,7 +36,7 @@ func (d *debugLogger) Run() {
 			if err == io.EOF {
 				continue
 			}
-			logger.Error("debugLogger.readStdin failed: %s\n", err)
+			log.Error("debugLogger.readStdin failed: %s\n", err)
 			continue
 		}
 		switch strings.TrimSuffix(line, "\n") {
@@ -76,8 +75,7 @@ func (d *debugLogger) printFrontend() {
 		fmt.Fprintf(s, "Locks (%d): %v\n", len(f.locks), f.locks)
 		fmt.Fprintf(s, "Last hitbox: %v", f.lastHitbox)
 	}
-	logger := log.FromName("resetti")
-	logger.Debug(s.String())
+	log.Debug(s.String())
 }
 
 func (d *debugLogger) printGc() {
@@ -93,8 +91,7 @@ func (d *debugLogger) printGc() {
 	fmt.Fprintf(s, "Pause time: %.4f ms\n", float64(mem.PauseTotalNs)/1e7)
 	fmt.Fprintf(s, "GC time: %.4f%%\n", mem.GCCPUFraction)
 	fmt.Fprintf(s, "GC cycles: %d", mem.NumGC)
-	logger := log.FromName("resetti")
-	logger.Debug(s.String())
+	log.Debug(s.String())
 }
 
 func (d *debugLogger) printInput() {
@@ -102,8 +99,7 @@ func (d *debugLogger) printInput() {
 	s.WriteString("\nInput: \n")
 	fmt.Fprintf(s, "Last binds: %+v\n", d.host.inputMgr.lastBinds)
 	fmt.Fprintf(s, "Last fail window: %d", d.host.inputMgr.lastFailWindow)
-	logger := log.FromName("resetti")
-	logger.Debug(s.String())
+	log.Debug(s.String())
 }
 
 func (d *debugLogger) printManager() {
@@ -113,6 +109,5 @@ func (d *debugLogger) printManager() {
 	for i, state := range states {
 		fmt.Fprintf(s, "%d\t%s\t%d\t%s", i, stateNames[state.Type], state.Progress, state.LastPreview.Format("15:04:05.9999"))
 	}
-	logger := log.FromName("resetti")
-	logger.Debug(s.String())
+	log.Debug(s.String())
 }

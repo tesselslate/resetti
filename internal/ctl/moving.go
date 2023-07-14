@@ -112,8 +112,7 @@ func (m *MovingWall) Input(input Input) {
 					continue
 				}
 				if err := m.proj.Focus(); err != nil {
-					logger := log.FromName("resetti")
-					logger.Error("Input: Failed to focus projector: %s", err)
+					log.Error("Input: Failed to focus projector: %s", err)
 				}
 			}
 			if m.active != -1 || !m.proj.Active {
@@ -385,8 +384,7 @@ func (m *MovingWall) resetIngame() {
 	}
 	m.layout()
 	if err := m.proj.Focus(); err != nil {
-		logger := log.FromName("resetti")
-		logger.Error("resetIngame: Failed to focus projector: %s", err)
+		log.Error("resetIngame: Failed to focus projector: %s", err)
 	}
 	m.host.DeleteSleepbgLock(false)
 	m.obs.SetScene("Wall")
@@ -478,8 +476,7 @@ func (m *MovingWall) wallResetAll() {
 		}
 	}
 
-	logger := log.FromName("resetti")
-	logger.Info("Reset all in %.2f ms", float64(time.Since(start).Microseconds())/1000)
+	log.Info("Reset all in %.2f ms", float64(time.Since(start).Microseconds())/1000)
 }
 
 // wallResetOthers plays an instance and resets all others in the first group.

@@ -44,8 +44,7 @@ func (c *sequenceCpuManager) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			if err := c.initGroups(); err != nil {
-				logger := log.FromName("resetti")
-				logger.Error("cpuManager: Failed to move instances to consistent state: %s", err)
+				log.Error("cpuManager: Failed to move instances to consistent state: %s", err)
 			}
 			return
 		case update := <-c.updates:
@@ -126,8 +125,7 @@ func (c *sequenceCpuManager) writeCpus(id int, cpus []int) {
 	// Writing CPU sets can have a latency impact.
 	go func() {
 		if err := writeCpuSet(fmt.Sprintf("inst%d", id), cpus); err != nil {
-			logger := log.FromName("resetti")
-			logger.Error("sequenceCpuManager.writeCpus: Failed to write CPU set: %s", err)
+			log.Error("sequenceCpuManager.writeCpus: Failed to write CPU set: %s", err)
 		}
 	}()
 }

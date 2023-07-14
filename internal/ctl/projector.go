@@ -67,8 +67,7 @@ func (p *ProjectorController) ProcessEvent(evt x11.Event) {
 			return
 		}
 		if err := p.updateProjector(p.window); err != nil {
-			logger := log.FromName("resetti")
-			logger.Error("ProjectorController: Failed to process resize event: %s", err)
+			log.Error("ProjectorController: Failed to process resize event: %s", err)
 		}
 	}
 }
@@ -133,30 +132,28 @@ func (p *ProjectorController) findProjector() error {
 
 // grabPointer grabs the mouse pointer if it is currently not grabbed.
 func (p *ProjectorController) grabPointer() {
-	logger := log.FromName("resetti")
 	// OBS can still be grabbing the pointer, so retry with backoff.
 	timeout := time.Millisecond
 	for tries := 1; tries <= 5; tries += 1 {
 		if err := p.x.GrabPointer(p.window, p.conf.Wall.ConfinePointer); err != nil {
-			logger.Error("Pointer grab failed: (%d/5): %s", tries, err)
+			log.Error("Pointer grab failed: (%d/5): %s", tries, err)
 		} else {
-			logger.Info("Grabbed pointer.")
+			log.Info("Grabbed pointer.")
 			p.grab = true
 			return
 		}
 		time.Sleep(timeout)
 		timeout *= 4
 	}
-	logger.Error("Pointer grab failed.")
+	log.Error("Pointer grab failed.")
 }
 
 // ungrabPointer ungrabs the mouse pointer if it is currently grabbed.
 func (p *ProjectorController) ungrabPointer() {
-	logger := log.FromName("resetti")
 	if err := p.x.UngrabPointer(); err != nil {
-		logger.Error("Failed to ungrab pointer: %s", err)
+		log.Error("Failed to ungrab pointer: %s", err)
 	} else {
-		logger.Info("Ungrabbed pointer.")
+		log.Info("Ungrabbed pointer.")
 		p.grab = false
 	}
 }

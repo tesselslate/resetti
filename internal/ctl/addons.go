@@ -121,7 +121,6 @@ func (h *hider) showAll() {
 		}
 	})
 	if err != nil {
-		logger := log.FromName("resetti")
-		logger.Error("hider.showAll: Batch failed: %s", err)
+		log.Error("hider.showAll: Batch failed: %s", err)
 	}
 }

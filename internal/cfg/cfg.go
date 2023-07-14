@@ -256,8 +256,7 @@ func validateProfile(conf *Profile) error {
 		return errors.New("invalid polling rate")
 	}
 	if conf.PollRate <= 10 {
-		logger := log.FromName("resetti")
-		logger.Warn("Very low poll rate in config. Consider increasing.")
+		log.Warn("Very low poll rate in config. Consider increasing.")
 	}
 
 	// Fix up the sleepbg.lock path.
