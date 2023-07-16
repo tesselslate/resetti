@@ -68,6 +68,8 @@ type Wall struct {
 	// Preview percentage to show instances at.
 	ShowAt int `toml:"show_at"`
 
+	WallWindow string `toml:"wall_window"` // Name of the wall window 
+
 	// Instance moving settings.
 	Moving struct {
 		Enabled         bool    `toml:"enabled"`

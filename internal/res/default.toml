@@ -155,6 +155,10 @@ freeze_at = 0
 # The percentage to show instances at on preview. Set below 0 to disable.
 show_at = 5
 
+# The name of the projector window to consider as the wall screen
+# You will have to change this if your OBS isn't in english
+wall_window = "Projector (Scene) - Wall"
+
 # Instance moving settings.
 [wall.moving]
 # Whether or not to use moving.
