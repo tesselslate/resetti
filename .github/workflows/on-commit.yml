@@ -18,8 +18,15 @@ jobs:
         with:
           go-version: "1.20.4"
 
-      - name: Build and package resetti
+      - name: Build and package resetti for debain
         run: make deb
+
+      - name: Build an package resetti for redhat distros
+        run: make rpm
+
+      - name: Get rpm file name
+        id: rpm-filename
+        run: echo "::set-output name=filename::$(ls out | grep .rpm)"
 
       - name: Upload artifact
         env:
@@ -27,8 +34,8 @@ jobs:
           WEBHOOK: ${{ secrets.DEV_BUILD_WEBHOOK }}
         run: |
           export SHA=$(git rev-parse --short HEAD)
-          export COMMIT_NAME=$(echo "$COMMIT" | head -n 1)
-          curl -H 'Content-Type: multipart/form-data' -X POST                                   \
-            -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT_NAME\"}" \
-            -F "file1=@out/resetti.deb"                                                         \
+          curl -H 'Content-Type: multipart/form-data' -X POST                               \
+            -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT\"}"  \
+            -F "file1=@out/resetti.deb"                                                     \
+            -F "file2=@out/{{ steps.rpm-filename.outputs.filename }}"                       \
             "$WEBHOOK"

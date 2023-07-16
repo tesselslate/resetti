@@ -28,6 +28,17 @@ deb: build
 	cp internal/res/scene-setup.lua out/deb/usr/local/share/resetti
 	dpkg-deb --build --root-owner-group out/deb out/resetti.deb
 
+rpm: GOFLAGS=-ldflags="-X res.overrideDataDir=/usr/share/resetti"
+rpm: build
+	mkdir -p out/rpm
+	@if git describe --exact-match HEAD; then \
+		echo "1" > out/rpm/.release; \
+	else \
+		git rev-parse --short HEAD > out/rpm/.release; \
+	fi
+	rpmbuild -ba --build-in-place --define "vernum $$(cut -d- -f1 < .version)" --define "rel $$(cat out/rpm/.release)" --define "_topdir $$(pwd)/out/rpm" .pkg/resetti.spec
+	mv out/rpm/RPMS/x86_64/* out
+
 clean:
 	rm -r out
 	go clean
