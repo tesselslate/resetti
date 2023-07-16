@@ -130,8 +130,8 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 		}
 
 		// Parse the key.
-		splits := strings.Split(line, ".")
-		keyName := splits[len(splits)-1]
+		keyName := strings.Split(line, ":")[1]
+		keyName = strings.TrimPrefix(keyName, "key.keyboard.")
 		if keyName == "unknown" {
 			return InstanceInfo{}, true, fmt.Errorf("atum's \"Create New World\" and/or world preview's \"Leave Preview\" keybinds were unbound (set them to any key)")
 		}
