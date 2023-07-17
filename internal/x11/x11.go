@@ -23,6 +23,7 @@ const (
 	netCurrentDesktop = "_NET_CURRENT_DESKTOP"
 	netWmDesktop      = "_NET_WM_DESKTOP"
 	netWmPid          = "_NET_WM_PID"
+	netWmName         = "_NET_WM_NAME"
 	utf8String        = "UTF8_STRING"
 	wmClass           = "WM_CLASS"
 	wmName            = "WM_NAME"
@@ -349,7 +350,7 @@ func (c *Client) GetWindowSize(win xproto.Window) (uint16, uint16, error) {
 
 // GetWindowTitle returns the title of the given window.
 func (c *Client) GetWindowTitle(win xproto.Window) (string, error) {
-	return c.getPropertyString(win, wmName)
+	return c.getPropertyUtf8(win, netWmName)
 }
 
 // GrabPointer grabs the mouse pointer, diverting all mouse events to resetti.
@@ -509,6 +510,16 @@ func (c *Client) getPropertyString(win xproto.Window, name string) (string, erro
 		return "", err
 	}
 	return string(reply), nil
+}
+
+// getPropertyUtf8 retrieves a utf8 window property.
+func (c *Client) getPropertyUtf8(win xproto.Window, name string) (string, error) {
+	reply, err := c.getProperty(win, name, xproto.GetPropertyTypeAny)
+
+	if err != nil {
+		return "", err
+	}
+	return string(reply[:]), nil
 }
 
 // sendEvent sends an event to another window.
