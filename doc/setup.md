@@ -22,7 +22,7 @@ Minecraft (benchmarks show OpenJDK 20 to be slower), so get it if available.
 We will create a single instance, and then duplicate it as many times as
 needed. Start by creating an instance in MultiMC (or your fork) with the desired
 version (e.g. 1.16.1). Launch and close the game once; then, install Fabric by
-going to `Edit Instance` -> `Version`. Unfortunatly, resetti does not currently, 
+going to `Edit Instance` -> `Version`. Unfortunatly, resetti does not currently 
 work with Flatpak launchers.
 
 #### Mods
