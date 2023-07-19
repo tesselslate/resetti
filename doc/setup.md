@@ -22,7 +22,8 @@ Minecraft (benchmarks show OpenJDK 20 to be slower), so get it if available.
 We will create a single instance, and then duplicate it as many times as
 needed. Start by creating an instance in MultiMC (or your fork) with the desired
 version (e.g. 1.16.1). Launch and close the game once; then, install Fabric by
-going to `Edit Instance` -> `Version`.
+going to `Edit Instance` -> `Version`. Unfortunatly, resetti does not currently, 
+work with Flatpak launchers.
 
 #### Mods
 
@@ -62,6 +63,8 @@ mods you would like. Atum and Fast Reset are mandatory. The following are
   the below configuration to `.minecraft/config/sleepbg.json`.
   - You may have a better experience by tweaking some of these values, but they
     are a better starting point than the defaults.
+- If you want to make updating your settings easier, you can softlink your `config` 
+  and `mods` folders to one place like so: `cd YOUR_NEW_INSTANCE; ln -s YOUR_CONFIG config`
 
 <details>
 
