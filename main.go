@@ -25,7 +25,7 @@ func main() {
 		logPath = "/tmp/resetti.log"
 	}
 
-	logger := log.DefaultLogger("resetti", log.INFO, logPath)
+	logger := log.DefaultLogger(log.INFO, logPath)
 	logger.Info("Started Logger")
 	defer func() {
 		logger.Close()
@@ -85,14 +85,13 @@ func main() {
 
 func Run(profileName string) {
 	// Get configuration and run.
-	logger := log.FromName("resetti")
 	profile, err := cfg.GetProfile(profileName)
 	if err != nil {
-		logger.Error("Failed to get profile: %s", err)
+		log.Error("Failed to get profile: %s", err)
 		return
 	}
 	if err = ctl.Run(&profile); err != nil {
-		logger.Error("Failed to run: %s", err)
+		log.Error("Failed to run: %s", err)
 		return
 	}
 }
