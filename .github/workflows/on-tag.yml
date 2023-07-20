@@ -23,7 +23,7 @@ jobs:
 
       - name: Build and package resetti for debian
         run: make deb
-      
+
       - name: Build an package resetti from redhat distros
         run: make rpm
 
