@@ -390,7 +390,7 @@ func (c *Controller) run(ctx context.Context) error {
 		case err := <-c.mgrErrors:
 			// All manager errors are fatal.
 			if errors.Is(err, mc.ErrInstanceClosed) {
-				// Don't logger the error twice.
+				// Don't log the error twice.
 				return nil
 			} else {
 				return fmt.Errorf("manager: %w", err)
