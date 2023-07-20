@@ -15,7 +15,8 @@ do not bundle it. In this case, you'll want to install OBS via the
 
 resetti comes with a simple OBS script that can generate scene collections for
 you. To start, create a new scene collection. Then, import the script by going to
-`Tools` -> `Scripts` and clicking the `+` icon.
+`Tools` -> `Scripts` and clicking the `+` icon. If the script is not able to generate
+from within this new scene collection, you may need to restart OBS.
 
 - If you installed from source or from binary, the script can be found at
   `$XDG_DATA_HOME/resetti/scene-setup.lua` (or `$HOME/.local/share/resetti/scene-setup.lua`).

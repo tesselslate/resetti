@@ -9,7 +9,11 @@ Click the icon in the upper left to view the table of contents.
 
 resetti has only been tested with [MultiMC](https://multimc.org) and forks such
 as [PrismLauncher](https://prismlauncher.org). No functionality is guaranteed
-when using the vanilla launcher or any other launcher.
+when using the vanilla launcher or any other launcher. 
+
+> **Warning**
+> resetti does not currently work with launchers installed using Flatpak.
+> You can check if your launcher is installed using Flatpak with `flatpak list`
 
 ### Java
 
@@ -58,6 +62,8 @@ mods you would like. Atum and Fast Reset are mandatory. The following are
 - If using StandardSettings, you may want to read the documentation (available [here](https://github.com/KingContaria/StandardSettings#standardsettings)).
   - In particular, you may want to use a global configuration file. This is
     mentioned in the documentation.
+- If you want to make updating your settings easier, you can softlink your `config` 
+  and `mods` folders to one place like so: `cd YOUR_NEW_INSTANCE; ln -s YOUR_CONFIG config`.
 - If using SleepBackground, the default configuration is suboptimal. You can add
   the below configuration to `.minecraft/config/sleepbg.json`.
   - You may have a better experience by tweaking some of these values, but they
