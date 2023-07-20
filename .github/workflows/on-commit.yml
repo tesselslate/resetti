@@ -38,5 +38,5 @@ jobs:
           curl -H 'Content-Type: multipart/form-data' -X POST                                   \
             -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT_NAME\"}" \
             -F "file1=@out/resetti.deb"                                                        \
-            -F "file2=@out/{{ steps.rpm-filename.outputs.filename }}"                       \
+            -F "file2=@out/${{ steps.rpm-filename.outputs.filename }}"                       \
             "$WEBHOOK"
