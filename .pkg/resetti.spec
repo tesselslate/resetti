@@ -2,7 +2,7 @@ Name:       resetti
 Version:    %{vernum}
 Release:    %{rel}
 
-Summary:    Minecraft multi-instance reset macro for speedrunning 
+Summary:    Minecraft multi-instance reset macro for speedrunning
 License:    GPLv3+
 URL: http://www.github.com/woofdoggo/resetti
 
