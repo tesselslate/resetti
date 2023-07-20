@@ -12,7 +12,7 @@ as [PrismLauncher](https://prismlauncher.org). No functionality is guaranteed
 when using the vanilla launcher or any other launcher. 
 
 > **Warning**
-> resetti does not currently, work with launchers installed using Flatpak.
+> resetti does not currently work with launchers installed using Flatpak.
 > You can check if your launcher is installed using Flatpak with `flatpak list`
 
 ### Java
