@@ -5,8 +5,8 @@ a variety of different resetting styles, categories, and Minecraft versions.
 
 ## Installation
 
-Distribution specific packages are currently only limited to **Arch** and
-**Debian-based** distributions. More distributions are planned for later.
+Distribution specific packages are currently availible for **Arch**,
+**Debian-based** and **RPM-based** distributions. More distributions are planned for later.
 
 - [From the AUR](#from-the-aur)
 - [From source](#from-source)
@@ -23,10 +23,10 @@ cd resetti
 makepkg -si
 ```
 
-### From the Debian package
+### From distro-specific packages
 
 Check the [Releases](https://github.com/woofdoggo/resetti/releases) tab for
-Debian packages or download the latest development builds from the
+distro-specific packages (deb or rpm) or download the latest development builds from the
 [Discord](https://discord.gg/fwZA2VJh7k).
 
 ### From source
