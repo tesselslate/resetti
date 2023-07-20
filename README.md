@@ -23,10 +23,10 @@ cd resetti
 makepkg -si
 ```
 
-### From the Debian or RPM package
+### From distro-specific packages
 
 Check the [Releases](https://github.com/woofdoggo/resetti/releases) tab for
-Debian packages or download the latest development builds from the
+distro-specific packages (deb or rpm) or download the latest development builds from the
 [Discord](https://discord.gg/fwZA2VJh7k).
 
 ### From source
