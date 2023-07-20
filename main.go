@@ -3,13 +3,12 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"strings"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/ctl"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/res"
 )
 
@@ -20,8 +19,20 @@ var notice string
 var version string
 
 func main() {
+	// Setup logger output.
+	logPath, ok := os.LookupEnv("RESETTI_LOG_PATH")
+	if !ok {
+		logPath = "/tmp/resetti.log"
+	}
+
+	logger := log.DefaultLogger(log.INFO, logPath)
+	logger.Info("Started Logger")
+	defer func() {
+		logger.Close()
+	}()
+
 	if err := res.WriteResources(); err != nil {
-		fmt.Println("Failed to write resources:", err)
+		logger.Error("Failed to write resources: %s", err)
 		os.Exit(1)
 	}
 	if len(os.Args) < 2 {
@@ -46,43 +57,42 @@ func main() {
 		}
 		err := cfg.MakeProfile(os.Args[2])
 		if err != nil {
-			fmt.Println("Failed to make profile:", err)
+			logger.Error("Failed to make profile: %s", err)
 		} else {
-			fmt.Println("Created profile!")
+			logger.Info("Created profile!")
 		}
+	case "-d", "--debug":
+		logger.Info("Running in debug mode.")
+		logger.SetLevel(log.DEBUG)
+		if len(os.Args) < 3 {
+			logger.Error("Expected profile name after -d, --debug.")
+			printHelp()
+			os.Exit(1)
+		}
+		profileName := os.Args[2]
+		Run(profileName)
 	default:
-		Run()
+		if len(os.Args) >= 3 {
+			if os.Args[2] == "-d" || os.Args[2] == "--debug" {
+				logger.Info("Running in debug mode.")
+				logger.SetLevel(log.DEBUG)
+			}
+		}
+		profileName := os.Args[1]
+		Run(profileName)
 	}
 }
 
-func Run() {
-	// Setup logger output.
-	logPath, ok := os.LookupEnv("RESETTI_LOG_PATH")
-	if !ok {
-		logPath = "/tmp/resetti.log"
-	}
-	logFile, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Println("Failed to open log:", err)
-		os.Exit(1)
-	}
-	defer func() {
-		_ = logFile.Close()
-	}()
-	logWriter := io.MultiWriter(logFile, os.Stdout)
-	log.SetFlags(log.Ltime | log.Lmicroseconds)
-	log.SetOutput(logWriter)
-
+func Run(profileName string) {
 	// Get configuration and run.
-	profileName := os.Args[1]
 	profile, err := cfg.GetProfile(profileName)
 	if err != nil {
-		fmt.Println("Failed to get profile:", err)
-		os.Exit(1)
+		log.Error("Failed to get profile: %s", err)
+		return
 	}
 	if err = ctl.Run(&profile); err != nil {
-		fmt.Println("Failed to run:", err)
-		os.Exit(1)
+		log.Error("Failed to run: %s", err)
+		return
 	}
 }
 
@@ -94,6 +104,7 @@ func printHelp() {
           --force-cgroups       Force the cgroup setup script to run.
           --force-log           Force the latest.log reader to be used.
           --force-wpstate       Force the wpstateout.txt reader to be used.
+          -d, --debug           Run resetti in debug mode.
 
     SUBCOMMANDS:
         resetti new [PROFILE]   Create a new profile named PROFILE with

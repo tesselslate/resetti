@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/woofdoggo/resetti/internal/log"
 	"golang.org/x/exp/slices"
 )
 
@@ -202,12 +202,12 @@ func (r *logReader) Process() (State, bool, error) {
 			// [XX:XX:XX] [Render thread/INFO]: Preparing spawn area: X%
 			words := strings.Split(line, " ")
 			if len(words) != 7 {
-				log.Printf("logReader.process: Progress line had %d words\n", len(words))
+				log.Warn("logReader.process: Progress line had %d words", len(words))
 				continue
 			}
 			progress, err := strconv.Atoi(strings.Trim(words[6], "%\n"))
 			if err != nil {
-				log.Printf("logReader.process: Failed to parse progress (%s)\n", err)
+				log.Error("logReader.process: Failed to parse progress (%s)", err)
 			}
 			r.state.Progress = progress
 			updated = true
@@ -222,12 +222,12 @@ func (r *logReader) Process() (State, bool, error) {
 func (r *logReader) ProcessEvent(op fsnotify.Op) error {
 	switch op {
 	case fsnotify.Rename:
-		log.Println("logReader.ProcessEvent: Log file is gone.")
+		log.Warn("logReader.ProcessEvent: Log file is gone.")
 		if r.file == nil {
 			return nil
 		}
 		if err := r.file.Close(); err != nil {
-			log.Printf("Failed to close log: %s\n", err)
+			log.Error("Failed to close log: %s", err)
 		}
 		time.Sleep(50 * time.Millisecond)
 		file, err := os.Open(r.path)
@@ -266,7 +266,7 @@ func (r *logReader) readLine() (string, error) {
 			case io.EOF:
 				continue
 			case nil:
-				log.Printf("logReader.readLine: succeeded after %d tries\n", tries+1)
+				log.Info("logReader.readLine: succeeded after %d tries", tries+1)
 				return string(buf), nil
 			default:
 				return "", err

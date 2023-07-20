@@ -2,9 +2,9 @@ package ctl
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 )
@@ -121,6 +121,6 @@ func (h *hider) showAll() {
 		}
 	})
 	if err != nil {
-		log.Printf("hider.showAll: Batch failed: %s\n", err)
+		log.Error("hider.showAll: Batch failed: %s", err)
 	}
 }

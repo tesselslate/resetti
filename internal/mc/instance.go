@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/x11"
 	"golang.org/x/exp/slices"
 )
@@ -127,7 +127,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 				_, err := os.Stat(fmt.Sprintf("/proc/%d/", inst.info.Pid))
 				if err != nil {
 					if !slices.Contains(deadInstances, id) {
-						log.Printf("Instance %d (%s) died. Reboot it and restart resetti.", id, inst.info.Dir)
+						log.Warn("Instance %d (%s) died. Reboot it and restart resetti.", id, inst.info.Dir)
 						deadInstances = append(deadInstances, id)
 					}
 
@@ -162,7 +162,8 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 				// Process any updates to the state file.
 				state, updated, err := m.instances[id].reader.Process()
 				if err != nil {
-					log.Printf("process log (%d) failed: %s", id, err)
+
+					log.Error("process log (%d) failed: %s", id, err)
 					continue
 				}
 				if !updated {
@@ -224,7 +225,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 			if !ok {
 				errch <- fmt.Errorf("watcher died: %w", err)
 			}
-			log.Printf("Manager: watcher error: %s\n", err)
+			log.Error("Manager: watcher error: %s", err)
 		}
 	}
 }
@@ -233,7 +234,7 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 // be logged.
 func (m *Manager) Focus(id int) {
 	if err := m.x.FocusWindow(m.instances[id].info.Wid); err != nil {
-		log.Printf("Focus %d failed: %s\n", id, err)
+		log.Error("Focus %d failed: %s", id, err)
 	}
 }
 

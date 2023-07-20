@@ -3,12 +3,12 @@ package ctl
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/jezek/xgb/xproto"
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
 	"golang.org/x/exp/slices"
@@ -67,7 +67,7 @@ func (p *ProjectorController) ProcessEvent(evt x11.Event) {
 			return
 		}
 		if err := p.updateProjector(p.window); err != nil {
-			log.Printf("ProjectorController: Failed to process resize event: %s\n", err)
+			log.Error("ProjectorController: Failed to process resize event: %s", err)
 		}
 	}
 }
@@ -136,24 +136,24 @@ func (p *ProjectorController) grabPointer() {
 	timeout := time.Millisecond
 	for tries := 1; tries <= 5; tries += 1 {
 		if err := p.x.GrabPointer(p.window, p.conf.Wall.ConfinePointer); err != nil {
-			log.Printf("Pointer grab failed: (%d/5): %s\n", tries, err)
+			log.Error("Pointer grab failed: (%d/5): %s", tries, err)
 		} else {
-			log.Println("Grabbed pointer.")
+			log.Info("Grabbed pointer.")
 			p.grab = true
 			return
 		}
 		time.Sleep(timeout)
 		timeout *= 4
 	}
-	log.Printf("Pointer grab failed.")
+	log.Error("Pointer grab failed.")
 }
 
 // ungrabPointer ungrabs the mouse pointer if it is currently grabbed.
 func (p *ProjectorController) ungrabPointer() {
 	if err := p.x.UngrabPointer(); err != nil {
-		log.Printf("Failed to ungrab pointer: %s\n", err)
+		log.Error("Failed to ungrab pointer: %s", err)
 	} else {
-		log.Println("Ungrabbed pointer.")
+		log.Info("Ungrabbed pointer.")
 		p.grab = false
 	}
 }

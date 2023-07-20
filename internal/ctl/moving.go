@@ -2,10 +2,10 @@ package ctl
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/woofdoggo/resetti/internal/cfg"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/obs"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -112,7 +112,7 @@ func (m *MovingWall) Input(input Input) {
 					continue
 				}
 				if err := m.proj.Focus(); err != nil {
-					log.Printf("Input: Failed to focus projector: %s\n", err)
+					log.Error("Input: Failed to focus projector: %s", err)
 				}
 			}
 			if m.active != -1 || !m.proj.Active {
@@ -384,7 +384,7 @@ func (m *MovingWall) resetIngame() {
 	}
 	m.layout()
 	if err := m.proj.Focus(); err != nil {
-		log.Printf("resetIngame: Failed to focus projector: %s\n", err)
+		log.Error("resetIngame: Failed to focus projector: %s", err)
 	}
 	m.host.DeleteSleepbgLock(false)
 	m.obs.SetScene("Wall")
@@ -475,7 +475,8 @@ func (m *MovingWall) wallResetAll() {
 			m.wallReset(m.queue[i])
 		}
 	}
-	log.Printf("Reset all in %.2f ms\n", float64(time.Since(start).Microseconds())/1000)
+
+	log.Info("Reset all in %.2f ms", float64(time.Since(start).Microseconds())/1000)
 }
 
 // wallResetOthers plays an instance and resets all others in the first group.
