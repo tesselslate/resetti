@@ -9,16 +9,14 @@ import (
 // LogConf is a middleware that stores the log configuration.
 // Maintains the data that it needs for Logger to reconstruct itself.
 type LogConf struct {
-	Name      string   `json:"name"`
-	LogLevel  LogLevel `json:"log_level"`
-	FilePath  string   `json:"file_path"`
-	FormatStr string   `json:"format_str"`
+	LogLevel LogLevel `json:"log_level"`
+	FilePath string   `json:"file_path"`
 }
 
-// ConfRead reads the configuration from `/tmp/<name>.json` and returns a LogConf instance.
-func ConfRead(name string) (LogConf, error) {
+// ConfRead reads the configuration from `/tmp/resetti.json` and returns a LogConf instance.
+func ConfRead() (LogConf, error) {
 	conf := LogConf{}
-	confFile, err := os.ReadFile(fmt.Sprintf("/tmp/%s.json", name))
+	confFile, err := os.ReadFile("/tmp/resetti.json")
 	if err != nil {
 		return LogConf{}, fmt.Errorf("Couldn't read conf file: %s\n", err)
 	}
@@ -26,15 +24,15 @@ func ConfRead(name string) (LogConf, error) {
 	return conf, nil
 }
 
-// Update is used to update a configuration to `/tmp/<name>.json`
+// Update is used to update a configuration to `/tmp/resetti.json`
 func (c *LogConf) UpdateLevel(level LogLevel) error {
 	c.LogLevel = level
 	return c.Write()
 }
 
-// Write is used to write a configuration to `/tmp/<name>.json`.
+// Write is used to write a configuration to `/tmp/resetti.json`.
 func (c *LogConf) Write() error {
-	logFile, err := os.OpenFile(fmt.Sprintf("/tmp/%s.json", c.Name), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile("/tmp/resetti.json", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("Failed to open config: %s", err)
 	}
