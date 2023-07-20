@@ -9,7 +9,11 @@ Click the icon in the upper left to view the table of contents.
 
 resetti has only been tested with [MultiMC](https://multimc.org) and forks such
 as [PrismLauncher](https://prismlauncher.org). No functionality is guaranteed
-when using the vanilla launcher or any other launcher.
+when using the vanilla launcher or any other launcher. 
+
+> **Warning**
+> resetti does not currently, work with launchers installed using Flatpak.
+> You can check if your launcher is installed using Flatpak with `flatpak list`
 
 ### Java
 
@@ -22,8 +26,7 @@ Minecraft (benchmarks show OpenJDK 20 to be slower), so get it if available.
 We will create a single instance, and then duplicate it as many times as
 needed. Start by creating an instance in MultiMC (or your fork) with the desired
 version (e.g. 1.16.1). Launch and close the game once; then, install Fabric by
-going to `Edit Instance` -> `Version`. Unfortunatly, resetti does not currently, 
-work with Flatpak launchers.
+going to `Edit Instance` -> `Version`.
 
 #### Mods
 
