@@ -34,8 +34,9 @@ jobs:
           WEBHOOK: ${{ secrets.DEV_BUILD_WEBHOOK }}
         run: |
           export SHA=$(git rev-parse --short HEAD)
-          curl -H 'Content-Type: multipart/form-data' -X POST                               \
-            -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT_NAME\"}"  \
-            -F "file1=@out/resetti.deb"                                                     \
+          export COMMIT_NAME=$(echo "$COMMIT" | head -n 1)
+          curl -H 'Content-Type: multipart/form-data' -X POST                                   \
+            -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT_NAME\"}" \
+            -F "file1=@out/resetti.deb"                                                        \
             -F "file2=@out/{{ steps.rpm-filename.outputs.filename }}"                       \
             "$WEBHOOK"
