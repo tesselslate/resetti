@@ -31,9 +31,8 @@ func Format(level string, message string, formatStr string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Failed Format: %s", err)
 	}
-	formattedStr := formatStr
 	for field, value := range values {
-		formattedStr = strings.ReplaceAll(formattedStr, field, value)
+		formatStr = strings.ReplaceAll(formatStr, field, value)
 	}
-	return formattedStr + "\n", nil
+	return formatStr + "\n", nil
 }

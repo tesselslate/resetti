@@ -32,19 +32,34 @@ type Logger struct {
 }
 
 // DefaultLogger creates a pre-defined instance of Logger with a default formatter.
-func DefaultLogger(level LogLevel, filePath string) Logger {
-	return NewLogger(level, filePath)
+func DefaultLogger(level LogLevel, filePath string, disableConsole bool) Logger {
+	return NewLogger(level, filePath, disableConsole)
 }
 
 // NewLogger creates a fresh instance of Logger with a user-defined Formatter.
 // It opens the log file in `filePath` with write-only, truncate and create flags and with mode 0644 (before umask).
-func NewLogger(level LogLevel, filePath string) Logger {
+// Passing filePath as a blank string makes it go to `/dev/null`.
+// disableConsole disables console output.
+func NewLogger(level LogLevel, filePath string, disableConsole bool) Logger {
+	if filePath == "" {
+		filePath = os.DevNull
+	}
 	logFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Printf("Couldn't create log file: %s\n", err)
 		os.Exit(1)
 	}
-	logWriter := io.MultiWriter(logFile, os.Stdout)
+	var logWriter io.Writer
+	if disableConsole {
+		nullFile, err := os.OpenFile(os.DevNull, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Printf("Couldn't open null file: %s\n", err)
+			os.Exit(1)
+		}
+		logWriter = io.MultiWriter(logFile, nullFile)
+	} else {
+		logWriter = io.MultiWriter(logFile, os.Stdout)
+	}
 	conf := LogConf{LogLevel: level, FilePath: filePath}
 	err = conf.Write()
 	if err != nil {
@@ -54,9 +69,9 @@ func NewLogger(level LogLevel, filePath string) Logger {
 	return Logger{conf: conf, level: level, formatStr: "{ascTime}: [{level}] - {message}", logFile: logFile, logWriter: logWriter}
 }
 
-// FromName loads an existing Logger instance from disk.
+// Rebuild loads an existing Logger instance from disk.
 // It parses the conf file in `/tmp/resetti.json` and builds a new Logger instance.
-func FromName() Logger {
+func Rebuild() Logger {
 	conf, err := ConfRead()
 	if err != nil {
 		fmt.Printf("Conf error: %s", err)
@@ -78,6 +93,20 @@ func (l *Logger) SetLevel(level LogLevel) {
 	if err != nil {
 		fmt.Printf("Log update error: %s\n", err)
 		os.Exit(1)
+	}
+}
+
+// SetConsole sets the output type for the Logger instance.
+func (l *Logger) SetConsole(disableConsole bool) {
+	if disableConsole {
+		nullFile, err := os.OpenFile(os.DevNull, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Printf("Log update error: %s\n", err)
+			os.Exit(1)
+		}
+		l.logWriter = io.MultiWriter(l.logFile, nullFile)
+	} else {
+		l.logWriter = io.MultiWriter(l.logFile, os.Stdout)
 	}
 }
 
@@ -158,31 +187,31 @@ func (l *Logger) Verbose(message string, args ...any) {
 
 // Error is a wrapper function that re-creates the logger instance from config and writes to it.
 func Error(message string, args ...any) {
-	logger := FromName()
+	logger := Rebuild()
 	logger.Error(message, args...)
 }
 
 // Warn is a wrapper function that re-creates the logger instance from config and writes to it.
 func Warn(message string, args ...any) {
-	logger := FromName()
+	logger := Rebuild()
 	logger.Warn(message, args...)
 }
 
 // Info is a wrapper function that re-creates the logger instance from config and writes to it.
 func Info(message string, args ...any) {
-	logger := FromName()
+	logger := Rebuild()
 	logger.Info(message, args...)
 }
 
 // Debug is a wrapper function that re-creates the logger instance from config and writes to it.
 func Debug(message string, args ...any) {
-	logger := FromName()
+	logger := Rebuild()
 	logger.Debug(message, args...)
 }
 
 // Verbose is a wrapper function that re-creates the logger instance from config and writes to it.
 func Verbose(message string, args ...any) {
-	logger := FromName()
+	logger := Rebuild()
 	logger.Verbose(message, args...)
 }
 
