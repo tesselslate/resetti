@@ -25,7 +25,7 @@ func main() {
 		logPath = "/tmp/resetti.log"
 	}
 
-	logger := log.DefaultLogger(log.INFO, logPath)
+	logger := log.DefaultLogger(log.INFO, logPath, false)
 	logger.Info("Started Logger")
 	defer func() {
 		logger.Close()
