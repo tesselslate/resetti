@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"runtime"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/woofdoggo/resetti/internal/cfg"
 	"github.com/woofdoggo/resetti/internal/ctl"
+	"github.com/woofdoggo/resetti/internal/log"
 	"github.com/woofdoggo/resetti/internal/mc"
 	"github.com/woofdoggo/resetti/internal/res"
 	"github.com/woofdoggo/resetti/internal/x11"
@@ -88,18 +88,22 @@ func main() {
 }
 
 func run(opts Options) int {
+	logger := log.DefaultLogger(log.INFO, "", false)
+	defer func() {
+		logger.Close()
+	}()
 	// Setup
 	x, err := x11.NewClient()
 	if err != nil {
-		log.Fatalln(err)
+		log.Error(err.Error())
 	}
 	instances, err := mc.FindInstances(&x)
 	if err != nil {
-		log.Fatalln(err)
+		log.Error(err.Error())
 	}
 	if opts.InstanceCount != 0 {
 		if len(instances) < opts.InstanceCount {
-			log.Fatalf("Found %d of %d instances\n", len(instances), opts.InstanceCount)
+			log.Error("Found %d of %d instances\n", len(instances), opts.InstanceCount)
 		}
 		instances = instances[:opts.InstanceCount]
 	}
@@ -118,13 +122,13 @@ func run(opts Options) int {
 	}
 	mgr, err := mc.NewManager(instances, conf, &x)
 	if err != nil {
-		log.Fatalln(err)
+		log.Error(err.Error())
 	}
 	states := mgr.GetStates()
 	if opts.Affinity == "sequence" || opts.Affinity == "ccx" {
 		_, err := ctl.NewCpuManager(instances, states, conf)
 		if err != nil {
-			log.Fatalln(err)
+			log.Error(err.Error())
 		}
 	}
 
@@ -132,10 +136,10 @@ func run(opts Options) int {
 	if opts.Pprof {
 		profile, err := os.OpenFile(fmt.Sprintf("/tmp/resetti-prof-%d", rand.Uint64()), os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
-			log.Fatalln(err)
+			log.Error(err.Error())
 		}
 		if err = pprof.StartCPUProfile(profile); err != nil {
-			log.Fatalln(err)
+			log.Error(err.Error())
 		}
 		defer func() {
 			pprof.StopCPUProfile()
@@ -144,20 +148,9 @@ func run(opts Options) int {
 		}()
 	}
 
-	// Log output
-	if opts.Fancy {
-		fh, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		log.SetOutput(fh)
-		defer func() {
-			_ = fh.Close()
-			// Print a newline since the progress bar does not.
-			fmt.Println()
-		}()
-	} else {
-		log.SetOutput(os.Stderr)
+	// Setup log outputs
+	if !opts.Fancy {
+		logger.SetConsole(false)
 	}
 
 	// Warmup instances
@@ -226,7 +219,7 @@ func run(opts Options) int {
 				}
 			}
 		case err := <-errch:
-			log.Fatalln(err)
+			log.Error(err.Error())
 		}
 	}
 	if !opts.PauseAfter {
@@ -245,7 +238,7 @@ func run(opts Options) int {
 				paused += 1
 			}
 		case err := <-errch:
-			log.Fatalln(err)
+			log.Error(err.Error())
 		}
 	}
 	return 0
