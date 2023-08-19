@@ -68,7 +68,7 @@ type Wall struct {
 	// Preview percentage to show instances at.
 	ShowAt int `toml:"show_at"`
 
-	WallWindow string `toml:"wall_window"` // Name of the wall window 
+	WallWindow string `toml:"wall_window"` // Name of the wall window
 
 	// Instance moving settings.
 	Moving struct {
@@ -358,6 +358,11 @@ func validateProfile(conf *Profile) error {
 		}
 	default:
 		return fmt.Errorf("invalid affinity setting %q", conf.Wall.Perf.Affinity)
+	}
+
+	// Fill missing configuration options
+	if conf.Wall.WallWindow == "" {
+		conf.Wall.WallWindow = "Projector (Scene) - Wall"
 	}
 	return nil
 }
