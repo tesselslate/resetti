@@ -123,7 +123,7 @@ func (p *ProjectorController) findProjector() error {
 		if err != nil {
 			continue
 		}
-		if strings.Contains(title, "Projector (Scene) - Wall") {
+		if strings.Contains(title, p.conf.Wall.WallWindow) {
 			return p.updateProjector(win)
 		}
 	}
