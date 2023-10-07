@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/woofdoggo/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/log"
 	"golang.org/x/exp/slices"
 )
 

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/log"
 )
 
 // counter keeps track of the number of resets performed and writes them to a

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/woofdoggo/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/log"
 )
 
 // Instance state names

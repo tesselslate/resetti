@@ -1,4 +1,4 @@
-module github.com/woofdoggo/resetti
+module github.com/tesselslate/resetti
 
 go 1.20
 

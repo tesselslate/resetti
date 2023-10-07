@@ -154,14 +154,14 @@ IDs start at 0 and increase sequentially (0, 1, 2, .. n).
 ## Setting up OBS
 
 If using OBS, you will need to perform some additional setup. Refer to the
-[OBS document](https://github.com/woofdoggo/resetti/blob/main/doc/obs.md) for
+[OBS document](https://github.com/tesselslate/resetti/blob/main/doc/obs.md) for
 more information.
 
 ## Optimization and Fixes
 
 On most distributions, the out-of-the-box experience playing Minecraft is quite
-subpar. Refer to the [optimization document](https://github.com/woofdoggo/resetti/blob/main/doc/optimization.md)
-and [common issues](https://github.com/woofdoggo/resetti/blob/main/doc/common-issues.md)
+subpar. Refer to the [optimization document](https://github.com/tesselslate/resetti/blob/main/doc/optimization.md)
+and [common issues](https://github.com/tesselslate/resetti/blob/main/doc/common-issues.md)
 for more information.
 
 ## Configuring resetti
@@ -178,13 +178,13 @@ or `$HOME/.config/resetti/PROFILE_NAME.toml` if `$XDG_CONFIG_HOME` is unset.
 
 The generated configuration profile will contain all of the available options
 with some documentation comments to explain their purpose. You may find the
-[configuration document](https://github.com/woofdoggo/resetti/blob/main/doc/configuration.md)
+[configuration document](https://github.com/tesselslate/resetti/blob/main/doc/configuration.md)
 helpful for more detailed information on certain settings.
 
 ## Running
 
 Congratulations! Once you've set everything up, you can get started by simply
-running `resetti PROFILE_NAME`. Refer to the [usage document](https://github.com/woofdoggo/resetti/blob/main/doc/usage.md)
+running `resetti PROFILE_NAME`. Refer to the [usage document](https://github.com/tesselslate/resetti/blob/main/doc/usage.md)
 for more information on how to use resetti once you've started it.
 
 - If you've configured affinity, it may prompt you for root privileges to

@@ -31,7 +31,7 @@ in version 3.3.3 of GLFW.
 Setting your mouse sensitivity with libinput's `Coordinate Transformation Matrix`
 property causes cursor warping to break entirely. There is no upstream fix
 yet, but the issue [is known.](https://github.com/glfw/glfw/issues/1860) You can
-fix it by applying [this patch](https://github.com/woofdoggo/resetti/blob/main/contrib/glfw-xinput.patch)
+fix it by applying [this patch](https://github.com/tesselslate/resetti/blob/main/contrib/glfw-xinput.patch)
 and [building GLFW from source](#building-glfw-from-source).
 
 #### Building GLFW from source
@@ -46,7 +46,7 @@ so do not build from master. Checkout the 3.3.8 tag.
 
 If you use glibc, then your instances will use an egregious amount of memory
 (their RSS will likely climb to several times the max heap size.) See the
-[optimization document](https://github.com/woofdoggo/resetti/blob/main/doc/optimization.md)
+[optimization document](https://github.com/tesselslate/resetti/blob/main/doc/optimization.md)
 for information on how to reduce memory usage.
 
 ### Flickering chunk borders

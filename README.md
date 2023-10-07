@@ -25,7 +25,7 @@ makepkg -si
 
 ### From distro-specific packages
 
-Check the [Releases](https://github.com/woofdoggo/resetti/releases) tab for
+Check the [Releases](https://github.com/tesselslate/resetti/releases) tab for
 distro-specific packages (deb or rpm) or download the latest development builds from the
 [Discord](https://discord.gg/fwZA2VJh7k).
 
@@ -35,21 +35,21 @@ If you have [Go](https://go.dev) installed, you can install from source:
 
 ```sh
 # Stable
-env CGO_ENABLED=0 go install -ldflags="-s -w" github.com/woofdoggo/resetti@latest
+env CGO_ENABLED=0 go install -ldflags="-s -w" github.com/tesselslate/resetti@latest
 
 # Dev
-env CGO_ENABLED=0 go install -ldflags="-s -w" github.com/woofdoggo/resetti@dev
+env CGO_ENABLED=0 go install -ldflags="-s -w" github.com/tesselslate/resetti@dev
 ```
 
 ### From binary
 
-You can download the latest version from the [Releases](https://github.com/woofdoggo/resetti/releases)
+You can download the latest version from the [Releases](https://github.com/tesselslate/resetti/releases)
 tab and place it somewhere on your `$PATH`. All binaries are statically linked
 and built for AMD64 (x86-64) systems.
 
 ## Usage
 
-You can refer to the [documentation](https://github.com/woofdoggo/resetti/blob/main/doc/README.md)
+You can refer to the [documentation](https://github.com/tesselslate/resetti/blob/main/doc/README.md)
 for detailed usage instructions.
 
 Please report any bugs which you encounter. resetti is still beta software and
@@ -91,7 +91,7 @@ open an issue to discuss the changes you'd like to make.
 ## License
 
 resetti is licensed under the GNU General Public License v3 ONLY, no later
-version. You can view the full license [here](https://raw.githubusercontent.com/woofdoggo/resetti/main/LICENSE).
+version. You can view the full license [here](https://raw.githubusercontent.com/tesselslate/resetti/main/LICENSE).
 
 ## Prior Art
 

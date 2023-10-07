@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/ctl"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/res"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/ctl"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/res"
 )
 
 //go:embed .notice

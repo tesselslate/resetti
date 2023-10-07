@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/mc"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/mc"
 )
 
 // Affinity groups

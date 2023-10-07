@@ -5,7 +5,7 @@ drop various write-once scripts and other files. If you are creating a package
 for a distribution, you are able to overwrite this directory at build time.
 
 ```sh
-go build -ldflags="-X 'github.com/woofdoggo/resetti/internal/res.overrideDataDir=/YOUR_DIR'"
+go build -ldflags="-X 'github.com/tesselslate/resetti/internal/res.overrideDataDir=/YOUR_DIR'"
 ```
 
 Add the above `-ldflags="..."` argument to your build invocation and change

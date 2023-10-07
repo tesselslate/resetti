@@ -5,11 +5,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/mc"
-	"github.com/woofdoggo/resetti/internal/obs"
-	"github.com/woofdoggo/resetti/internal/x11"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/mc"
+	"github.com/tesselslate/resetti/internal/obs"
+	"github.com/tesselslate/resetti/internal/x11"
 )
 
 // Wall implements a standard "Wall" interface, where the user can see all of

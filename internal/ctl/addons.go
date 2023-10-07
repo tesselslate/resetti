@@ -3,10 +3,10 @@ package ctl
 import (
 	"fmt"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/mc"
-	"github.com/woofdoggo/resetti/internal/obs"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/mc"
+	"github.com/tesselslate/resetti/internal/obs"
 )
 
 // freezer freezes and unfreezes instances as their states change.

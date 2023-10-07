@@ -11,12 +11,12 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/ctl"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/mc"
-	"github.com/woofdoggo/resetti/internal/res"
-	"github.com/woofdoggo/resetti/internal/x11"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/ctl"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/mc"
+	"github.com/tesselslate/resetti/internal/res"
+	"github.com/tesselslate/resetti/internal/x11"
 )
 
 type Options struct {

@@ -9,7 +9,7 @@ Click the icon in the upper left to view the table of contents.
 ## Benchmarking
 
 resetti has a simple benchmark utility to test the reset speed of your instances.
-It can be downloaded from the [Releases](https://github.com/woofdoggo/resetti/releases)
+It can be downloaded from the [Releases](https://github.com/tesselslate/resetti/releases)
 page (or it may come with a package.)
 
 > When starting up your instances, benchmark results can be wildly variable and
@@ -49,7 +49,7 @@ page (or it may come with a package.)
 
 resetti has a number of configuration options for CPU affinity, which can make
 your resets faster and your ingame experience smoother. See the
-[configuration document](https://github.com/woofdoggo/resetti/blob/main/doc/configuration.md)
+[configuration document](https://github.com/tesselslate/resetti/blob/main/doc/configuration.md)
 for more information.
 
 ## Garbage collection tuning

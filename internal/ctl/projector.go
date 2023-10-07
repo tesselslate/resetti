@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/jezek/xgb/xproto"
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/obs"
-	"github.com/woofdoggo/resetti/internal/x11"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/obs"
+	"github.com/tesselslate/resetti/internal/x11"
 	"golang.org/x/exp/slices"
 )
 

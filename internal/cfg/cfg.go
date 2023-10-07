@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/res"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/res"
 )
 
 // The number of CPUs on the user's system.

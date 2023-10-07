@@ -12,10 +12,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/woofdoggo/resetti/internal/cfg"
-	"github.com/woofdoggo/resetti/internal/log"
-	"github.com/woofdoggo/resetti/internal/mc"
-	"github.com/woofdoggo/resetti/internal/res"
+	"github.com/tesselslate/resetti/internal/cfg"
+	"github.com/tesselslate/resetti/internal/log"
+	"github.com/tesselslate/resetti/internal/mc"
+	"github.com/tesselslate/resetti/internal/res"
 	"golang.org/x/exp/slices"
 )
 

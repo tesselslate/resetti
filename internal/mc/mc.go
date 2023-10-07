@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/jezek/xgb/xproto"
-	"github.com/woofdoggo/resetti/internal/x11"
+	"github.com/tesselslate/resetti/internal/x11"
 )
 
 // List of WorldPreview jar hashes that support wpstateout.txt.
