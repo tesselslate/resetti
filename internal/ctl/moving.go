@@ -246,8 +246,8 @@ func (m *MovingWall) getHitbox(input Input) (hitbox, bool) {
 	x, y := m.proj.ToVideo(input.X, input.Y)
 	var hits []hitbox
 	for _, hitbox := range m.hitboxes {
-		a := x >= int(hitbox.box.X) && x <= int(hitbox.box.X+hitbox.box.W)
-		b := y >= int(hitbox.box.Y) && y <= int(hitbox.box.Y+hitbox.box.H)
+		a := x >= int(hitbox.box.X) && x <= int(hitbox.box.X)+int(hitbox.box.W)
+		b := y >= int(hitbox.box.Y) && y <= int(hitbox.box.Y)+int(hitbox.box.H)
 		if a && b && hitbox.clickable {
 			hits = append(hits, hitbox)
 		}
@@ -304,8 +304,8 @@ func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 			break
 		}
 		box := cfg.Rectangle{
-			X: group.Space.X + (x * instWidth),
-			Y: group.Space.Y + (y * instHeight),
+			X: group.Space.X + int32(x*instWidth),
+			Y: group.Space.Y + int32(y*instHeight),
 			W: instWidth,
 			H: instHeight,
 		}

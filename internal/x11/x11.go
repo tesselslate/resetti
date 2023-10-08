@@ -381,12 +381,12 @@ func (c *Client) GrabPointer(win xproto.Window, confine bool) error {
 }
 
 // MoveWindow moves and resizes the given window.
-func (c *Client) MoveWindow(win xproto.Window, x, y, w, h uint32) {
+func (c *Client) MoveWindow(win xproto.Window, x, y int32, w, h uint32) {
 	xproto.ConfigureWindow(
 		c.conn,
 		win,
 		maskWindow,
-		[]uint32{x, y, w, h},
+		[]uint32{uint32(x), uint32(y), w, h},
 	)
 }
 

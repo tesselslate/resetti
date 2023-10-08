@@ -180,7 +180,7 @@ func (p *ProjectorController) updateProjector(win xproto.Window) error {
 	}
 	p.display.W = uint32(p.scale * float64(p.BaseWidth))
 	p.display.H = uint32(p.scale * float64(p.BaseHeight))
-	p.display.X = uint32(p.winWidth/2) - (p.display.W / 2)
-	p.display.Y = uint32(p.winHeight/2) - (p.display.H / 2)
+	p.display.X = int32(p.winWidth/2) - int32(p.display.W/2)
+	p.display.Y = int32(p.winHeight/2) - int32(p.display.H/2)
 	return nil
 }

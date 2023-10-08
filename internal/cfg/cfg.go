@@ -150,7 +150,8 @@ type Group struct {
 
 // Rectangle is a rectangle. That's it.
 type Rectangle struct {
-	X, Y, W, H uint32
+	X, Y int32
+	W, H uint32
 }
 
 // getCpuCount finds the user's CPU count through /sys.
