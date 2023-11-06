@@ -25,9 +25,9 @@ var forceCgroups = slices.Contains(os.Args, "--force-cgroups")
 // A list of common setuid binaries. Used for getting root privileges to run
 // the cgroup setup script.
 var suidBinaries = [...]string{
+	"pkexec",
 	"sudo",
 	"doas",
-	"pkexec",
 }
 
 // CpuManager controls how much CPU time is given to each instance bsaed on its state.
