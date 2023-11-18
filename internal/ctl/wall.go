@@ -300,6 +300,7 @@ func (w *Wall) promptWallSize() error {
 // resetIngame resets the active instance.
 func (w *Wall) resetIngame() {
 	w.host.ResetInstance(w.active)
+	w.host.RunHook(HookReset)
 	if w.freezer != nil {
 		w.freezer.Unfreeze(w.active)
 	}
@@ -322,7 +323,6 @@ func (w *Wall) resetIngame() {
 	}
 	w.host.DeleteSleepbgLock(false)
 	w.obs.SetScene("Wall")
-	w.host.RunHook(HookReset)
 }
 
 // playFirstLocked plays the first idle, locked instance.

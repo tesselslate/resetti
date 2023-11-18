@@ -375,6 +375,7 @@ func (m *MovingWall) removeFromQueue(id int) {
 // resetIngame resets the active instance.
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
+	m.host.RunHook(HookReset)
 	if m.freezer != nil {
 		m.freezer.Unfreeze(m.active)
 	}
@@ -388,7 +389,6 @@ func (m *MovingWall) resetIngame() {
 	}
 	m.host.DeleteSleepbgLock(false)
 	m.obs.SetScene("Wall")
-	m.host.RunHook(HookReset)
 }
 
 // setLocked sets the lock state of the given instance.
