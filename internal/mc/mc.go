@@ -165,18 +165,31 @@ func hasModernWp(dir string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("read dir: %w", err)
 	}
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".jar") {
-			continue
-		}
-		archive, err := zip.OpenReader(dir + "/mods/" + entry.Name())
+
+	checkZip := func(name string) (bool, error) {
+		archive, err := zip.OpenReader(dir + "/mods/" + name)
 		if err != nil {
-			return false, fmt.Errorf("open zip %q: %w", entry.Name(), err)
+			return false, fmt.Errorf("open zip %q: %w", name, err)
 		}
+		defer func() {
+			_ = archive.Close()
+		}()
+
 		for _, file := range archive.File {
 			if stateOutputClasses[file.Name] {
 				return true, nil
 			}
+		}
+		return false, nil
+	}
+
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".jar") {
+			continue
+		}
+		ok, err := checkZip(entry.Name())
+		if ok || err != nil {
+			return ok, err
 		}
 	}
 	return false, nil
