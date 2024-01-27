@@ -3,8 +3,7 @@
 package mc
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
+	"archive/zip"
 	"errors"
 	"fmt"
 	"os"
@@ -17,11 +16,10 @@ import (
 	"github.com/tesselslate/resetti/internal/x11"
 )
 
-// List of WorldPreview jar hashes that support wpstateout.txt.
-var wpHashes = map[string]bool{
-	"c8893b913e0e9692ba1344e067f611ddd26a9779": true, // 1.15.2 build 3
-	"042d4fa41bef26b5727d6977820a37aad829f2af": true, // 1.16.1 build 3
-	"5398cb2adf4ddf99fa96e479b68d54c7d0ad9f0c": true, // 1.16.1 build 4
+// List of mod class names that indicate state output support.
+var stateOutputClasses = map[string]bool{
+	"me/voidxwalker/worldpreview/StateOutputHelper.class": true,
+	"xyz/tildejustin/stateoutput/":                        true,
 }
 
 // InstanceInfo contains information about how to interact with a Minecraft
@@ -168,20 +166,17 @@ func hasModernWp(dir string) (bool, error) {
 		return false, fmt.Errorf("read dir: %w", err)
 	}
 	for _, entry := range entries {
-		// This is probably a safe assumption.
-		if !strings.Contains(strings.ToLower(entry.Name()), "preview") {
-			continue
-		}
 		if !strings.HasSuffix(entry.Name(), ".jar") {
 			continue
 		}
-		jar, err := os.ReadFile(dir + "/mods/" + entry.Name())
+		archive, err := zip.OpenReader(dir + "/mods/" + entry.Name())
 		if err != nil {
-			return false, fmt.Errorf("read %s: %w", entry.Name(), err)
+			return false, fmt.Errorf("open zip %q: %w", entry.Name(), err)
 		}
-		hash := sha1.Sum(jar)
-		if wpHashes[hex.EncodeToString(hash[:])] {
-			return true, nil
+		for _, file := range archive.File {
+			if stateOutputClasses[file.Name] {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
