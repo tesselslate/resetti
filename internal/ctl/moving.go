@@ -324,11 +324,20 @@ func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 func (m *MovingWall) layoutObs() {
 	m.obs.BatchAsync(obs.SerialFrame, func(b *obs.Batch) {
 		visible := make([]bool, len(m.instances))
+		var minIndex int = 1e2
+		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
+			h := m.hitboxes[i]
+			name := fmt.Sprintf("Wall MC %d", h.id+1)
+			idx := b.GetSceneItemIndex("Wall", name)
+			if minIndex > idx {
+				minIndex = idx
+			}
+		}
 		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
 			h := m.hitboxes[i]
 			visible[h.id] = true
 			name := fmt.Sprintf("Wall MC %d", h.id+1)
-			b.SetItemIndex("Wall", name, 0)
+			b.SetItemIndex("Wall", name, minIndex)
 			b.SetItemBounds(
 				"Wall",
 				name,

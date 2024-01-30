@@ -49,6 +49,14 @@ func (b *Batch) SetItemIndex(scene, name string, index int) {
 	b.requests = append(b.requests, req)
 }
 
+func (b *Batch) GetSceneItemIndex(scene, name string) int {
+	idx, err := b.client.GetSceneItemIndex(scene, name)
+	if err != nil {
+		panic(batchError{err})
+	}
+	return idx
+}
+
 func (b *Batch) SetItemVisibility(scene, name string, visible bool) {
 	id, err := b.client.getSceneItemId(scene, name)
 	if err != nil {
