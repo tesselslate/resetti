@@ -90,7 +90,15 @@ func (w *Wall) Input(input Input) {
 			case cfg.ActionIngameFocus:
 				w.host.FocusInstance(w.active)
 			case cfg.ActionIngameRes:
-				w.host.ToggleResolution(w.active)
+				if action.Extra != nil {
+					resId := *action.Extra
+					if resId < 0 || resId > len(w.conf.AltRes)-1 {
+						continue
+					}
+					w.host.ToggleResolution(w.active, resId)
+				} else {
+					w.host.ToggleResolution(w.active, 0)
+				}
 			}
 		}
 	} else {

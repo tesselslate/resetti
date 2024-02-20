@@ -127,7 +127,7 @@ type Profile struct {
 	UnpauseFocus bool       `toml:"unpause_focus"` // Whether to unpause on focus
 	PollRate     int        `toml:"poll_rate"`     // Polling rate for input handling
 	NormalRes    *Rectangle `toml:"play_res"`      // Normal resolution
-	AltRes       *Rectangle `toml:"alt_res"`       // Alternate ingame resolution
+	AltRes       AltRes     `toml:"alt_res"`       // Alternate ingame resolution
 
 	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`
@@ -279,8 +279,10 @@ func validateProfile(conf *Profile) error {
 	if !validateRectangle(conf.NormalRes) {
 		return errors.New("invalid playing resolution")
 	}
-	if !validateRectangle(conf.AltRes) {
-		return errors.New("invalid alternate resolution")
+	for idx, res := range conf.AltRes {
+		if !validateRectangle(&res) {
+			return fmt.Errorf("invalid alternate resolution at index %d", idx)
+		}
 	}
 	alt := conf.AltRes != nil
 	normal := conf.NormalRes != nil

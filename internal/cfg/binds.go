@@ -69,6 +69,9 @@ type Bind struct {
 	str string
 }
 
+// AltRes represents a list of alternate resolutions.
+type AltRes []Rectangle
+
 // UnmarshalTOML implements toml.Unmarshaler.
 func (a *ActionList) UnmarshalTOML(value any) error {
 	actionsRaw, ok := value.([]any)
@@ -110,6 +113,9 @@ func (a *ActionList) UnmarshalTOML(value any) error {
 				if typ >= ActionWallLock && typ <= ActionWallResetOthers {
 					a.WallActions = append(a.WallActions, Action{typ, &num})
 					uniqueWall[Action{typ, &num}] = true
+				} else if typ == ActionIngameRes {
+					a.IngameActions = append(a.IngameActions, Action{typ, &num})
+					uniqueGame[Action{typ, &num}] = true
 				} else {
 					return fmt.Errorf("action %q cannot have number", actionStr)
 				}
@@ -174,6 +180,35 @@ func (b *Bind) UnmarshalTOML(value any) error {
 		return errors.New("can only use one key or button per bind")
 	}
 	b.str = str
+	return nil
+}
+
+// UnmarshalTOML implements toml.Unmarshaler.
+func (a *AltRes) UnmarshalTOML(value any) error {
+	str, ok := value.(string)
+	if !ok {
+		resListRaw, ok := value.([]any)
+		if !ok {
+			return errors.New("parse alt_res as a single resolution or a list of resolutions")
+		}
+		for _, raw := range resListRaw {
+			var res Rectangle
+			resStr, ok := raw.(string)
+			if !ok {
+				return errors.New("parse alt_res as a list of resolutions")
+			}
+			if err := res.UnmarshalTOML(resStr); err != nil {
+				return fmt.Errorf("parse alternate resolution: %w", err)
+			}
+			*a = append(*a, res)
+		}
+	} else {
+		var res Rectangle
+		if err := res.UnmarshalTOML(str); err != nil {
+			return fmt.Errorf("parse alternate resolution: %w", err)
+		}
+		*a = append(*a, res)
+	}
 	return nil
 }
 

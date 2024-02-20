@@ -62,7 +62,15 @@ func (m *Multi) Input(input Input) {
 				m.host.RunHook(HookReset)
 			}
 		case cfg.ActionIngameRes:
-			m.host.ToggleResolution(m.active)
+			if action.Extra != nil {
+				resId := *action.Extra
+				if resId < 0 || resId > len(m.conf.AltRes)-1 {
+					continue
+				}
+				m.host.ToggleResolution(m.active, resId)
+			} else {
+				m.host.ToggleResolution(m.active, 0)
+			}
 		}
 	}
 }
