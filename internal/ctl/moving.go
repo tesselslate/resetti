@@ -336,6 +336,7 @@ func (m *MovingWall) layoutObs() {
 		idx, err := m.obs.GetSceneItemIndex("Wall", fmt.Sprintf("Wall MC %d", i))
 		if err != nil {
 			log.Error("Failed to get Z index for Wall MC %d: %s", i, err)
+			continue
 		}
 		if idx < minIndex {
 			minIndex = idx
