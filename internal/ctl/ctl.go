@@ -310,8 +310,8 @@ func (c *Controller) FocusInstance(id int) {
 	c.manager.Focus(id)
 }
 
-// ToggleResolution switches the given instance between the normal and alternate
-// resolution.
+// ToggleResolution switches the given instance between the normal (play)
+// resolution and the given alternate resolution.
 func (c *Controller) ToggleResolution(id int, resId int) {
 	if c.manager.ToggleResolution(id, resId) {
 		c.RunHook(HookAltRes)

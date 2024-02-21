@@ -238,8 +238,9 @@ func (m *Manager) Focus(id int) {
 	}
 }
 
-// ToggleResolution switches the given instance between the normal and alternate
-// resolution and returns whether or not it is now on the alternate resolution.
+// ToggleResolution switches the given instance between the normal (play)
+// resolution and the given alternate resolution. It returns whether or not
+// the instance is now using the alternate resolution.
 func (m *Manager) ToggleResolution(id int, resId int) bool {
 	if m.instances[id].altRes {
 		m.setResolution(id, m.conf.NormalRes)

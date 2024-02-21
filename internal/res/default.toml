@@ -18,8 +18,9 @@ play_res = "1920x1080+0,0"
 
 # An alternate resolution that can be toggled to while ingame. Delete this if
 # you do not want to use e.g. thin or tall window.
-# You can even declare this as a list of resolutions.
-# Eg: alt_res = ["400x1080+810,0", "1920x300+0,390"]
+#
+# You can declare multiple resolutions, like so:
+# alt_res = ["400x1080+810,0", "1920x300+0,390"]
 alt_res = "400x1080+810,0"
 
 # The delay section contains delays (in milliseconds) before performing various
@@ -83,8 +84,8 @@ wall_reset = ""
 # Available actions:
 # - ingame_focus            Focus active instance.
 # - ingame_reset            Reset active instance.
-# - ingame_toggle_res       Toggle the resolution for active instance.
-# - ingame_toggle_res(n)    Toggle the resolution N for active instance.
+# - ingame_toggle_res(n)    Toggle resolution N for the active instance.
+#                           The list of alternate resolutions starts with N=0.
 # - wall_focus              Focus wall projector.
 # - wall_reset_all          Reset all unlocked instances.
 # - wall_lock               Lock hovered instance.

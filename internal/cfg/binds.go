@@ -185,29 +185,28 @@ func (b *Bind) UnmarshalTOML(value any) error {
 
 // UnmarshalTOML implements toml.Unmarshaler.
 func (a *AltRes) UnmarshalTOML(value any) error {
-	str, ok := value.(string)
-	if !ok {
-		resListRaw, ok := value.([]any)
-		if !ok {
-			return errors.New("parse alt_res as a single resolution or a list of resolutions")
+	switch value := value.(type) {
+	case string:
+		rect, err := parseRectangle(value)
+		if err != nil {
+			return err
 		}
-		for _, raw := range resListRaw {
-			var res Rectangle
-			resStr, ok := raw.(string)
+		*a = append(*a, rect)
+	case []any:
+		for i, raw := range value {
+			res, ok := raw.(string)
 			if !ok {
-				return errors.New("parse alt_res as a list of resolutions")
+				return fmt.Errorf("parse alt_res %d: non-string value", i)
 			}
-			if err := res.UnmarshalTOML(resStr); err != nil {
-				return fmt.Errorf("parse alternate resolution: %w", err)
+
+			rect, err := parseRectangle(res)
+			if err != nil {
+				return fmt.Errorf("parse alt_res %d: %w", i, err)
 			}
-			*a = append(*a, res)
+			*a = append(*a, rect)
 		}
-	} else {
-		var res Rectangle
-		if err := res.UnmarshalTOML(str); err != nil {
-			return fmt.Errorf("parse alternate resolution: %w", err)
-		}
-		*a = append(*a, res)
+	default:
+		return fmt.Errorf("alt_res has invalid type %T", value)
 	}
 	return nil
 }
