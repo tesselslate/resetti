@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/tesselslate/resetti/internal/cfg"
@@ -330,17 +331,19 @@ func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 // layoutObs adjusts the position of each instance on the wall scene according
 // to their positions in queue or in the locked group.
 func (m *MovingWall) layoutObs() {
+	minIndex := math.MaxInt
+	for i := 1; i <= len(m.hitboxes); i += 1 {
+		idx, err := m.obs.GetSceneItemIndex("Wall", fmt.Sprintf("Wall MC %d", i))
+		if err != nil {
+			log.Error("Failed to get Z index for Wall MC %d: %s", i, err)
+		}
+		if idx < minIndex {
+			minIndex = idx
+		}
+	}
+
 	m.obs.BatchAsync(obs.SerialFrame, func(b *obs.Batch) {
 		visible := make([]bool, len(m.instances))
-		var minIndex int = 1e2
-		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
-			h := m.hitboxes[i]
-			name := fmt.Sprintf("Wall MC %d", h.id+1)
-			idx := b.GetSceneItemIndex("Wall", name)
-			if minIndex > idx {
-				minIndex = idx
-			}
-		}
 		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
 			h := m.hitboxes[i]
 			visible[h.id] = true
