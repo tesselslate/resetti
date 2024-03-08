@@ -20,6 +20,7 @@ import (
 var stateOutputClasses = map[string]bool{
 	"me/voidxwalker/worldpreview/StateOutputHelper.class": true,
 	"xyz/tildejustin/stateoutput/":                        true,
+	"dev/tildejustin/stateoutput/":                        true,
 }
 
 // InstanceInfo contains information about how to interact with a Minecraft
