@@ -31,7 +31,6 @@ type MovingWall struct {
 
 	proj    ProjectorController
 	freezer *freezer
-	hider   *hider
 }
 
 // hitbox contains information about the state of an instance on the projector.
@@ -67,9 +66,6 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	m.obs.SetScene("Wall")
 	if m.conf.Wall.FreezeAt > 0 {
 		m.freezer = newFreezer(deps.conf, deps.obs, deps.states)
-	}
-	if m.conf.Wall.ShowAt >= 0 {
-		m.hider = newHider(deps.conf, deps.obs, deps.states)
 	}
 
 	// Fill the queue with all instances.
@@ -217,23 +213,14 @@ func (m *MovingWall) Update(update mc.Update) {
 	if m.freezer != nil {
 		m.freezer.Update(update)
 	}
-	if m.hider != nil {
-		if m.hider.ShouldShow(update) {
-			if !slices.Contains(m.queue, update.Id) {
-				m.queue = append(m.queue, update.Id)
-				m.layout()
-			}
-		}
-	} else {
-		prev := m.states[update.Id].Type
-		next := update.State.Type
-		if !slices.Contains(m.queue, update.Id) && !slices.Contains(m.locks, update.Id) {
-			nowPreview := prev != mc.StPreview && next == mc.StPreview
-			catchIdle := next == mc.StIdle
-			if nowPreview || catchIdle {
-				m.queue = append(m.queue, update.Id)
-				m.layout()
-			}
+	prev := m.states[update.Id].Type
+	next := update.State.Type
+	if !slices.Contains(m.queue, update.Id) && !slices.Contains(m.locks, update.Id) {
+		nowPreview := prev != mc.StPreview && next == mc.StPreview
+		catchIdle := next == mc.StIdle
+		if nowPreview || catchIdle {
+			m.queue = append(m.queue, update.Id)
+			m.layout()
 		}
 	}
 	m.states[update.Id] = update.State
