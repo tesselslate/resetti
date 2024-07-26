@@ -75,6 +75,10 @@ type AltRes []Rectangle
 // AltResHook represents a list of hooks to run for each alternate resolution (in order).
 type AltResHook []string
 
+// AltResHook represents a list of hooks to run for each alternate resolution (in order)
+// when switching from that resolution to the normal resolution.
+type NormalResHook []string
+
 // UnmarshalTOML implements toml.Unmarshaler.
 func (a *ActionList) UnmarshalTOML(value any) error {
 	actionsRaw, ok := value.([]any)
@@ -229,6 +233,25 @@ func (a *AltResHook) UnmarshalTOML(value any) error {
 		}
 	default:
 		return fmt.Errorf("alt_res hook has invalid type %T", value)
+	}
+	return nil
+}
+
+// UnmarshalTOML implements toml.Unmarshaler.
+func (a *NormalResHook) UnmarshalTOML(value any) error {
+	switch value := value.(type) {
+	case string:
+		*a = append(*a, value)
+	case []any:
+		for i, raw := range value {
+			hook, ok := raw.(string)
+			if !ok {
+				return fmt.Errorf("parse normal_res hook %d: non-string value", i)
+			}
+			*a = append(*a, hook)
+		}
+	default:
+		return fmt.Errorf("normal_res hook has invalid type %T", value)
 	}
 	return nil
 }

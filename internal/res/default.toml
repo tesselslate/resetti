@@ -65,6 +65,9 @@ reset = ""
 alt_res = ""
 
 # Run when the user switches to their normal resolution.
+# Make sure to have hooks for each of the alt_res's (in order) if you used more than one above.
+# You'd need to configure to run when switching from the alt_res to normal_res.
+# You can do it like so: [ "echo Hello1", "echo Hello2" ]
 normal_res = ""
 
 # Run when an instance is locked on the wall.

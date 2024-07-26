@@ -30,13 +30,13 @@ type Delays struct {
 // Hooks contains various commands to run whenever the user performs certain
 // actions.
 type Hooks struct {
-	Reset      string     `toml:"reset"`       // Command to run on ingame reset
-	AltRes     AltResHook `toml:"alt_res"`     // Command to run on alternate resolution
-	NormalRes  string     `toml:"normal_res"`  // Command to run on normal resolution
-	WallLock   string     `toml:"wall_lock"`   // Command to run on wall reset
-	WallUnlock string     `toml:"wall_unlock"` // Command to run on wall unlock
-	WallPlay   string     `toml:"wall_play"`   // Command to run on wall play
-	WallReset  string     `toml:"wall_reset"`  // Command to run on wall reset
+	Reset      string        `toml:"reset"`       // Command to run on ingame reset
+	AltRes     AltResHook    `toml:"alt_res"`     // Command to run on alternate resolution
+	NormalRes  NormalResHook `toml:"normal_res"`  // Command to run on normal resolution
+	WallLock   string        `toml:"wall_lock"`   // Command to run on wall reset
+	WallUnlock string        `toml:"wall_unlock"` // Command to run on wall unlock
+	WallPlay   string        `toml:"wall_play"`   // Command to run on wall play
+	WallReset  string        `toml:"wall_reset"`  // Command to run on wall reset
 }
 
 // Keybinds contains the user's keybindings.

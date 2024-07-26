@@ -125,7 +125,7 @@ func Run(conf *cfg.Profile) error {
 	c.hooks = map[int][]string{
 		HookReset:     {c.conf.Hooks.Reset},
 		HookAltRes:    c.conf.Hooks.AltRes,
-		HookNormalRes: {c.conf.Hooks.NormalRes},
+		HookNormalRes: c.conf.Hooks.NormalRes,
 		HookLock:      {c.conf.Hooks.WallLock},
 		HookUnlock:    {c.conf.Hooks.WallUnlock},
 		HookWallPlay:  {c.conf.Hooks.WallPlay},
@@ -316,15 +316,9 @@ func (c *Controller) FocusInstance(id int) {
 // resolution and the given alternate resolution.
 func (c *Controller) ToggleResolution(id int, resId int) {
 	if c.manager.ToggleResolution(id, resId) {
-		err := c.RunHook(HookAltRes, resId)
-		if err != nil {
-			log.Error("ToggleResolution: Failed to run hook: %s", err)
-		}
+		c.RunHook(HookAltRes, resId)
 	} else {
-		err := c.RunHook(HookNormalRes, 0)
-		if err != nil {
-			log.Error("ToggleResolution: Failed to run hook: %s", err)
-		}
+		c.RunHook(HookNormalRes, resId)
 	}
 }
 
@@ -357,13 +351,14 @@ func (c *Controller) ResetInstance(id int) bool {
 }
 
 // RunHook runs the hook of the given type if it exists.
-func (c *Controller) RunHook(hook int, hookId int) error {
+func (c *Controller) RunHook(hook int, hookId int) {
 	if hookId >= len(c.hooks[hook]) {
-		return fmt.Errorf("RunHook: hook id %d out of bounds", hookId)
+		log.Error("RunHook: hook id %d out of bounds", hookId)
+		return
 	}
 	cmdStr := c.hooks[hook][hookId]
 	if cmdStr == "" {
-		return nil
+		return
 	}
 	go func() {
 		bin, rawArgs, ok := strings.Cut(cmdStr, " ")
@@ -377,7 +372,6 @@ func (c *Controller) RunHook(hook int, hookId int) error {
 			log.Error("RunHook (%d) failed: %s", hook, err)
 		}
 	}()
-	return nil
 }
 
 // SetPriority sets the priority of the instance in the CPU manager.

@@ -383,10 +383,7 @@ func (m *MovingWall) removeFromQueue(id int) {
 // resetIngame resets the active instance.
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
-	err := m.host.RunHook(HookReset, 0)
-	if err != nil {
-		log.Error("resetIngame: Failed to run hook: %s", err)
-	}
+	m.host.RunHook(HookReset, 0)
 	if m.freezer != nil {
 		m.freezer.Unfreeze(m.active)
 	}
@@ -445,10 +442,7 @@ func (m *MovingWall) wallPlay(id int) {
 	m.active = id
 	m.proj.Unfocus()
 	m.host.PlayInstance(id)
-	err := m.host.RunHook(HookWallPlay, 0)
-	if err != nil {
-		log.Error("wallPlay: Failed to run hook %s", err)
-	}
+	m.host.RunHook(HookWallPlay, 0)
 	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(m.instances); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
