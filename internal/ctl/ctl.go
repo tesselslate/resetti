@@ -55,7 +55,7 @@ type Controller struct {
 	binds    map[cfg.Bind]cfg.ActionList
 	inputMgr inputManager
 	inputs   <-chan Input
-	hooks    map[int]string
+	hooks    map[int][]string
 
 	obsErrors <-chan error
 	mgrErrors <-chan error
@@ -122,14 +122,14 @@ func Run(conf *cfg.Profile) error {
 	c.dbg = &debugLogger{&c}
 	c.conf = conf
 	c.binds = make(map[cfg.Bind]cfg.ActionList)
-	c.hooks = map[int]string{
-		HookReset:     c.conf.Hooks.Reset,
+	c.hooks = map[int][]string{
+		HookReset:     {c.conf.Hooks.Reset},
 		HookAltRes:    c.conf.Hooks.AltRes,
-		HookNormalRes: c.conf.Hooks.NormalRes,
-		HookLock:      c.conf.Hooks.WallLock,
-		HookUnlock:    c.conf.Hooks.WallUnlock,
-		HookWallPlay:  c.conf.Hooks.WallPlay,
-		HookWallReset: c.conf.Hooks.WallReset,
+		HookNormalRes: {c.conf.Hooks.NormalRes},
+		HookLock:      {c.conf.Hooks.WallLock},
+		HookUnlock:    {c.conf.Hooks.WallUnlock},
+		HookWallPlay:  {c.conf.Hooks.WallPlay},
+		HookWallReset: {c.conf.Hooks.WallReset},
 	}
 
 	x, err := x11.NewClient()
@@ -243,7 +243,7 @@ func Run(conf *cfg.Profile) error {
 
 	log.Info("Ready.")
 	go c.dbg.Run()
-	err = c.run(ctx)
+	err = c.run()
 	if err != nil {
 		fmt.Println("Failed to run:", err)
 	}
@@ -310,13 +310,19 @@ func (c *Controller) FocusInstance(id int) {
 	c.manager.Focus(id)
 }
 
-// ToggleResolution switches the given instance between the normal and alternate
-// resolution.
+// ToggleResolution switches the given instance between the normal (play)
+// resolution and the given alternate resolution.
 func (c *Controller) ToggleResolution(id int, resId int) {
 	if c.manager.ToggleResolution(id, resId) {
-		c.RunHook(HookAltRes)
+		err := c.RunHook(HookAltRes, resId)
+		if err != nil {
+			log.Error("ToggleResolution: Failed to run hook: %s", err)
+		}
 	} else {
-		c.RunHook(HookNormalRes)
+		err := c.RunHook(HookNormalRes, 0)
+		if err != nil {
+			log.Error("ToggleResolution: Failed to run hook: %s", err)
+		}
 	}
 }
 
@@ -349,10 +355,13 @@ func (c *Controller) ResetInstance(id int) bool {
 }
 
 // RunHook runs the hook of the given type if it exists.
-func (c *Controller) RunHook(hook int) {
-	cmdStr := c.hooks[hook]
+func (c *Controller) RunHook(hook int, hookId int) error {
+	if hookId >= len(c.hooks[hook]) {
+		return fmt.Errorf("RunHook: hook id %d out of bounds", hookId)
+	}
+	cmdStr := c.hooks[hook][hookId]
 	if cmdStr == "" {
-		return
+		return nil
 	}
 	go func() {
 		bin, rawArgs, ok := strings.Cut(cmdStr, " ")
@@ -366,6 +375,7 @@ func (c *Controller) RunHook(hook int) {
 			log.Error("RunHook (%d) failed: %s", hook, err)
 		}
 	}()
+	return nil
 }
 
 // SetPriority sets the priority of the instance in the CPU manager.
@@ -376,7 +386,7 @@ func (c *Controller) SetPriority(id int, prio bool) {
 }
 
 // run runs the main loop for the controller.
-func (c *Controller) run(ctx context.Context) error {
+func (c *Controller) run() error {
 	for {
 		select {
 		case sig := <-c.signals:

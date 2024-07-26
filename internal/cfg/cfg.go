@@ -30,13 +30,13 @@ type Delays struct {
 // Hooks contains various commands to run whenever the user performs certain
 // actions.
 type Hooks struct {
-	Reset      string `toml:"reset"`       // Command to run on ingame reset
-	AltRes     string `toml:"alt_res"`     // Command to run on alternate resolution
-	NormalRes  string `toml:"normal_res"`  // Command to run on normal resolution
-	WallLock   string `toml:"wall_lock"`   // Command to run on wall reset
-	WallUnlock string `toml:"wall_unlock"` // Command to run on wall unlock
-	WallPlay   string `toml:"wall_play"`   // Command to run on wall play
-	WallReset  string `toml:"wall_reset"`  // Command to run on wall reset
+	Reset      string     `toml:"reset"`       // Command to run on ingame reset
+	AltRes     AltResHook `toml:"alt_res"`     // Command to run on alternate resolution
+	NormalRes  string     `toml:"normal_res"`  // Command to run on normal resolution
+	WallLock   string     `toml:"wall_lock"`   // Command to run on wall reset
+	WallUnlock string     `toml:"wall_unlock"` // Command to run on wall unlock
+	WallPlay   string     `toml:"wall_play"`   // Command to run on wall play
+	WallReset  string     `toml:"wall_reset"`  // Command to run on wall reset
 }
 
 // Keybinds contains the user's keybindings.
@@ -128,6 +128,7 @@ type Profile struct {
 	PollRate     int        `toml:"poll_rate"`     // Polling rate for input handling
 	NormalRes    *Rectangle `toml:"play_res"`      // Normal resolution
 	AltRes       AltRes     `toml:"alt_res"`       // Alternate ingame resolution
+	DisablePause bool       `toml:"disable_pause"` // Disable pausing
 
 	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`
@@ -281,7 +282,11 @@ func validateProfile(conf *Profile) error {
 	}
 	for idx, res := range conf.AltRes {
 		if !validateRectangle(&res) {
-			return fmt.Errorf("invalid alternate resolution at index %d", idx)
+			if len(conf.AltRes) == 1 {
+				return errors.New("invalid alternate resolution")
+			} else {
+				return fmt.Errorf("invalid alternate resolution %v at index %d", res, idx)
+			}
 		}
 	}
 	alt := conf.AltRes != nil
@@ -370,6 +375,19 @@ func validateProfile(conf *Profile) error {
 	return nil
 }
 
+// parseRectangle attempts to parse the string representation of a Rectangle.
+func parseRectangle(raw string) (Rectangle, error) {
+	r := Rectangle{}
+	n, err := fmt.Sscanf(raw, "%dx%d+%d,%d", &r.W, &r.H, &r.X, &r.Y)
+	if err != nil {
+		return r, err
+	}
+	if n != 4 {
+		return r, errors.New("missing rectangle dimensions")
+	}
+	return r, nil
+}
+
 // validateRectangle ensures the rectangle has a size.
 func validateRectangle(r *Rectangle) bool {
 	return r == nil || r.W > 0 && r.H > 0
@@ -381,12 +399,10 @@ func (r *Rectangle) UnmarshalTOML(value any) error {
 	if !ok {
 		return errors.New("rectangle value was not a string")
 	}
-	n, err := fmt.Sscanf(str, "%dx%d+%d,%d", &r.W, &r.H, &r.X, &r.Y)
+	rect, err := parseRectangle(str)
 	if err != nil {
 		return err
 	}
-	if n != 4 {
-		return errors.New("missing rectangle dimensions")
-	}
+	*r = rect
 	return nil
 }

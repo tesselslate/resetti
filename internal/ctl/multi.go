@@ -59,7 +59,7 @@ func (m *Multi) Input(input Input) {
 				m.host.PlayInstance(next)
 				m.active = next
 				m.updateObs()
-				m.host.RunHook(HookReset)
+				m.host.RunHook(HookReset, 0)
 			}
 		case cfg.ActionIngameRes:
 			if action.Extra != nil {

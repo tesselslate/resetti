@@ -18,9 +18,15 @@ play_res = "1920x1080+0,0"
 
 # An alternate resolution that can be toggled to while ingame. Delete this if
 # you do not want to use e.g. thin or tall window.
-# You can even declare this as a list of resolutions.
-# Eg: alt_res = ["400x1080+810,0", "1920x300+0,390"]
+#
+# You can declare multiple resolutions, like so:
+# alt_res = ["400x1080+810,0", "1920x300+0,390"]
 alt_res = "400x1080+810,0"
+
+# Disable pausing using F3+Esc altogether.
+# Required for SeedQueue if you just want resetti
+# to handle alternate resolutions.
+no_pause = false
 
 # The delay section contains delays (in milliseconds) before performing various
 # actions. These defaults are completely arbitrary. Increase relevant delays if
@@ -50,6 +56,8 @@ warp = 0
 reset = ""
 
 # Run when the user switches to their alternate resolution.
+# Make sure to have hooks for each of the alt_res's (in order) if you used more than one above.
+# You can do it like so: [ "echo Hello1", "echo Hello2" ]
 alt_res = ""
 
 # Run when the user switches to their normal resolution.
@@ -83,8 +91,8 @@ wall_reset = ""
 # Available actions:
 # - ingame_focus            Focus active instance.
 # - ingame_reset            Reset active instance.
-# - ingame_toggle_res       Toggle the resolution for active instance.
-# - ingame_toggle_res(n)    Toggle the resolution N for active instance.
+# - ingame_toggle_res(n)    Toggle resolution N for the active instance.
+#                           The list of alternate resolutions starts with N=0.
 # - wall_focus              Focus wall projector.
 # - wall_reset_all          Reset all unlocked instances.
 # - wall_lock               Lock hovered instance.
