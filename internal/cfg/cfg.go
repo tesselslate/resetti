@@ -129,6 +129,7 @@ type Profile struct {
 	NormalRes    *Rectangle `toml:"play_res"`      // Normal resolution
 	AltRes       AltRes     `toml:"alt_res"`       // Alternate ingame resolution
 	DisablePause bool       `toml:"disable_pause"` // Disable pausing
+	UtilityMode  bool       `toml:"utility_mode"`  // Utility mode
 
 	Delay    Delays   `toml:"delay"`
 	Hooks    Hooks    `toml:"hooks"`

@@ -48,9 +48,12 @@ func (m *Multi) Input(input Input) {
 	for _, action := range actions.IngameActions {
 		switch action.Type {
 		case cfg.ActionIngameFocus:
+			if m.conf.UtilityMode {
+				continue
+			}
 			m.host.FocusInstance(m.active)
 		case cfg.ActionIngameReset:
-			if m.x.GetActiveWindow() != m.instances[m.active].Wid {
+			if m.conf.UtilityMode || m.x.GetActiveWindow() != m.instances[m.active].Wid {
 				continue
 			}
 			next := (m.active + 1) % len(m.states)
@@ -82,12 +85,15 @@ func (m *Multi) ProcessEvent(x11.Event) {
 
 // Update implements Frontend.
 func (m *Multi) Update(update mc.Update) {
+	if m.conf.UtilityMode {
+		return
+	}
 	m.states[update.Id] = update.State
 }
 
 // updateObs changes which instance is visible on the OBS scene.
 func (m *Multi) updateObs() {
-	if !m.conf.Obs.Enabled {
+	if m.conf.UtilityMode || !m.conf.Obs.Enabled {
 		return
 	}
 	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {

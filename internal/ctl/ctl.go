@@ -160,7 +160,7 @@ func Run(conf *cfg.Profile) error {
 	}
 
 	c.obs = &obs.Client{}
-	if conf.Obs.Enabled {
+	if !conf.UtilityMode && conf.Obs.Enabled {
 		obsErrors, err := c.obs.Connect(ctx, conf.Obs.Port, conf.Obs.Password)
 		if err != nil {
 			return fmt.Errorf("(init) create OBS client: %w", err)
@@ -187,7 +187,7 @@ func Run(conf *cfg.Profile) error {
 		}
 	}
 
-	if c.conf.Wall.Enabled {
+	if !conf.UtilityMode && conf.Wall.Enabled {
 		if c.conf.Wall.Perf.Affinity != "" {
 			states := c.manager.GetStates()
 			c.cpu, err = NewCpuManager(instances, states, conf)
@@ -197,7 +197,7 @@ func Run(conf *cfg.Profile) error {
 		}
 	}
 
-	if c.conf.Wall.Enabled {
+	if !c.conf.UtilityMode && c.conf.Wall.Enabled {
 		if c.conf.Wall.Moving.Enabled {
 			c.frontend = &MovingWall{}
 		} else {
@@ -227,7 +227,9 @@ func Run(conf *cfg.Profile) error {
 	errch := make(chan error, 1)
 	c.mgrEvents = evtch
 	c.mgrErrors = errch
-	go c.manager.Run(ctx, evtch, errch)
+	if !conf.UtilityMode {
+		go c.manager.Run(ctx, evtch, errch)
+	}
 	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
