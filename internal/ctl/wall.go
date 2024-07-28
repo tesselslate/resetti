@@ -90,7 +90,18 @@ func (w *Wall) Input(input Input) {
 			case cfg.ActionIngameFocus:
 				w.host.FocusInstance(w.active)
 			case cfg.ActionIngameRes:
-				w.host.ToggleResolution(w.active)
+				if w.x.GetActiveWindow() != w.instances[w.active].Wid {
+					continue
+				}
+				if action.Extra != nil {
+					resId := *action.Extra
+					if resId < 0 || resId > len(w.conf.AltRes)-1 {
+						continue
+					}
+					w.host.ToggleResolution(w.active, resId)
+				} else {
+					w.host.ToggleResolution(w.active, 0)
+				}
 			}
 		}
 	} else {
@@ -300,7 +311,7 @@ func (w *Wall) promptWallSize() error {
 // resetIngame resets the active instance.
 func (w *Wall) resetIngame() {
 	w.host.ResetInstance(w.active)
-	w.host.RunHook(HookReset)
+	w.host.RunHook(HookReset, 0)
 	if w.freezer != nil {
 		w.freezer.Unfreeze(w.active)
 	}
@@ -354,9 +365,9 @@ func (w *Wall) wallLock(id int) {
 	}
 	w.setLocked(id, lock)
 	if lock {
-		w.host.RunHook(HookLock)
+		w.host.RunHook(HookLock, 0)
 	} else {
-		w.host.RunHook(HookUnlock)
+		w.host.RunHook(HookUnlock, 0)
 		if w.conf.Wall.ResetUnlock {
 			w.wallReset(id)
 		}
@@ -370,7 +381,7 @@ func (w *Wall) wallPlay(id int) {
 	w.proj.Unfocus()
 	w.host.PlayInstance(id)
 
-	w.host.RunHook(HookWallPlay)
+	w.host.RunHook(HookWallPlay, 0)
 	w.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(w.instances); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
@@ -402,7 +413,7 @@ func (w *Wall) wallReset(id int) {
 				1,
 			)
 		}
-		w.host.RunHook(HookWallReset)
+		w.host.RunHook(HookWallReset, 0)
 	}
 }
 

@@ -55,7 +55,7 @@ type Controller struct {
 	binds    map[cfg.Bind]cfg.ActionList
 	inputMgr inputManager
 	inputs   <-chan Input
-	hooks    map[int]string
+	hooks    map[int][]string
 
 	obsErrors <-chan error
 	mgrErrors <-chan error
@@ -122,14 +122,14 @@ func Run(conf *cfg.Profile) error {
 	c.dbg = &debugLogger{&c}
 	c.conf = conf
 	c.binds = make(map[cfg.Bind]cfg.ActionList)
-	c.hooks = map[int]string{
-		HookReset:     c.conf.Hooks.Reset,
+	c.hooks = map[int][]string{
+		HookReset:     {c.conf.Hooks.Reset},
 		HookAltRes:    c.conf.Hooks.AltRes,
 		HookNormalRes: c.conf.Hooks.NormalRes,
-		HookLock:      c.conf.Hooks.WallLock,
-		HookUnlock:    c.conf.Hooks.WallUnlock,
-		HookWallPlay:  c.conf.Hooks.WallPlay,
-		HookWallReset: c.conf.Hooks.WallReset,
+		HookLock:      {c.conf.Hooks.WallLock},
+		HookUnlock:    {c.conf.Hooks.WallUnlock},
+		HookWallPlay:  {c.conf.Hooks.WallPlay},
+		HookWallReset: {c.conf.Hooks.WallReset},
 	}
 
 	x, err := x11.NewClient()
@@ -160,7 +160,7 @@ func Run(conf *cfg.Profile) error {
 	}
 
 	c.obs = &obs.Client{}
-	if conf.Obs.Enabled {
+	if !conf.UtilityMode && conf.Obs.Enabled {
 		obsErrors, err := c.obs.Connect(ctx, conf.Obs.Port, conf.Obs.Password)
 		if err != nil {
 			return fmt.Errorf("(init) create OBS client: %w", err)
@@ -187,7 +187,7 @@ func Run(conf *cfg.Profile) error {
 		}
 	}
 
-	if c.conf.Wall.Enabled {
+	if !conf.UtilityMode && conf.Wall.Enabled {
 		if c.conf.Wall.Perf.Affinity != "" {
 			states := c.manager.GetStates()
 			c.cpu, err = NewCpuManager(instances, states, conf)
@@ -197,7 +197,7 @@ func Run(conf *cfg.Profile) error {
 		}
 	}
 
-	if c.conf.Wall.Enabled {
+	if !c.conf.UtilityMode && c.conf.Wall.Enabled {
 		if c.conf.Wall.Moving.Enabled {
 			c.frontend = &MovingWall{}
 		} else {
@@ -227,7 +227,9 @@ func Run(conf *cfg.Profile) error {
 	errch := make(chan error, 1)
 	c.mgrEvents = evtch
 	c.mgrErrors = errch
-	go c.manager.Run(ctx, evtch, errch)
+	if !conf.UtilityMode {
+		go c.manager.Run(ctx, evtch, errch)
+	}
 	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
@@ -243,7 +245,7 @@ func Run(conf *cfg.Profile) error {
 
 	log.Info("Ready.")
 	go c.dbg.Run()
-	err = c.run(ctx)
+	err = c.run()
 	if err != nil {
 		fmt.Println("Failed to run:", err)
 	}
@@ -310,13 +312,13 @@ func (c *Controller) FocusInstance(id int) {
 	c.manager.Focus(id)
 }
 
-// ToggleResolution switches the given instance between the normal and alternate
-// resolution.
-func (c *Controller) ToggleResolution(id int) {
-	if c.manager.ToggleResolution(id) {
-		c.RunHook(HookAltRes)
+// ToggleResolution switches the given instance between the normal (play)
+// resolution and the given alternate resolution.
+func (c *Controller) ToggleResolution(id int, resId int) {
+	if c.manager.ToggleResolution(id, resId) {
+		c.RunHook(HookAltRes, resId)
 	} else {
-		c.RunHook(HookNormalRes)
+		c.RunHook(HookNormalRes, resId)
 	}
 }
 
@@ -349,8 +351,12 @@ func (c *Controller) ResetInstance(id int) bool {
 }
 
 // RunHook runs the hook of the given type if it exists.
-func (c *Controller) RunHook(hook int) {
-	cmdStr := c.hooks[hook]
+func (c *Controller) RunHook(hook int, hookId int) {
+	if hookId >= len(c.hooks[hook]) {
+		log.Error("RunHook: hook id %d out of bounds", hookId)
+		return
+	}
+	cmdStr := c.hooks[hook][hookId]
 	if cmdStr == "" {
 		return
 	}
@@ -376,7 +382,7 @@ func (c *Controller) SetPriority(id int, prio bool) {
 }
 
 // run runs the main loop for the controller.
-func (c *Controller) run(ctx context.Context) error {
+func (c *Controller) run() error {
 	for {
 		select {
 		case sig := <-c.signals:

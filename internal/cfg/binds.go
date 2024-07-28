@@ -69,6 +69,16 @@ type Bind struct {
 	str string
 }
 
+// AltRes represents a list of alternate resolutions.
+type AltRes []Rectangle
+
+// AltResHook represents a list of hooks to run for each alternate resolution (in order).
+type AltResHook []string
+
+// AltResHook represents a list of hooks to run for each alternate resolution (in order)
+// when switching from that resolution to the normal resolution.
+type NormalResHook []string
+
 // UnmarshalTOML implements toml.Unmarshaler.
 func (a *ActionList) UnmarshalTOML(value any) error {
 	actionsRaw, ok := value.([]any)
@@ -110,6 +120,9 @@ func (a *ActionList) UnmarshalTOML(value any) error {
 				if typ >= ActionWallLock && typ <= ActionWallResetOthers {
 					a.WallActions = append(a.WallActions, Action{typ, &num})
 					uniqueWall[Action{typ, &num}] = true
+				} else if typ == ActionIngameRes {
+					a.IngameActions = append(a.IngameActions, Action{typ, &num})
+					uniqueGame[Action{typ, &num}] = true
 				} else {
 					return fmt.Errorf("action %q cannot have number", actionStr)
 				}
@@ -174,6 +187,72 @@ func (b *Bind) UnmarshalTOML(value any) error {
 		return errors.New("can only use one key or button per bind")
 	}
 	b.str = str
+	return nil
+}
+
+// UnmarshalTOML implements toml.Unmarshaler.
+func (a *AltRes) UnmarshalTOML(value any) error {
+	switch value := value.(type) {
+	case string:
+		rect, err := parseRectangle(value)
+		if err != nil {
+			return err
+		}
+		*a = append(*a, rect)
+	case []any:
+		for i, raw := range value {
+			res, ok := raw.(string)
+			if !ok {
+				return fmt.Errorf("parse alt_res %d: non-string value", i)
+			}
+
+			rect, err := parseRectangle(res)
+			if err != nil {
+				return fmt.Errorf("parse alt_res %d: %w", i, err)
+			}
+			*a = append(*a, rect)
+		}
+	default:
+		return fmt.Errorf("alt_res has invalid type %T", value)
+	}
+	return nil
+}
+
+// UnmarshalTOML implements toml.Unmarshaler.
+func (a *AltResHook) UnmarshalTOML(value any) error {
+	switch value := value.(type) {
+	case string:
+		*a = append(*a, value)
+	case []any:
+		for i, raw := range value {
+			hook, ok := raw.(string)
+			if !ok {
+				return fmt.Errorf("parse alt_res hook %d: non-string value", i)
+			}
+			*a = append(*a, hook)
+		}
+	default:
+		return fmt.Errorf("alt_res hook has invalid type %T", value)
+	}
+	return nil
+}
+
+// UnmarshalTOML implements toml.Unmarshaler.
+func (a *NormalResHook) UnmarshalTOML(value any) error {
+	switch value := value.(type) {
+	case string:
+		*a = append(*a, value)
+	case []any:
+		for i, raw := range value {
+			hook, ok := raw.(string)
+			if !ok {
+				return fmt.Errorf("parse normal_res hook %d: non-string value", i)
+			}
+			*a = append(*a, hook)
+		}
+	default:
+		return fmt.Errorf("normal_res hook has invalid type %T", value)
+	}
 	return nil
 }
 

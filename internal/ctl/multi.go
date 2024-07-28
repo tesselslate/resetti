@@ -45,24 +45,40 @@ func (m *Multi) Input(input Input) {
 	if input.Held {
 		return
 	}
-	for _, action := range actions.IngameActions {
-		switch action.Type {
-		case cfg.ActionIngameFocus:
-			m.host.FocusInstance(m.active)
-		case cfg.ActionIngameReset:
-			if m.x.GetActiveWindow() != m.instances[m.active].Wid {
-				continue
+	if m.active != -1 {
+		for _, action := range actions.IngameActions {
+			switch action.Type {
+			case cfg.ActionIngameFocus:
+				if m.conf.UtilityMode {
+					continue
+				}
+				m.host.FocusInstance(m.active)
+			case cfg.ActionIngameReset:
+				if m.conf.UtilityMode || m.x.GetActiveWindow() != m.instances[m.active].Wid {
+					continue
+				}
+				next := (m.active + 1) % len(m.states)
+				current := m.active
+				if m.host.ResetInstance(current) {
+					m.host.PlayInstance(next)
+					m.active = next
+					m.updateObs()
+					m.host.RunHook(HookReset, 0)
+				}
+			case cfg.ActionIngameRes:
+				if m.x.GetActiveWindow() != m.instances[m.active].Wid {
+					continue
+				}
+				if action.Extra != nil {
+					resId := *action.Extra
+					if resId < 0 || resId > len(m.conf.AltRes)-1 {
+						continue
+					}
+					m.host.ToggleResolution(m.active, resId)
+				} else {
+					m.host.ToggleResolution(m.active, 0)
+				}
 			}
-			next := (m.active + 1) % len(m.states)
-			current := m.active
-			if m.host.ResetInstance(current) {
-				m.host.PlayInstance(next)
-				m.active = next
-				m.updateObs()
-				m.host.RunHook(HookReset)
-			}
-		case cfg.ActionIngameRes:
-			m.host.ToggleResolution(m.active)
 		}
 	}
 }
@@ -74,12 +90,15 @@ func (m *Multi) ProcessEvent(x11.Event) {
 
 // Update implements Frontend.
 func (m *Multi) Update(update mc.Update) {
+	if m.conf.UtilityMode {
+		return
+	}
 	m.states[update.Id] = update.State
 }
 
 // updateObs changes which instance is visible on the OBS scene.
 func (m *Multi) updateObs() {
-	if !m.conf.Obs.Enabled {
+	if m.conf.UtilityMode || !m.conf.Obs.Enabled {
 		return
 	}
 	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {

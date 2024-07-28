@@ -145,6 +145,9 @@ func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- err
 				}
 			}
 		case id := <-m.pause:
+			if m.conf.DisablePause {
+				continue
+			}
 			state := m.instances[id].state.Type
 			if state == StPreview || state == StIdle {
 				m.sendKeyDown(id, x11.KeyF3)
@@ -238,13 +241,14 @@ func (m *Manager) Focus(id int) {
 	}
 }
 
-// ToggleResolution switches the given instance between the normal and alternate
-// resolution and returns whether or not it is now on the alternate resolution.
-func (m *Manager) ToggleResolution(id int) bool {
+// ToggleResolution switches the given instance between the normal (play)
+// resolution and the given alternate resolution. It returns whether or not
+// the instance is now using the alternate resolution.
+func (m *Manager) ToggleResolution(id int, resId int) bool {
 	if m.instances[id].altRes {
 		m.setResolution(id, m.conf.NormalRes)
 	} else {
-		m.setResolution(id, m.conf.AltRes)
+		m.setResolution(id, &m.conf.AltRes[resId])
 	}
 	m.instances[id].altRes = !m.instances[id].altRes
 	m.Focus(id)

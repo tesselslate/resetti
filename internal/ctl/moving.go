@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/tesselslate/resetti/internal/cfg"
@@ -30,7 +31,6 @@ type MovingWall struct {
 
 	proj    ProjectorController
 	freezer *freezer
-	hider   *hider
 }
 
 // hitbox contains information about the state of an instance on the projector.
@@ -67,9 +67,6 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 	if m.conf.Wall.FreezeAt > 0 {
 		m.freezer = newFreezer(deps.conf, deps.obs, deps.states)
 	}
-	if m.conf.Wall.ShowAt >= 0 {
-		m.hider = newHider(deps.conf, deps.obs, deps.states)
-	}
 
 	// Fill the queue with all instances.
 	for i := range deps.instances {
@@ -100,7 +97,18 @@ func (m *MovingWall) Input(input Input) {
 			case cfg.ActionIngameFocus:
 				m.host.FocusInstance(m.active)
 			case cfg.ActionIngameRes:
-				m.host.ToggleResolution(m.active)
+				if m.x.GetActiveWindow() != m.instances[m.active].Wid {
+					return
+				}
+				if action.Extra != nil {
+					resId := *action.Extra
+					if resId < 0 || resId > len(m.conf.AltRes)-1 {
+						continue
+					}
+					m.host.ToggleResolution(m.active, resId)
+				} else {
+					m.host.ToggleResolution(m.active, 0)
+				}
 			}
 		}
 	} else {
@@ -208,23 +216,14 @@ func (m *MovingWall) Update(update mc.Update) {
 	if m.freezer != nil {
 		m.freezer.Update(update)
 	}
-	if m.hider != nil {
-		if m.hider.ShouldShow(update) {
-			if !slices.Contains(m.queue, update.Id) {
-				m.queue = append(m.queue, update.Id)
-				m.layout()
-			}
-		}
-	} else {
-		prev := m.states[update.Id].Type
-		next := update.State.Type
-		if !slices.Contains(m.queue, update.Id) && !slices.Contains(m.locks, update.Id) {
-			nowPreview := prev != mc.StPreview && next == mc.StPreview
-			catchIdle := next == mc.StIdle
-			if nowPreview || catchIdle {
-				m.queue = append(m.queue, update.Id)
-				m.layout()
-			}
+	prev := m.states[update.Id].Type
+	next := update.State.Type
+	if !slices.Contains(m.queue, update.Id) && !slices.Contains(m.locks, update.Id) {
+		nowPreview := prev != mc.StPreview && next == mc.StPreview
+		catchIdle := next == mc.StIdle
+		if nowPreview || catchIdle {
+			m.queue = append(m.queue, update.Id)
+			m.layout()
 		}
 	}
 	m.states[update.Id] = update.State
@@ -322,13 +321,25 @@ func (m *MovingWall) layoutGroup(group cfg.Group, startZ int, instances []int) {
 // layoutObs adjusts the position of each instance on the wall scene according
 // to their positions in queue or in the locked group.
 func (m *MovingWall) layoutObs() {
+	minIndex := math.MaxInt
+	for i := 1; i <= len(m.hitboxes); i += 1 {
+		idx, err := m.obs.GetSceneItemIndex("Wall", fmt.Sprintf("Wall MC %d", i))
+		if err != nil {
+			log.Error("Failed to get Z index for Wall MC %d: %s", i, err)
+			continue
+		}
+		if idx < minIndex {
+			minIndex = idx
+		}
+	}
+
 	m.obs.BatchAsync(obs.SerialFrame, func(b *obs.Batch) {
 		visible := make([]bool, len(m.instances))
 		for i := len(m.hitboxes) - 1; i >= 0; i -= 1 {
 			h := m.hitboxes[i]
 			visible[h.id] = true
 			name := fmt.Sprintf("Wall MC %d", h.id+1)
-			b.SetItemIndex("Wall", name, 0)
+			b.SetItemIndex("Wall", name, minIndex)
 			b.SetItemBounds(
 				"Wall",
 				name,
@@ -375,7 +386,7 @@ func (m *MovingWall) removeFromQueue(id int) {
 // resetIngame resets the active instance.
 func (m *MovingWall) resetIngame() {
 	m.host.ResetInstance(m.active)
-	m.host.RunHook(HookReset)
+	m.host.RunHook(HookReset, 0)
 	if m.freezer != nil {
 		m.freezer.Unfreeze(m.active)
 	}
@@ -416,9 +427,9 @@ func (m *MovingWall) wallLock(id int) {
 	if lock {
 		idx := slices.Index(m.queue, id)
 		m.queue[idx] = -1
-		m.host.RunHook(HookLock)
+		m.host.RunHook(HookLock, 0)
 	} else {
-		m.host.RunHook(HookUnlock)
+		m.host.RunHook(HookUnlock, 0)
 		if m.conf.Wall.ResetUnlock {
 			m.wallReset(id)
 		}
@@ -434,7 +445,7 @@ func (m *MovingWall) wallPlay(id int) {
 	m.active = id
 	m.proj.Unfocus()
 	m.host.PlayInstance(id)
-	m.host.RunHook(HookWallPlay)
+	m.host.RunHook(HookWallPlay, 0)
 	m.obs.BatchAsync(obs.SerialRealtime, func(b *obs.Batch) {
 		for i := 1; i <= len(m.instances); i += 1 {
 			b.SetItemVisibility("Instance", fmt.Sprintf("MC %d", i), i-1 == id)
@@ -456,7 +467,7 @@ func (m *MovingWall) wallReset(id int) {
 		if m.freezer != nil {
 			m.freezer.Unfreeze(id)
 		}
-		m.host.RunHook(HookWallReset)
+		m.host.RunHook(HookWallReset, 0)
 	} else {
 		m.queue = append(m.queue, id)
 	}
