@@ -90,6 +90,9 @@ func (w *Wall) Input(input Input) {
 			case cfg.ActionIngameFocus:
 				w.host.FocusInstance(w.active)
 			case cfg.ActionIngameRes:
+				if w.x.GetActiveWindow() != w.instances[w.active].Wid {
+					continue
+				}
 				if action.Extra != nil {
 					resId := *action.Extra
 					if resId < 0 || resId > len(w.conf.AltRes)-1 {

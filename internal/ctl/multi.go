@@ -45,34 +45,39 @@ func (m *Multi) Input(input Input) {
 	if input.Held {
 		return
 	}
-	for _, action := range actions.IngameActions {
-		switch action.Type {
-		case cfg.ActionIngameFocus:
-			if m.conf.UtilityMode {
-				continue
-			}
-			m.host.FocusInstance(m.active)
-		case cfg.ActionIngameReset:
-			if m.conf.UtilityMode || m.x.GetActiveWindow() != m.instances[m.active].Wid {
-				continue
-			}
-			next := (m.active + 1) % len(m.states)
-			current := m.active
-			if m.host.ResetInstance(current) {
-				m.host.PlayInstance(next)
-				m.active = next
-				m.updateObs()
-				m.host.RunHook(HookReset, 0)
-			}
-		case cfg.ActionIngameRes:
-			if action.Extra != nil {
-				resId := *action.Extra
-				if resId < 0 || resId > len(m.conf.AltRes)-1 {
+	if m.active != -1 {
+		for _, action := range actions.IngameActions {
+			switch action.Type {
+			case cfg.ActionIngameFocus:
+				if m.conf.UtilityMode {
 					continue
 				}
-				m.host.ToggleResolution(m.active, resId)
-			} else {
-				m.host.ToggleResolution(m.active, 0)
+				m.host.FocusInstance(m.active)
+			case cfg.ActionIngameReset:
+				if m.conf.UtilityMode || m.x.GetActiveWindow() != m.instances[m.active].Wid {
+					continue
+				}
+				next := (m.active + 1) % len(m.states)
+				current := m.active
+				if m.host.ResetInstance(current) {
+					m.host.PlayInstance(next)
+					m.active = next
+					m.updateObs()
+					m.host.RunHook(HookReset, 0)
+				}
+			case cfg.ActionIngameRes:
+				if m.x.GetActiveWindow() != m.instances[m.active].Wid {
+					continue
+				}
+				if action.Extra != nil {
+					resId := *action.Extra
+					if resId < 0 || resId > len(m.conf.AltRes)-1 {
+						continue
+					}
+					m.host.ToggleResolution(m.active, resId)
+				} else {
+					m.host.ToggleResolution(m.active, 0)
+				}
 			}
 		}
 	}
