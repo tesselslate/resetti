@@ -26,14 +26,13 @@ var stateOutputClasses = map[string]bool{
 // InstanceInfo contains information about how to interact with a Minecraft
 // instance, such as its game directory and window ID.
 type InstanceInfo struct {
-	Id         int            // Instance number
-	Pid        uint32         // Process ID
-	Wid        xproto.Window  // Window ID
-	Dir        string         // .minecraft directory
-	Version    int            // Minecraft version
-	ModernWp   bool           // Has wpstateout.txt WorldPreview
-	ResetKey   xproto.Keycode // Atum reset key
-	PreviewKey xproto.Keycode // Leave preview key
+	Id       int            // Instance number
+	Pid      uint32         // Process ID
+	Wid      xproto.Window  // Window ID
+	Dir      string         // .minecraft directory
+	Version  int            // Minecraft version
+	ModernWp bool           // Has wpstateout.txt WorldPreview
+	ResetKey xproto.Keycode // Atum reset key
 }
 
 // FindInstances returns a sorted list of all running Minecraft instances,
@@ -119,12 +118,10 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 		return InstanceInfo{}, true, fmt.Errorf("couldn't open instance options.txt: %w", err)
 	}
 	resetKey := x11.KeyF6
-	previewKey := x11.KeyH
 	for _, line := range strings.Split(string(options), "\n") {
-		// Only parse this keybind if it is the reset or leave preview key.
+		// Only parse this keybind if it is the Atum reset key.
 		isResetKey := strings.Contains(line, "key_Create New World")
-		isPreviewKey := strings.Contains(line, "key_Leave Preview")
-		if !isResetKey && !isPreviewKey {
+		if !isResetKey {
 			continue
 		}
 
@@ -132,18 +129,16 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 		keyName := strings.Split(line, ":")[1]
 		keyName = strings.TrimPrefix(keyName, "key.keyboard.")
 		if keyName == "unknown" {
-			return InstanceInfo{}, true, fmt.Errorf("atum's \"Create New World\" and/or world preview's \"Leave Preview\" keybinds were unbound (set them to any key)")
+			return InstanceInfo{}, true, fmt.Errorf("atum's \"Create New World\" keybind was unbound (set it to any key)")
 		}
 		keycode, ok := x11.KeycodesMc[keyName]
 		if !ok {
-			return InstanceInfo{}, true, fmt.Errorf("\"reset\" or \"leave preview\" keybinds were set to an unknown keycode %s", keyName)
+			return InstanceInfo{}, true, fmt.Errorf("atum's \"Create New World\" keybind was set to an unknown keycode %s", keyName)
 		}
 
 		// Store it.
 		if isResetKey {
 			resetKey = keycode
-		} else {
-			previewKey = keycode
 		}
 	}
 
@@ -155,7 +150,6 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 		version,
 		modernWp,
 		resetKey,
-		previewKey,
 	}, true, nil
 }
 

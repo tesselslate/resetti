@@ -202,7 +202,7 @@ func run(opts Options) int {
 			case 0:
 				if last.Type != mc.StPreview && next.Type == mc.StPreview {
 					x.SendKeyPress(
-						instances[update.Id].PreviewKey,
+						instances[update.Id].ResetKey,
 						instances[update.Id].Wid,
 					)
 					resets += 1

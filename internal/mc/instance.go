@@ -322,13 +322,7 @@ func (m *Manager) Reset(id int) bool {
 		}
 		m.instances[id].altRes = false
 	}
-	var key xproto.Keycode
-	if state.Type == StPreview && state.Progress < 80 {
-		key = m.instances[id].info.PreviewKey
-	} else {
-		key = m.instances[id].info.ResetKey
-	}
-	m.sendKeyPress(id, key)
+	m.sendKeyPress(id, m.instances[id].info.ResetKey)
 	return true
 }
 
