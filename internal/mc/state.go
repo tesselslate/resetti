@@ -346,6 +346,9 @@ func (r *wpstateReader) Process() (State, bool, error) {
 			return r.state, false, errors.New("no inworld split")
 		}
 		r.state.Menu = b != "unpaused"
+	case "wall":
+		r.state.Type = StDirt
+		r.state.Menu = false
 	default:
 		return r.state, false, fmt.Errorf("unrecognized log type: %s", a)
 	}
