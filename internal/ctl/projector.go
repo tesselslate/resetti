@@ -115,6 +115,19 @@ func (p *ProjectorController) Unfocus() {
 	}
 }
 
+// ToggleGrab toggles whether or not the mouse pointer is grabbed.
+func (p *ProjectorController) ToggleGrab() {
+	if !p.Active {
+		return
+	}
+
+	if p.grab {
+		p.ungrabPointer()
+	} else {
+		p.grabPointer()
+	}
+}
+
 // findProjector finds the wall projector.
 func (p *ProjectorController) findProjector() error {
 	windows := p.x.GetWindowList()

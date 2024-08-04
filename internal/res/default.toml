@@ -100,7 +100,8 @@ wall_reset = ""
 # - ingame_reset            Reset active instance.
 # - ingame_toggle_res(n)    Toggle resolution N for the active instance.
 #                           The list of alternate resolutions starts with N=0.
-# - wall_focus              Focus wall projector.
+# - wall_focus              Focus wall projector. If already focused, ungrab the
+#                           pointer.
 # - wall_reset_all          Reset all unlocked instances.
 # - wall_lock               Lock hovered instance.
 # - wall_lock(n)            Lock instance N.

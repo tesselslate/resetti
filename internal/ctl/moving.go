@@ -119,8 +119,12 @@ func (m *MovingWall) Input(input Input) {
 				if input.Held {
 					continue
 				}
-				if err := m.proj.Focus(); err != nil {
-					log.Error("Input: Failed to focus projector: %s", err)
+				if m.proj.Active {
+					m.proj.ToggleGrab()
+				} else {
+					if err := m.proj.Focus(); err != nil {
+						log.Error("Input: Failed to focus projector: %s", err)
+					}
 				}
 			}
 			if m.active != -1 || !m.proj.Active {

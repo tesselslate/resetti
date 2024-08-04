@@ -112,8 +112,12 @@ func (w *Wall) Input(input Input) {
 				if input.Held {
 					continue
 				}
-				if err := w.proj.Focus(); err != nil {
-					log.Error("Input: Failed to focus projector: %s", err)
+				if w.proj.Active {
+					w.proj.ToggleGrab()
+				} else {
+					if err := w.proj.Focus(); err != nil {
+						log.Error("Input: Failed to focus projector: %s", err)
+					}
 				}
 			}
 			if w.active != -1 || !w.proj.Active {
