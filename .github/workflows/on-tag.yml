@@ -44,7 +44,7 @@ jobs:
       - name: Publish release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "out/resetti.deb,out/${{ steps.rpm-filename.outputs.filename }},out/glfw/glfw-patched.zip,out/resetti,out/bench"
+          artifacts: "out/resetti.deb,out/${{ steps.rpm-filename.outputs.filename }},out/glfw/libglfw.so.3.3,out/resetti,out/bench"
           draft: true
           name: ${{ steps.tag.outputs.tag }}
           tag: ${{ steps.tag.outputs.tag }}

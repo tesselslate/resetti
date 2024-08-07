@@ -45,5 +45,5 @@ jobs:
             -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT_NAME\"}" \
             -F "file1=@out/resetti.deb"                                                        \
             -F "file2=@out/${{ steps.rpm-filename.outputs.filename }}"                       \
-            -F "file3=@out/glfw/glfw-patched.zip" \
+            -F "file3=@out/glfw/libglfw.so.3.3" \
             "$WEBHOOK"

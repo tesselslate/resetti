@@ -49,5 +49,5 @@ test:
 glfw:
 	mkdir -p out/glfw
 	sh contrib/build-glfw.sh
-	cd glfw && zip -r ../out/glfw/glfw-patched.zip ./ && cd ..
+	cp glfw/build/src/libglfw.so.3.3 out/glfw/
 	rm -rf glfw
