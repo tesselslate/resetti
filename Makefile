@@ -45,3 +45,9 @@ clean:
 
 test:
 	go test ./...
+
+glfw:
+	mkdir -p out/glfw
+	sh contrib/build-glfw.sh
+	cd glfw && zip -r ../out/glfw/glfw-patched.zip ./ && cd ..
+	rm -rf glfw
