@@ -24,6 +24,9 @@ jobs:
       - name: Build and package resetti for redhat distros
         run: make rpm
 
+      - name: Get dependencies for glfw build
+        run: sudo apt-get install libwayland-dev libxkbcommon-dev xorg-dev
+
       - name: Build and package glfw for mcsr.
         run: make glfw
 
