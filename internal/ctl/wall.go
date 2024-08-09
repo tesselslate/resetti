@@ -173,7 +173,9 @@ func (w *Wall) Input(input Input) {
 						w.wallPlay(id)
 					}
 				case cfg.ActionWallReset:
-					w.wallReset(id)
+					if !w.locks[id] || w.conf.Wall.JultiLocking {
+						w.wallReset(id)
+					}
 				case cfg.ActionWallResetOthers:
 					if w.states[id].Type == mc.StIdle {
 						w.wallResetOthers(id)
@@ -371,6 +373,11 @@ func (w *Wall) wallLock(id int) {
 	if lock {
 		w.host.RunHook(HookLock, 0)
 	} else {
+		// Julti does not let you unlock instances.
+		if w.conf.Wall.JultiLocking {
+			return
+		}
+
 		w.host.RunHook(HookUnlock, 0)
 		if w.conf.Wall.ResetUnlock {
 			w.wallReset(id)
@@ -400,9 +407,6 @@ func (w *Wall) wallPlay(id int) {
 
 // wallReset resets the given instance.
 func (w *Wall) wallReset(id int) {
-	if w.locks[id] {
-		return
-	}
 	if w.states[id].Type != mc.StIngame && w.host.ResetInstance(id) {
 		if w.freezer != nil {
 			w.freezer.Unfreeze(id)
@@ -425,7 +429,9 @@ func (w *Wall) wallReset(id int) {
 func (w *Wall) wallResetAll() {
 	start := time.Now()
 	for i := 0; i < len(w.instances); i += 1 {
-		w.wallReset(i)
+		if !w.locks[i] {
+			w.wallReset(i)
+		}
 	}
 
 	log.Info("Reset all in %.2f ms", float64(time.Since(start).Microseconds())/1000)
@@ -436,7 +442,7 @@ func (w *Wall) wallResetAll() {
 func (w *Wall) wallResetOthers(id int) {
 	w.wallPlay(id)
 	for i := 0; i < len(w.instances); i += 1 {
-		if i != id {
+		if i != id && !w.locks[i] {
 			w.wallReset(i)
 		}
 	}

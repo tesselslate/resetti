@@ -201,8 +201,10 @@ func (m *MovingWall) Input(input Input) {
 						m.collapseEmpty()
 					}
 				case cfg.ActionWallReset:
-					m.wallReset(id)
-					m.collapseEmpty()
+					if !slices.Contains(m.locks, id) || m.conf.Wall.JultiLocking {
+						m.wallReset(id)
+						m.collapseEmpty()
+					}
 				case cfg.ActionWallResetOthers:
 					if m.states[id].Type == mc.StIdle {
 						m.wallResetOthers(id)
@@ -433,6 +435,11 @@ func (m *MovingWall) wallLock(id int) {
 		m.queue[idx] = -1
 		m.host.RunHook(HookLock, 0)
 	} else {
+		// Julti does not let you unlock instances.
+		if m.conf.Wall.JultiLocking {
+			return
+		}
+
 		m.host.RunHook(HookUnlock, 0)
 		if m.conf.Wall.ResetUnlock {
 			m.wallReset(id)
@@ -463,7 +470,7 @@ func (m *MovingWall) wallPlay(id int) {
 
 // wallReset resets the given instance.
 func (m *MovingWall) wallReset(id int) {
-	if slices.Contains(m.locks, id) || m.states[id].Type == mc.StIngame {
+	if m.states[id].Type == mc.StIngame {
 		return
 	}
 	m.removeFromQueue(id)
@@ -486,7 +493,7 @@ func (m *MovingWall) wallResetAll() {
 		to = len(m.queue)
 	}
 	for i := to - 1; i >= 0; i -= 1 {
-		if m.queue[i] != -1 {
+		if m.queue[i] != -1 && !slices.Contains(m.locks, m.queue[i]) {
 			m.wallReset(m.queue[i])
 		}
 	}
@@ -504,7 +511,7 @@ func (m *MovingWall) wallResetOthers(id int) {
 		to = len(m.queue)
 	}
 	for i := to - 1; i >= 0; i -= 1 {
-		if m.queue[i] != -1 && m.queue[i] != id {
+		if m.queue[i] != -1 && m.queue[i] != id && !slices.Contains(m.locks, m.queue[i]) {
 			m.wallReset(m.queue[i])
 		}
 	}

@@ -155,6 +155,11 @@ goto_locked = false
 # If enabled, instances will be automatically reset when they are unlocked.
 reset_unlock = false
 
+# If enabled, the behavior of locked instances will match Julti. This means:
+# - Locked instances can be reset directly using the reset hotkey
+# - Locked instances cannot be unlocked.
+julti_locking = false
+
 # The number of milliseconds to prevent you from resetting an instance after it
 # starts previewing. Set to 0 to disable.
 grace_period = 250
