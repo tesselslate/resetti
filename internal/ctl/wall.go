@@ -175,6 +175,7 @@ func (w *Wall) Input(input Input) {
 				case cfg.ActionWallReset:
 					if !w.locks[id] || w.conf.Wall.JultiLocking {
 						w.wallReset(id)
+						w.setLocked(id, false)
 					}
 				case cfg.ActionWallResetOthers:
 					if w.states[id].Type == mc.StIdle {

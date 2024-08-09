@@ -203,6 +203,7 @@ func (m *MovingWall) Input(input Input) {
 				case cfg.ActionWallReset:
 					if !slices.Contains(m.locks, id) || m.conf.Wall.JultiLocking {
 						m.wallReset(id)
+						m.setLocked(id, false)
 						m.collapseEmpty()
 					}
 				case cfg.ActionWallResetOthers:
