@@ -48,8 +48,6 @@ func (d *debugLogger) Run() {
 			d.printGc()
 		case "i", "input":
 			d.printInput()
-		case "m", "mgr":
-			d.printManager()
 		}
 	}
 }
@@ -58,23 +56,11 @@ func (d *debugLogger) printAll() {
 	d.printFrontend()
 	d.printGc()
 	d.printInput()
-	d.printManager()
 }
 
 func (d *debugLogger) printFrontend() {
 	s := &strings.Builder{}
 	s.WriteString("\nFrontend: \n")
-	switch f := d.host.frontend.(type) {
-	case *Wall:
-		fmt.Fprintf(s, "Wall size: %dx%d\n", f.wallWidth, f.wallHeight)
-		fmt.Fprintf(s, "Active: %d\n", f.active)
-		fmt.Fprintf(s, "Locks: %v\n", f.locks)
-		fmt.Fprintf(s, "Last mouse ID: %d", f.lastMouseId)
-	case *MovingWall:
-		fmt.Fprintf(s, "Queue (%d): %v\n", len(f.queue), f.queue)
-		fmt.Fprintf(s, "Locks (%d): %v\n", len(f.locks), f.locks)
-		fmt.Fprintf(s, "Last hitbox: %v", f.lastHitbox)
-	}
 	log.Debug(s.String())
 }
 
@@ -99,15 +85,5 @@ func (d *debugLogger) printInput() {
 	s.WriteString("\nInput: \n")
 	fmt.Fprintf(s, "Last binds: %+v\n", d.host.inputMgr.lastBinds)
 	fmt.Fprintf(s, "Last fail window: %d", d.host.inputMgr.lastFailWindow)
-	log.Debug(s.String())
-}
-
-func (d *debugLogger) printManager() {
-	states := d.host.manager.GetStates()
-	s := &strings.Builder{}
-	s.WriteString("\nManager: \n")
-	for i, state := range states {
-		fmt.Fprintf(s, "%d\t%s\t%d\t%s", i, stateNames[state.Type], state.Progress, state.LastPreview.Format("15:04:05.9999"))
-	}
 	log.Debug(s.String())
 }

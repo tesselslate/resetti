@@ -1,7 +1,6 @@
 build:
 	mkdir -p out
 	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out/resetti -ldflags="-s -w" ${GOFLAGS}
-	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out/bench -ldflags="-s -w" ${GOFLAGS} ./contrib/bench.go
 
 check:
 	# go install github.com/kisielk/errcheck@latest
@@ -21,11 +20,8 @@ deb: build
 	else \
 		sed -i "s/VERSION/0.0.0dev-$$(git rev-parse --short HEAD)/" out/deb/DEBIAN/control; \
 	fi
-	cp out/bench out/deb/usr/local/bin
 	cp out/resetti out/deb/usr/local/bin
-	cp internal/res/cgroup_setup.sh out/deb/usr/local/share/resetti
 	cp internal/res/default.toml out/deb/usr/local/share/resetti
-	cp internal/res/scene-setup.lua out/deb/usr/local/share/resetti
 	dpkg-deb --build --root-owner-group out/deb out/resetti.deb
 
 rpm: GOFLAGS=-ldflags="-X res.overrideDataDir=/usr/share/resetti"

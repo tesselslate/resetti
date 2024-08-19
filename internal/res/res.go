@@ -12,25 +12,13 @@ import (
 )
 
 const (
-	CgroupScriptPath  = "/cgroup_setup.sh"
 	DefaultConfigPath = "/default.toml"
-	ObsScriptPath     = "/scene-setup.lua"
 )
-
-// CgroupScript contains the cgroups setup shell script.
-//
-//go:embed cgroup_setup.sh
-var CgroupScript []byte
 
 // DefaultConfig contains the example configuration.
 //
 //go:embed default.toml
 var DefaultConfig []byte
-
-// ObsScript contains the OBS scene collection generator script.
-//
-//go:embed scene-setup.lua
-var ObsScript []byte
 
 // dataDir contains the directory in which resources are stored. It is assigned
 // by WriteResources on startup.
@@ -90,9 +78,7 @@ func WriteResources() error {
 	}
 
 	resources := map[string][]byte{
-		CgroupScriptPath:  CgroupScript,
 		DefaultConfigPath: DefaultConfig,
-		ObsScriptPath:     ObsScript,
 	}
 	for name, contents := range resources {
 		// Only overwrite if changed.

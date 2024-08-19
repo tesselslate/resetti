@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -26,7 +25,6 @@ var stateOutputClasses = map[string]bool{
 // InstanceInfo contains information about how to interact with a Minecraft
 // instance, such as its game directory and window ID.
 type InstanceInfo struct {
-	Id       int            // Instance number
 	Pid      uint32         // Process ID
 	Wid      xproto.Window  // Window ID
 	Dir      string         // .minecraft directory
@@ -35,11 +33,12 @@ type InstanceInfo struct {
 	ResetKey xproto.Keycode // Atum reset key
 }
 
-// FindInstances returns a sorted list of all running Minecraft instances,
-// or an error if the running instances do not form a list.
-func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
-	instances := make([]InstanceInfo, 0)
+// FindInstance returns the running Minecraft instance,
+// or an error if it doesn't find any.
+func FindInstance(x *x11.Client) (InstanceInfo, error) {
+	var instance InstanceInfo
 	windows := x.GetWindowList()
+	foundInstance := false
 
 	// Check every window to see if it is a Minecraft instance.
 	for _, win := range windows {
@@ -52,15 +51,18 @@ func FindInstances(x *x11.Client) ([]InstanceInfo, error) {
 		info, was_instance, err := getInstanceInfo(x, win)
 		if was_instance {
 			if err == nil {
-				instances = append(instances, info)
+				instance = info
+				foundInstance = true
+				break
 			} else {
-				return instances, fmt.Errorf("unusable instance: %w", err)
+				return InstanceInfo{}, fmt.Errorf("unusable instance: %w", err)
 			}
 		}
 	}
-
-	// Sort instances.
-	return sortInstances(instances)
+	if !foundInstance {
+		return InstanceInfo{}, fmt.Errorf("no instance found")
+	}
+	return instance, nil
 }
 
 // getInstanceInfo attempts to gather information about the given Minecraft
@@ -78,16 +80,6 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 		return InstanceInfo{}, false, err
 	}
 	pwd := string(rawPwd)
-
-	// Get instance ID.
-	rawId, err := os.ReadFile(fmt.Sprintf("%s/instance_num", pwd))
-	if err != nil {
-		return InstanceInfo{}, false, err
-	}
-	id, err := strconv.Atoi(strings.TrimSuffix(string(rawId), "\n"))
-	if err != nil {
-		return InstanceInfo{}, false, err
-	}
 
 	// Get game version.
 	title, err := x.GetWindowTitle(win)
@@ -143,7 +135,6 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 	}
 
 	return InstanceInfo{
-		id,
 		pid,
 		win,
 		pwd,
@@ -207,48 +198,4 @@ func isMinecraftWindow(x *x11.Client, win xproto.Window) bool {
 		return false
 	}
 	return true
-}
-
-// sortInstances returns a sorted list of all open instances, or an error if
-// some instances are missing or out of order.
-func sortInstances(instances []InstanceInfo) ([]InstanceInfo, error) {
-	// Return an error if no instances were found.
-	if len(instances) == 0 {
-		return nil, errors.New("no instances found")
-	}
-
-	// Sort the instances based on ID.
-	sort.Slice(instances, func(i, j int) bool {
-		return instances[i].Id < instances[j].Id
-	})
-
-	// Ensure that all instances are present.
-	maxId := 0
-	for _, instance := range instances {
-		if instance.Id > maxId {
-			maxId = instance.Id
-		}
-	}
-
-	found := make([]bool, maxId+1)
-	sorted := true
-	for index, instance := range instances {
-		if instance.Id != index {
-			sorted = false
-		} else {
-			found[instance.Id] = true
-		}
-	}
-
-	if sorted {
-		return instances, nil
-	} else {
-		missing := []string{fmt.Sprintf("Expected %d instances", maxId+1)}
-		for index, exists := range found {
-			if !exists {
-				missing = append(missing, fmt.Sprintf("Missing instance %d", index+1))
-			}
-		}
-		return nil, errors.New(strings.Join(missing, "\n"))
-	}
 }

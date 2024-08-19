@@ -15,6 +15,4 @@ Add the above `-ldflags="..."` argument to your build invocation and change
 > you have already placed the necessary files there and will not create them
 > itself. It expects to see all of the resources contained in `internal/res`:
 >
-> - cgroup_setup.sh
 > - default.toml
-> - scene-setup.lua
