@@ -1,3 +1,6 @@
+# This is the default configuration profile for resetti.
+# You can delete or ignore any sections which are not applicable.
+
 # The rate (in Hz) to poll for hotkey inputs.
 poll_rate = 100
 

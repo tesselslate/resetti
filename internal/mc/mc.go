@@ -36,9 +36,7 @@ type InstanceInfo struct {
 // FindInstance returns the running Minecraft instance,
 // or an error if it doesn't find any.
 func FindInstance(x *x11.Client) (InstanceInfo, error) {
-	var instance InstanceInfo
 	windows := x.GetWindowList()
-	foundInstance := false
 
 	// Check every window to see if it is a Minecraft instance.
 	for _, win := range windows {
@@ -51,18 +49,13 @@ func FindInstance(x *x11.Client) (InstanceInfo, error) {
 		info, was_instance, err := getInstanceInfo(x, win)
 		if was_instance {
 			if err == nil {
-				instance = info
-				foundInstance = true
-				break
+				return info, nil
 			} else {
 				return InstanceInfo{}, fmt.Errorf("unusable instance: %w", err)
 			}
 		}
 	}
-	if !foundInstance {
-		return InstanceInfo{}, fmt.Errorf("no instance found")
-	}
-	return instance, nil
+	return InstanceInfo{}, fmt.Errorf("no instance found")
 }
 
 // getInstanceInfo attempts to gather information about the given Minecraft
