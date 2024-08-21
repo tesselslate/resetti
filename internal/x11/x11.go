@@ -116,12 +116,6 @@ type Client struct {
 	mu sync.Mutex
 }
 
-// Event represents an event from the X server to be processed by resetti.
-type Event any
-
-// FocusEvent represents a window focus change.
-type FocusEvent xproto.Window
-
 // InputState represents the state of a button or key (up or down.)
 type InputState int
 
@@ -131,12 +125,6 @@ type Keymap struct {
 	data [32]byte
 }
 
-// Point represents a point on the X screen.
-type Point struct {
-	X int16
-	Y int16
-}
-
 // Pointer contains information about the state of the mouse pointer.
 type Pointer struct {
 	RootX, RootY, EventX, EventY int
@@ -144,12 +132,6 @@ type Pointer struct {
 
 	// Modmask (contains keyboard modifiers)
 	buttons uint16
-}
-
-// ResizeEvent contains information about a change to a window's geometry.
-type ResizeEvent struct {
-	Window     xproto.Window
-	X, Y, W, H int
 }
 
 // atomCache maintains a mapping of strings to X11 atoms to avoid re-requesting
@@ -391,11 +373,10 @@ func (c *Client) MoveWindow(win xproto.Window, x, y int32, w, h uint32) {
 }
 
 // Poll starts listening for window focus changes in the background.
-func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
-	ch := make(chan Event, 256)
+func (c *Client) Poll(ctx context.Context) (<-chan error, error) {
 	errch := make(chan error, 8)
-	go c.poll(ctx, ch, errch)
-	return ch, errch, nil
+	go c.poll(ctx, errch)
+	return errch, nil
 }
 
 // QueryKeymap queries the state of the keyboard.
@@ -453,20 +434,20 @@ func (c *Client) WarpPointer(x, y int, dest xproto.Window) {
 }
 
 // getActiveWindow returns the currently focused window.
-func (c *Client) getActiveWindow() (xproto.Window, error) {
+func (c *Client) getActiveWindow() error {
 	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
 	if err != nil {
 		// The _NET_ACTIVE_WINDOW property might not exist depending on the
 		// window manager.
 		if err == errInvalidLength {
-			return 0, nil
+			return nil
 		}
-		return 0, err
+		return err
 	}
 	c.mu.Lock()
 	c.active = xproto.Window(win)
 	c.mu.Unlock()
-	return xproto.Window(win), nil
+	return nil
 }
 
 // getProperty retrieves a raw window property.
@@ -605,8 +586,7 @@ func (c *Client) setCurrentDesktop(desktop uint32) error {
 }
 
 // poll listens for user inputs in the background.
-func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) {
-	defer close(ch)
+func (c *Client) poll(ctx context.Context, errch chan<- error) {
 	defer close(errch)
 	activeWindow, err := c.atoms.Get(netActiveWindow)
 	if err != nil {
@@ -630,24 +610,15 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 			continue
 		}
 		switch evt := evt.(type) {
-		case xproto.ConfigureNotifyEvent:
-			ch <- ResizeEvent{
-				evt.Window,
-				int(evt.X),
-				int(evt.Y),
-				int(evt.Width),
-				int(evt.Height),
-			}
 		case xproto.PropertyNotifyEvent:
 			if activeWindow != evt.Atom {
 				continue
 			}
-			win, err := c.getActiveWindow()
+			err := c.getActiveWindow()
 			if err != nil {
 				errch <- err
 				continue
 			}
-			ch <- FocusEvent(win)
 		}
 	}
 }

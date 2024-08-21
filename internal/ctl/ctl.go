@@ -49,7 +49,6 @@ type Controller struct {
 
 	x11Errors <-chan error
 	signals   <-chan os.Signal
-	x11Events <-chan x11.Event
 }
 
 // A Frontend handles user-facing I/O (input handling, instance actions, OBS
@@ -141,7 +140,7 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) setup frontend: %w", err)
 	}
 
-	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
+	c.x11Errors, err = c.x.Poll(ctx)
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}

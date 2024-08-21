@@ -48,11 +48,10 @@ func FindInstance(x *x11.Client) (InstanceInfo, error) {
 		// Get the info for this instance.
 		info, was_instance, err := getInstanceInfo(x, win)
 		if was_instance {
-			if err == nil {
-				return info, nil
-			} else {
+			if err != nil {
 				return InstanceInfo{}, fmt.Errorf("unusable instance: %w", err)
 			}
+			return info, nil
 		}
 	}
 	return InstanceInfo{}, fmt.Errorf("no instance found")
