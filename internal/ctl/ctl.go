@@ -26,10 +26,8 @@ const (
 	HookReset int = iota
 	HookAltRes
 	HookNormalRes
-	HookLock
-	HookUnlock
-	HookWallPlay
-	HookWallReset
+	HookFocusLost
+	HookFocusGained
 )
 
 // Controller manages all of the components necessary for resetti to run and
@@ -47,6 +45,7 @@ type Controller struct {
 	inputs   <-chan Input
 	hooks    map[int][]string
 
+	x11Events <-chan x11.Event
 	x11Errors <-chan error
 	signals   <-chan os.Signal
 }
@@ -60,6 +59,9 @@ type Frontend interface {
 	// Setup takes in all of the potentially needed dependencies and prepares
 	// the Frontend to handle user input.
 	Setup(frontendDependencies) error
+
+	// ProcessEvent processes a miscellanous event from the X server.
+	ProcessEvent(x11.Event)
 }
 
 // An Input represents a single user input.
@@ -101,9 +103,11 @@ func Run(conf *cfg.Profile) error {
 	c.conf = conf
 	c.binds = make(map[cfg.Bind]cfg.ActionList)
 	c.hooks = map[int][]string{
-		HookReset:     {c.conf.Hooks.Reset},
-		HookAltRes:    c.conf.Hooks.AltRes,
-		HookNormalRes: c.conf.Hooks.NormalRes,
+		HookReset:       {c.conf.Hooks.Reset},
+		HookAltRes:      c.conf.Hooks.AltRes,
+		HookNormalRes:   c.conf.Hooks.NormalRes,
+		HookFocusLost:   {c.conf.Hooks.FocusLost},
+		HookFocusGained: {c.conf.Hooks.FocusGained},
 	}
 
 	x, err := x11.NewClient()
@@ -140,7 +144,7 @@ func Run(conf *cfg.Profile) error {
 		return fmt.Errorf("(init) setup frontend: %w", err)
 	}
 
-	c.x11Errors, err = c.x.Poll(ctx)
+	c.x11Events, c.x11Errors, err = c.x.Poll(ctx)
 	if err != nil {
 		return fmt.Errorf("(init) X poll: %w", err)
 	}
@@ -224,6 +228,8 @@ func (c *Controller) run() error {
 				return fmt.Errorf("fatal X error: %w", err)
 			}
 			log.Error("X error: %s", err)
+		case evt := <-c.x11Events:
+			c.frontend.ProcessEvent(evt)
 		case input := <-c.inputs:
 			c.frontend.Input(input)
 		}

@@ -15,9 +15,11 @@ import (
 // Hooks contains various commands to run whenever the user performs certain
 // actions.
 type Hooks struct {
-	Reset     string        `toml:"reset"`      // Command to run on ingame reset
-	AltRes    AltResHook    `toml:"alt_res"`    // Command to run on alternate resolution
-	NormalRes NormalResHook `toml:"normal_res"` // Command to run on normal resolution
+	Reset       string        `toml:"reset"`        // Command to run on ingame reset
+	AltRes      AltResHook    `toml:"alt_res"`      // Command to run on alternate resolution
+	NormalRes   NormalResHook `toml:"normal_res"`   // Command to run on normal resolution
+	FocusLost   string        `toml:"focus_lost"`   // Command to run when instance loses focus
+	FocusGained string        `toml:"focus_gained"` // Command to run when instance gains focus
 }
 
 // Keybinds contains the user's keybindings.

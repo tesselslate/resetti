@@ -33,6 +33,12 @@ alt_res = ""
 # You can do it like so: [ "echo Hello1", "echo Hello2" ]
 normal_res = ""
 
+# Run when the Minecraft instance loses focus.
+focus_lost = ""
+
+# Run when the Minecraft instance gains focus.
+focus_gained = ""
+
 # The keybinds section lets you specify keybindings for various actions you
 # may want to perform.
 #

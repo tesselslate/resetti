@@ -1,6 +1,7 @@
 package ctl
 
 import (
+	"github.com/jezek/xgb/xproto"
 	"github.com/tesselslate/resetti/internal/cfg"
 	"github.com/tesselslate/resetti/internal/mc"
 	"github.com/tesselslate/resetti/internal/x11"
@@ -58,6 +59,18 @@ func (m *Single) Input(input Input) {
 			if m.host.ResetInstance() {
 				m.host.RunHook(HookReset, 0)
 			}
+		}
+	}
+}
+
+// ProcessEvent implements Frontend.
+func (m *Single) ProcessEvent(evt x11.Event) {
+	switch evt := evt.(type) {
+	case x11.FocusEvent:
+		if m.instance.Wid == xproto.Window(evt) {
+			m.host.RunHook(HookFocusGained, 0)
+		} else {
+			m.host.RunHook(HookFocusLost, 0)
 		}
 	}
 }

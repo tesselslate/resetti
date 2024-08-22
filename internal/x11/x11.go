@@ -116,6 +116,12 @@ type Client struct {
 	mu sync.Mutex
 }
 
+// Event represents an event from the X server to be processed by resetti.
+type Event any
+
+// FocusEvent represents a window focus change.
+type FocusEvent xproto.Window
+
 // InputState represents the state of a button or key (up or down.)
 type InputState int
 
@@ -373,10 +379,11 @@ func (c *Client) MoveWindow(win xproto.Window, x, y int32, w, h uint32) {
 }
 
 // Poll starts listening for window focus changes in the background.
-func (c *Client) Poll(ctx context.Context) (<-chan error, error) {
+func (c *Client) Poll(ctx context.Context) (<-chan Event, <-chan error, error) {
+	ch := make(chan Event, 256)
 	errch := make(chan error, 8)
-	go c.poll(ctx, errch)
-	return errch, nil
+	go c.poll(ctx, ch, errch)
+	return ch, errch, nil
 }
 
 // QueryKeymap queries the state of the keyboard.
@@ -434,20 +441,20 @@ func (c *Client) WarpPointer(x, y int, dest xproto.Window) {
 }
 
 // getActiveWindow returns the currently focused window.
-func (c *Client) getActiveWindow() error {
+func (c *Client) getActiveWindow() (uint32, error) {
 	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
 	if err != nil {
 		// The _NET_ACTIVE_WINDOW property might not exist depending on the
 		// window manager.
 		if err == errInvalidLength {
-			return nil
+			return 0, nil
 		}
-		return err
+		return 0, err
 	}
 	c.mu.Lock()
 	c.active = xproto.Window(win)
 	c.mu.Unlock()
-	return nil
+	return win, nil
 }
 
 // getProperty retrieves a raw window property.
@@ -586,7 +593,8 @@ func (c *Client) setCurrentDesktop(desktop uint32) error {
 }
 
 // poll listens for user inputs in the background.
-func (c *Client) poll(ctx context.Context, errch chan<- error) {
+func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) {
+	defer close(ch)
 	defer close(errch)
 	activeWindow, err := c.atoms.Get(netActiveWindow)
 	if err != nil {
@@ -614,11 +622,12 @@ func (c *Client) poll(ctx context.Context, errch chan<- error) {
 			if activeWindow != evt.Atom {
 				continue
 			}
-			err := c.getActiveWindow()
+			win, err := c.getActiveWindow()
 			if err != nil {
 				errch <- err
 				continue
 			}
+			ch <- FocusEvent(win)
 		}
 	}
 }
