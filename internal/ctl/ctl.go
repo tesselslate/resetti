@@ -33,6 +33,8 @@ const (
 	HookReset int = iota
 	HookAltRes
 	HookNormalRes
+	HookFocusLost
+	HookFocusGained
 	HookLock
 	HookUnlock
 	HookWallPlay
@@ -123,13 +125,15 @@ func Run(conf *cfg.Profile) error {
 	c.conf = conf
 	c.binds = make(map[cfg.Bind]cfg.ActionList)
 	c.hooks = map[int][]string{
-		HookReset:     {c.conf.Hooks.Reset},
-		HookAltRes:    c.conf.Hooks.AltRes,
-		HookNormalRes: c.conf.Hooks.NormalRes,
-		HookLock:      {c.conf.Hooks.WallLock},
-		HookUnlock:    {c.conf.Hooks.WallUnlock},
-		HookWallPlay:  {c.conf.Hooks.WallPlay},
-		HookWallReset: {c.conf.Hooks.WallReset},
+		HookReset:       {c.conf.Hooks.Reset},
+		HookAltRes:      c.conf.Hooks.AltRes,
+		HookNormalRes:   c.conf.Hooks.NormalRes,
+		HookFocusLost:   {c.conf.Hooks.FocusLost},
+		HookFocusGained: {c.conf.Hooks.FocusGained},
+		HookLock:        {c.conf.Hooks.WallLock},
+		HookUnlock:      {c.conf.Hooks.WallUnlock},
+		HookWallPlay:    {c.conf.Hooks.WallPlay},
+		HookWallReset:   {c.conf.Hooks.WallReset},
 	}
 
 	x, err := x11.NewClient()

@@ -5,6 +5,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/jezek/xgb/xproto"
 	"github.com/tesselslate/resetti/internal/cfg"
 	"github.com/tesselslate/resetti/internal/log"
 	"github.com/tesselslate/resetti/internal/mc"
@@ -189,6 +190,14 @@ func (w *Wall) Input(input Input) {
 
 // ProcessEvent implements Frontend.
 func (w *Wall) ProcessEvent(evt x11.Event) {
+	switch evnt := evt.(type) {
+	case x11.FocusEvent:
+		if w.active != -1 && w.instances[w.active].Wid == xproto.Window(evnt) {
+			w.host.RunHook(HookFocusGained, 0)
+		} else {
+			w.host.RunHook(HookFocusLost, 0)
+		}
+	}
 	w.proj.ProcessEvent(evt)
 }
 

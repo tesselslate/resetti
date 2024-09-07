@@ -70,6 +70,12 @@ alt_res = ""
 # You can do it like so: [ "echo Hello1", "echo Hello2" ]
 normal_res = ""
 
+# Run when a Minecraft instance loses focus.
+focus_lost = ""
+
+# Run when a Minecraft instance gains focus.
+focus_gained = ""
+
 # Run when an instance is locked on the wall.
 wall_lock = ""
 

@@ -3,6 +3,7 @@ package ctl
 import (
 	"fmt"
 
+	"github.com/jezek/xgb/xproto"
 	"github.com/tesselslate/resetti/internal/cfg"
 	"github.com/tesselslate/resetti/internal/mc"
 	"github.com/tesselslate/resetti/internal/obs"
@@ -84,8 +85,15 @@ func (m *Multi) Input(input Input) {
 }
 
 // ProcessEvent implements Frontend.
-func (m *Multi) ProcessEvent(x11.Event) {
-	// Do nothing.
+func (m *Multi) ProcessEvent(evt x11.Event) {
+	switch evnt := evt.(type) {
+	case x11.FocusEvent:
+		if m.active != -1 && m.instances[m.active].Wid == xproto.Window(evnt) {
+			m.host.RunHook(HookFocusGained, 0)
+		} else {
+			m.host.RunHook(HookFocusLost, 0)
+		}
+	}
 }
 
 // Update implements Frontend.

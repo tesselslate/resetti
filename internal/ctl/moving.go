@@ -5,6 +5,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/jezek/xgb/xproto"
 	"github.com/tesselslate/resetti/internal/cfg"
 	"github.com/tesselslate/resetti/internal/log"
 	"github.com/tesselslate/resetti/internal/mc"
@@ -78,6 +79,14 @@ func (m *MovingWall) Setup(deps frontendDependencies) error {
 
 // ProcessEvent implements Frontend.
 func (m *MovingWall) ProcessEvent(evt x11.Event) {
+	switch evnt := evt.(type) {
+	case x11.FocusEvent:
+		if m.active != -1 && m.instances[m.active].Wid == xproto.Window(evnt) {
+			m.host.RunHook(HookFocusGained, 0)
+		} else {
+			m.host.RunHook(HookFocusLost, 0)
+		}
+	}
 	m.proj.ProcessEvent(evt)
 }
 
