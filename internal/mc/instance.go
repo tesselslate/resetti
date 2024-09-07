@@ -2,21 +2,16 @@ package mc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/jezek/xgb/xproto"
 	"github.com/tesselslate/resetti/internal/cfg"
 	"github.com/tesselslate/resetti/internal/log"
 	"github.com/tesselslate/resetti/internal/x11"
-	"golang.org/x/exp/slices"
 )
-
-var ErrInstanceClosed = errors.New("instance closed")
 
 // TODO: Pre 1.14 support
 
@@ -24,8 +19,6 @@ var ErrInstanceClosed = errors.New("instance closed")
 // as its game directory and current state.
 type instance struct {
 	info   InstanceInfo
-	reader StateReader
-	state  State
 	altRes bool
 }
 
@@ -37,323 +30,105 @@ type Manager struct {
 	// instance states.
 	mu sync.Mutex
 
-	active    int               // Active instance ID. -1 signals no active instance.
-	instances []instance        // List of instances
-	paths     map[string]int    // State file -> instance ID mapping
-	watcher   *fsnotify.Watcher // State file watcher
-	pause     chan int          // Instances to pause
+	instance instance // Minecraft instance being managed
 
 	conf *cfg.Profile
 	x    *x11.Client
 }
 
 // NewManager attempts to create a new Manager for the given instances.
-func NewManager(infos []InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manager, error) {
-	// Create instances.
-	instances := make([]instance, 0, len(infos))
-	for _, info := range infos {
-		reader, state, err := createStateReader(info)
-		if err != nil {
-			return nil, err
-		}
-		if state.Type == stWorld {
-			state.Type = StIdle
-		}
-		instance := instance{info, reader, state, false}
-		instances = append(instances, instance)
-	}
-
-	// Setup state watcher.
-	watcher, err := fsnotify.NewWatcher()
-	paths := make(map[string]int)
-	if err != nil {
-		return nil, fmt.Errorf("open watcher: %w", err)
-	}
-	for idx, inst := range instances {
-		path := inst.reader.Path()
-		paths[path] = idx
-		if err := watcher.Add(path); err != nil {
-			_ = watcher.Close()
-			return nil, fmt.Errorf("watch instance %d: %w", idx, err)
-		}
-	}
+func NewManager(info InstanceInfo, conf *cfg.Profile, x *x11.Client) (*Manager, error) {
+	// Create instance.
+	instance := instance{info, false}
 
 	m := Manager{
 		sync.Mutex{},
-		-1,
-		instances,
-		paths,
-		watcher,
-		make(chan int, len(instances)*2),
+		instance,
 		conf,
 		x,
 	}
-
-	// Warmup instances.
-	for _, inst := range infos {
-		x.Click(inst.Wid)
-	}
+	x.Click(info.Wid)
 
 	return &m, nil
 }
 
-// GetStates returns a list of all instance states.
-func (m *Manager) GetStates() []State {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var out []State
-	for _, inst := range m.instances {
-		out = append(out, inst.state)
-	}
-	return out
-}
-
 // Run starts managing instances in the background. Any non-fatal errors are
 // logged, any fatal errors are returned via the provided error channel.
-func (m *Manager) Run(ctx context.Context, evtch chan<- Update, errch chan<- error) {
+func (m *Manager) Run(ctx context.Context) {
 	instanceCheckup := time.NewTicker(time.Second)
-	defer func() {
-		instanceCheckup.Stop()
-		_ = m.watcher.Close()
-	}()
 
-	var deadInstances []int
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-instanceCheckup.C:
-			for id, inst := range m.instances {
-				_, err := os.Stat(fmt.Sprintf("/proc/%d/", inst.info.Pid))
-				if err != nil {
-					if !slices.Contains(deadInstances, id) {
-						log.Warn("Instance %d (%s) died. Reboot it and restart resetti.", id, inst.info.Dir)
-						deadInstances = append(deadInstances, id)
-					}
-
-					// Return once all instances are paused.
-					c := 0
-					for _, inst := range m.instances {
-						if inst.state.Type == StIdle || inst.state.LastPreview.Equal(time.Time{}) {
-							c += 1
-						}
-					}
-					if c+len(deadInstances) >= len(m.instances) {
-						errch <- fmt.Errorf("%w: %d", ErrInstanceClosed, id)
-						return
-					}
-				}
+			inst := m.instance
+			_, err := os.Stat(fmt.Sprintf("/proc/%d/", inst.info.Pid))
+			if err != nil {
+				log.Warn("Instance (%s) died. Reboot it and restart resetti.", inst.info.Dir)
 			}
-		case id := <-m.pause:
-			if m.conf.DisablePause {
-				continue
-			}
-			state := m.instances[id].state.Type
-			if state == StPreview || state == StIdle {
-				m.sendKeyDown(id, x11.KeyF3)
-				m.sendKeyPress(id, x11.KeyEsc)
-				m.sendKeyUp(id, x11.KeyF3)
-			}
-		case evt, ok := <-m.watcher.Events:
-			if !ok {
-				errch <- errors.New("watcher events closed")
-				return
-			}
-			id := m.paths[evt.Name]
-			switch evt.Op {
-			case fsnotify.Write:
-				// Process any updates to the state file.
-				state, updated, err := m.instances[id].reader.Process()
-				if err != nil {
-
-					log.Error("process log (%d) failed: %s", id, err)
-					continue
-				}
-				if !updated {
-					continue
-				}
-
-				// Only modify the fields that the state reader knows about.
-				m.mu.Lock()
-				lastType := m.instances[id].state.Type
-				m.instances[id].state.Type = state.Type
-				m.instances[id].state.Progress = state.Progress
-				m.instances[id].state.Menu = state.Menu
-
-				// The stWorld state should only ever be handled internally.
-				// Update it to the appropriate public state before notifying
-				// the frontend.
-				switch state.Type {
-				case stWorld:
-					if m.active == id {
-						m.instances[id].state.Type = StIngame
-					} else {
-						m.instances[id].state.Type = StIdle
-						if lastType != StIdle {
-							if m.conf.Delay.IdlePause > 0 {
-								time.AfterFunc(time.Millisecond*time.Duration(m.conf.Delay.IdlePause), func() {
-									m.pause <- id
-								})
-							} else {
-								m.sendKeyDown(id, x11.KeyF3)
-								m.sendKeyPress(id, x11.KeyEsc)
-								m.sendKeyUp(id, x11.KeyF3)
-							}
-						}
-					}
-				case StPreview:
-					if lastType != StPreview {
-						m.instances[id].state.LastPreview = time.Now()
-						if m.conf.Delay.WpPause > 0 {
-							time.AfterFunc(time.Millisecond*time.Duration(m.conf.Delay.WpPause), func() {
-								m.pause <- id
-							})
-						} else {
-							m.sendKeyDown(id, x11.KeyF3)
-							m.sendKeyPress(id, x11.KeyEsc)
-							m.sendKeyUp(id, x11.KeyF3)
-						}
-					}
-				}
-				evtch <- Update{m.instances[id].state, id}
-				m.mu.Unlock()
-			default:
-				err := m.instances[id].reader.ProcessEvent(evt.Op)
-				if err != nil {
-					errch <- fmt.Errorf("process event (%d) failed: %w", id, err)
-					return
-				}
-			}
-		case err, ok := <-m.watcher.Errors:
-			if !ok {
-				errch <- fmt.Errorf("watcher died: %w", err)
-			}
-			log.Error("Manager: watcher error: %s", err)
 		}
 	}
 }
 
 // Focus attempts to focus the window of the given instance. Any errors will
 // be logged.
-func (m *Manager) Focus(id int) {
-	if err := m.x.FocusWindow(m.instances[id].info.Wid); err != nil {
-		log.Error("Focus %d failed: %s", id, err)
+func (m *Manager) Focus() {
+	if err := m.x.FocusWindow(m.instance.info.Wid); err != nil {
+		log.Error("Focus failed: %s", err)
 	}
 }
 
 // ToggleResolution switches the given instance between the normal (play)
 // resolution and the given alternate resolution. It returns whether or not
 // the instance is now using the alternate resolution.
-func (m *Manager) ToggleResolution(id int, resId int) bool {
-	if m.instances[id].altRes {
-		m.setResolution(id, m.conf.NormalRes)
+func (m *Manager) ToggleResolution(resId int) bool {
+	if m.instance.altRes {
+		m.setResolution(m.conf.NormalRes)
 	} else {
-		m.setResolution(id, &m.conf.AltRes[resId])
+		m.setResolution(&m.conf.AltRes[resId])
 	}
-	m.instances[id].altRes = !m.instances[id].altRes
-	m.Focus(id)
-	return m.instances[id].altRes
-}
-
-// Play attempts to play the given instance.
-//
-// If there is a currently active instance, the given instance will supersede it.
-// Any additional actions which should happen before playing (e.g. stretching,
-// unpausing, F1) will be handled by this function. Any errors will be logged.
-func (m *Manager) Play(id int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.Focus(id)
-	m.active = id
-	m.instances[id].state.Type = StIngame
-
-	if m.conf.UnpauseFocus {
-		m.sendKeyPress(id, x11.KeyEsc)
-	}
-	if m.conf.Wall.Enabled {
-		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
-		m.setResolution(id, m.conf.NormalRes)
-		if m.conf.UnpauseFocus && m.conf.Wall.UseF1 {
-			m.sendKeyPress(id, x11.KeyF1)
-		}
-	}
-
-	if m.conf.UnpauseFocus {
-		// Pause and unpause again to let the cursor position update for the next
-		// time a menu is opened.
-		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Unpause))
-		m.sendKeyPress(id, x11.KeyEsc)
-		m.sendKeyPress(id, x11.KeyEsc)
-	}
+	m.instance.altRes = !m.instance.altRes
+	m.Focus()
+	return m.instance.altRes
 }
 
 // Reset attempts to reset the given instance. The return value will indicate
 // whether or not the instance was in a legal state for resetting. If an actual
 // error occurs, it will be logged.
-func (m *Manager) Reset(id int) bool {
+func (m *Manager) Reset() bool {
 	// Check if the reset can occur.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	state := m.instances[id].state
-	if state.Type == StDirt {
-		return false
-	}
-	if m.conf.Wall.Enabled {
-		if time.Since(state.LastPreview) < time.Duration(m.conf.Wall.GracePeriod) {
-			return false
-		}
-	}
 
-	// Reset.
-	if m.active == id {
-		m.active = -1
-
-		// Ghost pie fix.
-		m.sendKeyUp(id, x11.KeyShift)
-		m.sendKeyPress(id, x11.KeyF3)
-		time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.GhostPie))
-
-		// Unstretch.
-		if m.conf.Wall.Enabled {
-			m.setResolution(id, m.conf.Wall.StretchRes)
-			time.Sleep(time.Millisecond * time.Duration(m.conf.Delay.Stretch))
-		} else if m.instances[id].altRes {
-			m.setResolution(id, m.conf.NormalRes)
-		}
-		m.instances[id].altRes = false
+	// Ghost pie fix.
+	m.sendKeyUp(x11.KeyShift)
+	m.sendKeyPress(x11.KeyF3)
+	if m.instance.altRes {
+		m.setResolution(m.conf.NormalRes)
+		m.instance.altRes = false
 	}
-	var key xproto.Keycode
-	if state.Type == StPreview && state.Progress < 80 {
-		key = m.instances[id].info.PreviewKey
-	} else {
-		key = m.instances[id].info.ResetKey
-	}
-	m.sendKeyPress(id, key)
+	m.sendKeyPress(m.instance.info.ResetKey)
 	return true
 }
 
-// sendKeyDown sends a key down event to the given instance.
-func (m *Manager) sendKeyDown(id int, key xproto.Keycode) {
-	m.x.SendKeyDown(key, m.instances[id].info.Wid)
-}
-
 // sendKeyPress sends a key down and key up event to the given instance.
-func (m *Manager) sendKeyPress(id int, key xproto.Keycode) {
-	m.x.SendKeyPress(key, m.instances[id].info.Wid)
+func (m *Manager) sendKeyPress(key xproto.Keycode) {
+	m.x.SendKeyPress(key, m.instance.info.Wid)
 }
 
 // sendKeyUp sends a key up event to the given instance.
-func (m *Manager) sendKeyUp(id int, key xproto.Keycode) {
-	m.x.SendKeyUp(key, m.instances[id].info.Wid)
+func (m *Manager) sendKeyUp(key xproto.Keycode) {
+	m.x.SendKeyUp(key, m.instance.info.Wid)
 }
 
 // setResolution sets the window geometry of an instance.
-func (m *Manager) setResolution(id int, rect *cfg.Rectangle) {
+func (m *Manager) setResolution(rect *cfg.Rectangle) {
 	if rect == nil {
 		return
 	}
 	m.x.MoveWindow(
-		m.instances[id].info.Wid,
+		m.instance.info.Wid,
 		rect.X, rect.Y, rect.W, rect.H,
 	)
 }

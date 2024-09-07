@@ -24,6 +24,12 @@ jobs:
       - name: Build and package resetti for redhat distros
         run: make rpm
 
+      - name: Get dependencies for glfw build
+        run: sudo apt-get install libwayland-dev libxkbcommon-dev xorg-dev
+
+      - name: Build and package glfw for mcsr.
+        run: make glfw
+
       - name: Get rpm file name
         id: rpm-filename
         run: echo "::set-output name=filename::$(ls out | grep .rpm)"
@@ -39,4 +45,5 @@ jobs:
             -F "payload_json={\"username\": \"updates\", \"content\": \"($SHA) $COMMIT_NAME\"}" \
             -F "file1=@out/resetti.deb"                                                        \
             -F "file2=@out/${{ steps.rpm-filename.outputs.filename }}"                       \
+            -F "file3=@out/glfw/libglfw.so.3.3" \
             "$WEBHOOK"

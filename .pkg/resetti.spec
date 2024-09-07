@@ -21,20 +21,14 @@ Please report any bugs which you encounter. resetti is still beta software and i
 %install
 mkdir -p %{buildroot}/%{_bindir}
 install -m 0755 out/%{name} %{buildroot}/%{_bindir}/%{name}
-install -m 0755 out/bench %{buildroot}/%{_bindir}/%{name}-bench
 mkdir -p %{buildroot}/%{_datadir}/%{name}
-cp ./internal/res/cgroup_setup.sh %{buildroot}/%{_datadir}/%{name}
 cp ./internal/res/default.toml %{buildroot}/%{_datadir}/%{name}
-cp ./internal/res/scene-setup.lua %{buildroot}/%{_datadir}/%{name}
 
 %files
 %{_bindir}/%{name}
-%{_bindir}/%{name}-bench
 %license LICENSE
 %dir %{_datadir}/%{name}
-%{_datadir}/%{name}/cgroup_setup.sh
 %{_datadir}/%{name}/default.toml
-%{_datadir}/%{name}/scene-setup.lua
 
 %changelog
 * Sun Jul 16 2023 Dworv <dwarvyt@gmail.com>

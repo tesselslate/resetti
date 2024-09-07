@@ -27,6 +27,12 @@ jobs:
       - name: Build an package resetti from redhat distros
         run: make rpm
 
+      - name: Get dependencies for glfw build
+        run: sudo apt-get install libwayland-dev libxkbcommon-dev xorg-dev
+
+      - name: Build and package glfw for mcsr.
+        run: make glfw
+
       - name: Get release info
         id: tag
         run: echo "::set-output name=tag::$(git describe --tags --abbrev=0)"
@@ -38,7 +44,7 @@ jobs:
       - name: Publish release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "out/resetti.deb,out/${{ steps.rpm-filename.outputs.filename }},out/resetti,out/bench"
+          artifacts: "out/resetti.deb,out/${{ steps.rpm-filename.outputs.filename }},out/glfw/libglfw.so.3.3,out/resetti,out/bench"
           draft: true
           name: ${{ steps.tag.outputs.tag }}
           tag: ${{ steps.tag.outputs.tag }}

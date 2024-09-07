@@ -46,9 +46,6 @@ mods you would like. Atum and Fast Reset are mandatory. The following are
 - antiresourcereload
 - StandardSettings
 
-> ServerSideRNG can be installed to make verifying your runs easier. However,
-> it still has some issues (as of April 2023) that may impact your experience.
-
 > Force Port can be installed if you plan on doing co-op runs.
 
 #### Configuration
@@ -113,50 +110,6 @@ mods you would like. Atum and Fast Reset are mandatory. The following are
 ```
 </details>
 
-#### Instance Numbers
-
-Once you've created one instance, duplicate it as needed to reach the desired
-number of instances. Once all of your instances have been created, they will
-each need their own `instance_num` file to let resetti know their ID. Here is
-an example of how that looks:
-
-```
-instances
-├─ 16_MULTI1
-│  └─ .minecraft
-│     └─ instance_num
-│        └─ contents: "0"
-├─ 16_MULTI2
-│  └─ .minecraft
-│     └─ instance_num
-│        └─ contents: "1"
-└─ 16_MULTI3
-   └─ .minecraft
-      └─ instance_num
-         └─ contents: "2"
-```
-
-> The instance names are not important, although a consistent format like this
-> makes it easier to run shell commands to operate on all of your instances at
-> once.
-
-You can use a shell one-liner to create the `instance_num` files, if you'd like.
-Here's an example in [fish](https://fishshell.com); adjust it for your shell.
-
-```sh
-for i in (seq 1 3); echo (math $i - 1) | tee 16_MULTI$i/.minecraft/instance_num; end
-```
-
-When running resetti, it will only detect instances with an `instance_num`
-file. resetti will refuse to start if it cannot detect a set of instances whose
-IDs start at 0 and increase sequentially (0, 1, 2, .. n).
-
-## Setting up OBS
-
-If using OBS, you will need to perform some additional setup. Refer to the
-[OBS document](https://github.com/tesselslate/resetti/blob/main/doc/obs.md) for
-more information.
-
 ## Optimization and Fixes
 
 On most distributions, the out-of-the-box experience playing Minecraft is quite
@@ -186,11 +139,6 @@ helpful for more detailed information on certain settings.
 Congratulations! Once you've set everything up, you can get started by simply
 running `resetti PROFILE_NAME`. Refer to the [usage document](https://github.com/tesselslate/resetti/blob/main/doc/usage.md)
 for more information on how to use resetti once you've started it.
-
-- If you've configured affinity, it may prompt you for root privileges to
-  perform the necessary setup.
-- If you're using OBS, you'll need to switch to the correct scene collection
-  and may need to open up a projector for your wall scene.
 
 If you encounter any issues or think this documentation could be improved, feel
 free to join the [Discord](https://discord.gg/fwZA2VJh7k) or open an issue.

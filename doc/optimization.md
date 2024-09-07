@@ -6,52 +6,6 @@ schedulers or CPU power governors.
 
 Click the icon in the upper left to view the table of contents.
 
-## Benchmarking
-
-resetti has a simple benchmark utility to test the reset speed of your instances.
-It can be downloaded from the [Releases](https://github.com/tesselslate/resetti/releases)
-page (or it may come with a package.)
-
-> When starting up your instances, benchmark results can be wildly variable and
-> are likely not representative of actual performance. Perform several preliminary
-> runs to allow time for the JVM to warmup and code to get JIT compiled.
-
-<details>
-
-<summary>Benchmark arguments</summary>
-
-```
-  -affinity string
-    	The affinity type to use (sequence, ccx, none). (default "none")
-  -ccx int
-    	The number of CCXs to split across for CCX affinity. (default 2)
-  -fancy
-    	Show a fancy progress display or plain text output.
-  -instances int
-    	The number of instances to use. Set to 0 to use all instances.
-  -pause-after
-    	Whether or not to pause all instances before exiting. (default true)
-  -profile
-    	Whether or not to collect profiling information.
-  -reset-count int
-    	The number of resets to perform. (default 2000)
-  -reset-percent int
-    	What percent to reset instances at. 0 for preview, 100 for full load.
-```
-
-> When not using the `-fancy` argument, benchmark results are provided in the
-> format `RESET_NUM     INST_ID     MS_SINCE_START`. Each value is separated
-> by one tab.
-
-</details>
-
-## CPU affinity
-
-resetti has a number of configuration options for CPU affinity, which can make
-your resets faster and your ingame experience smoother. See the
-[configuration document](https://github.com/tesselslate/resetti/blob/main/doc/configuration.md)
-for more information.
-
 ## Garbage collection tuning
 
 The default garbage collector (G1) has been benchmarked to be the fastest for

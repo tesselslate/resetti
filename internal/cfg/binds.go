@@ -13,30 +13,16 @@ import (
 
 // Keybind actions
 const (
-	ActionIngameFocus int = iota
-	ActionIngameReset
+	ActionIngameReset int = iota
+	ActionIngameFocus
 	ActionIngameRes
-	ActionWallFocus
-	ActionWallResetAll
-	ActionWallLock
-	ActionWallPlay
-	ActionWallReset
-	ActionWallResetOthers
-	ActionWallPlayFirstLocked
 )
 
 // Mapping of action names -> action types
 var actionNames = map[string]int{
-	"ingame_focus":           ActionIngameFocus,
-	"ingame_reset":           ActionIngameReset,
-	"ingame_toggle_res":      ActionIngameRes,
-	"wall_focus":             ActionWallFocus,
-	"wall_reset_all":         ActionWallResetAll,
-	"wall_lock":              ActionWallLock,
-	"wall_play":              ActionWallPlay,
-	"wall_reset":             ActionWallReset,
-	"wall_reset_others":      ActionWallResetOthers,
-	"wall_play_first_locked": ActionWallPlayFirstLocked,
+	"ingame_reset":      ActionIngameReset,
+	"ingame_focus":      ActionIngameFocus,
+	"ingame_toggle_res": ActionIngameRes,
 }
 
 // Keybind parsing regexes
@@ -93,17 +79,11 @@ func (a *ActionList) UnmarshalTOML(value any) error {
 		}
 		actions = append(actions, str)
 	}
-	uniqueWall := make(map[Action]bool)
 	uniqueGame := make(map[Action]bool)
 	for _, actionStr := range actions {
 		if typ, ok := actionNames[actionStr]; ok {
-			if typ < ActionWallFocus {
-				a.IngameActions = append(a.IngameActions, Action{typ, nil})
-				uniqueGame[Action{typ, nil}] = true
-			} else {
-				a.WallActions = append(a.WallActions, Action{typ, nil})
-				uniqueWall[Action{typ, nil}] = true
-			}
+			a.IngameActions = append(a.IngameActions, Action{typ, nil})
+			uniqueGame[Action{typ, nil}] = true
 		} else {
 			loc := numRegexp.FindStringIndex(actionStr)
 			if loc == nil {
@@ -117,10 +97,7 @@ func (a *ActionList) UnmarshalTOML(value any) error {
 			num -= 1
 			typ := actionStr[:loc[0]]
 			if typ, ok := actionNames[typ]; ok {
-				if typ >= ActionWallLock && typ <= ActionWallResetOthers {
-					a.WallActions = append(a.WallActions, Action{typ, &num})
-					uniqueWall[Action{typ, &num}] = true
-				} else if typ == ActionIngameRes {
+				if typ == ActionIngameRes {
 					a.IngameActions = append(a.IngameActions, Action{typ, &num})
 					uniqueGame[Action{typ, &num}] = true
 				} else {
@@ -131,7 +108,7 @@ func (a *ActionList) UnmarshalTOML(value any) error {
 			}
 		}
 	}
-	if len(uniqueWall)+len(uniqueGame) != len(actions) {
+	if len(uniqueGame) != len(actions) {
 		return fmt.Errorf("duplicate action in bind %v", actions)
 	}
 	return nil

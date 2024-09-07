@@ -101,7 +101,6 @@ func printHelp() {
     resetti - Minecraft resetting macro
     USAGE:
         resetti [PROFILE]       Run resetti with the given profile.
-          --force-cgroups       Force the cgroup setup script to run.
           --force-log           Force the latest.log reader to be used.
           --force-wpstate       Force the wpstateout.txt reader to be used.
           -d, --debug           Run resetti in debug mode.

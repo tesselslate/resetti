@@ -131,12 +131,6 @@ type Keymap struct {
 	data [32]byte
 }
 
-// Point represents a point on the X screen.
-type Point struct {
-	X int16
-	Y int16
-}
-
 // Pointer contains information about the state of the mouse pointer.
 type Pointer struct {
 	RootX, RootY, EventX, EventY int
@@ -144,12 +138,6 @@ type Pointer struct {
 
 	// Modmask (contains keyboard modifiers)
 	buttons uint16
-}
-
-// ResizeEvent contains information about a change to a window's geometry.
-type ResizeEvent struct {
-	Window     xproto.Window
-	X, Y, W, H int
 }
 
 // atomCache maintains a mapping of strings to X11 atoms to avoid re-requesting
@@ -453,7 +441,7 @@ func (c *Client) WarpPointer(x, y int, dest xproto.Window) {
 }
 
 // getActiveWindow returns the currently focused window.
-func (c *Client) getActiveWindow() (xproto.Window, error) {
+func (c *Client) getActiveWindow() (uint32, error) {
 	win, err := c.getPropertyInt(c.root, netActiveWindow, xproto.AtomWindow)
 	if err != nil {
 		// The _NET_ACTIVE_WINDOW property might not exist depending on the
@@ -466,7 +454,7 @@ func (c *Client) getActiveWindow() (xproto.Window, error) {
 	c.mu.Lock()
 	c.active = xproto.Window(win)
 	c.mu.Unlock()
-	return xproto.Window(win), nil
+	return win, nil
 }
 
 // getProperty retrieves a raw window property.
@@ -630,14 +618,6 @@ func (c *Client) poll(ctx context.Context, ch chan<- Event, errch chan<- error) 
 			continue
 		}
 		switch evt := evt.(type) {
-		case xproto.ConfigureNotifyEvent:
-			ch <- ResizeEvent{
-				evt.Window,
-				int(evt.X),
-				int(evt.Y),
-				int(evt.Width),
-				int(evt.Height),
-			}
 		case xproto.PropertyNotifyEvent:
 			if activeWindow != evt.Atom {
 				continue
