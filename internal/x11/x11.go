@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jezek/xgb"
+	"github.com/jezek/xgb/res"
 	"github.com/jezek/xgb/xproto"
 )
 
@@ -167,6 +168,11 @@ func NewClient() (Client, error) {
 	if err != nil {
 		return Client{}, err
 	}
+
+	if err := res.Init(conn); err != nil {
+		return Client{}, err
+	}
+
 	root := xproto.Setup(conn).DefaultScreen(conn).Root
 	err = xproto.ChangeWindowAttributesChecked(
 		conn,
@@ -177,10 +183,12 @@ func NewClient() (Client, error) {
 	if err != nil {
 		return Client{}, err
 	}
+
 	offset, err := approximateOffset(conn)
 	if err != nil {
 		return Client{}, err
 	}
+
 	return Client{
 		atomCache{
 			conn: conn,
@@ -324,7 +332,20 @@ func (c *Client) GetWindowClass(win xproto.Window) (string, error) {
 
 // GetWindowPid returns the PID of the process that owns the given window.
 func (c *Client) GetWindowPid(win xproto.Window) (uint32, error) {
-	return c.getPropertyInt(win, netWmPid, xproto.AtomCardinal)
+	reply, err := res.QueryClientIds(c.conn, 1, []res.ClientIdSpec{
+		{Client: uint32(win), Mask: res.ClientIdMaskLocalClientPID},
+	}).Reply()
+	if err != nil {
+		return 0, err
+	}
+
+	for _, id := range reply.Ids {
+		for _, value := range id.Value {
+			return value, nil
+		}
+	}
+
+	return 0, errors.New("no PID returned")
 }
 
 // GetWindowSize returns the size of the given window.
