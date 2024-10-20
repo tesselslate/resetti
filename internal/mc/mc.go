@@ -51,6 +51,7 @@ func FindInstance(x *x11.Client) (InstanceInfo, error) {
 		info, err := getInstanceInfo(x, win)
 		if err != nil {
 			log.Warn("unusable instance (window %d): %s", win, err)
+			continue
 		}
 		return info, nil
 	}
