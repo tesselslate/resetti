@@ -57,26 +57,9 @@ is not guaranteed to work.
 
 ## Features
 
-- Single- and multi-instance support
-- Wall-style resetting
-  - Reset all instances
-  - Reset an instance
-  - Play an instance and reset all others
-  - Play an instance
-  - Lock an instance
-  - Instance stretching, hiding, and preview freezing
-  - Mouse support
-  - Moving wall
-    - Define one or more "groups" of instances to interact with
 - Flexible keybind and "hook" system for running commands
-- Lock instances to specific cores (affinity) for performance
 - Supports 1.14+ (Atum required)
 - Run with or without WorldPreview
-- Multi-version support
-  - Reset with multiple different versions at once
-- OBS integration
-  - Automatically switch OBS scenes
-  - Simple setup wizard for generating OBS scene collections
 
 ## Contributing
 
