@@ -1,0 +1,61 @@
+diff --git a/src/x11_init.c b/src/x11_init.c
+index e992f444..8e9eada3 100644
+--- a/src/x11_init.c
++++ b/src/x11_init.c
+@@ -639,6 +639,10 @@ static GLFWbool initExtensions(void)
+             _glfwPlatformGetModuleSymbol(_glfw.x11.xi.handle, "XIQueryVersion");
+         _glfw.x11.xi.SelectEvents = (PFN_XISelectEvents)
+             _glfwPlatformGetModuleSymbol(_glfw.x11.xi.handle, "XISelectEvents");
++        _glfw.x11.xi.GetClientPointer = (PFN_XIGetClientPointer)
++            _glfwPlatformGetModuleSymbol(_glfw.x11.xi.handle, "XIGetClientPointer");
++        _glfw.x11.xi.WarpPointer = (PFN_XIWarpPointer)
++            _glfwPlatformGetModuleSymbol(_glfw.x11.xi.handle, "XIWarpPointer");
+ 
+         if (XQueryExtension(_glfw.x11.display,
+                             "XInputExtension",
+diff --git a/src/x11_platform.h b/src/x11_platform.h
+index 14e363d1..a6fcd64f 100644
+--- a/src/x11_platform.h
++++ b/src/x11_platform.h
+@@ -371,8 +371,12 @@ typedef Bool (* PFN_XF86VidModeGetGammaRampSize)(Display*,int,int*);
+ 
+ typedef Status (* PFN_XIQueryVersion)(Display*,int*,int*);
+ typedef int (* PFN_XISelectEvents)(Display*,Window,XIEventMask*,int);
++typedef Bool (* PFN_XIGetClientPointer)(Display*,Window,int*);
++typedef Bool (* PFN_XIWarpPointer)(Display*,int,Window,Window,double,double,int,int,double,double);
+ #define XIQueryVersion _glfw.x11.xi.QueryVersion
+ #define XISelectEvents _glfw.x11.xi.SelectEvents
++#define XIGetClientPointer _glfw.x11.xi.GetClientPointer
++#define XIWarpPointer _glfw.x11.xi.WarpPointer
+ 
+ typedef Bool (* PFN_XRenderQueryExtension)(Display*,int*,int*);
+ typedef Status (* PFN_XRenderQueryVersion)(Display*dpy,int*,int*);
+@@ -848,6 +852,8 @@ typedef struct _GLFWlibraryX11
+         int         minor;
+         PFN_XIQueryVersion QueryVersion;
+         PFN_XISelectEvents SelectEvents;
++        PFN_XIGetClientPointer GetClientPointer;
++        PFN_XIWarpPointer WarpPointer;
+     } xi;
+ 
+     struct {
+diff --git a/src/x11_window.c b/src/x11_window.c
+index e0295465..b80939cf 100644
+--- a/src/x11_window.c
++++ b/src/x11_window.c
+@@ -2854,8 +2854,13 @@ void _glfwSetCursorPosX11(_GLFWwindow* window, double x, double y)
+     window->x11.warpCursorPosX = (int) x;
+     window->x11.warpCursorPosY = (int) y;
+ 
+-    XWarpPointer(_glfw.x11.display, None, window->x11.handle,
+-                 0,0,0,0, (int) x, (int) y);
++    int device;
++    if (XIGetClientPointer(_glfw.x11.display, window->x11.handle, &device)) {
++        XIWarpPointer(_glfw.x11.display, device, None, window->x11.handle,
++                0, 0, 0, 0, x, y);
++    } else {
++        fprintf(stderr, "XIGetClientPointer fail\n");
++    }
+     XFlush(_glfw.x11.display);
+ }
+ 
