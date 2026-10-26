@@ -313,13 +313,13 @@ func (c *Client) GetWindowChildren(win xproto.Window) []xproto.Window {
 	return queue
 }
 
-// GetWindowClass returns the class of the given window.
-func (c *Client) GetWindowClass(win xproto.Window) (string, error) {
+// GetWindowClasses returns the classes of the given window.
+func (c *Client) GetWindowClasses(win xproto.Window) ([]string, error) {
 	class, err := c.getPropertyString(win, wmClass)
 	if err != nil {
-		return "", err
+		return []string{}, err
 	}
-	return strings.Split(class, "\x00")[0], nil
+	return strings.Split(class, "\x00"), nil
 }
 
 // GetWindowPid returns the PID of the process that owns the given window.

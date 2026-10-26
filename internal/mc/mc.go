@@ -53,6 +53,7 @@ func FindInstance(x *x11.Client) (InstanceInfo, error) {
 			}
 			return info, nil
 		}
+
 	}
 	return InstanceInfo{}, fmt.Errorf("no instance found")
 }
@@ -78,11 +79,7 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 	if err != nil {
 		return InstanceInfo{}, false, err
 	}
-	versionString := strings.Split(
-		strings.Split(title, " ")[1],
-		".",
-	)[1]
-	version, err := strconv.Atoi(versionString)
+	version, err := getVersion(title)
 	if err != nil {
 		return InstanceInfo{}, false, err
 	}
@@ -136,6 +133,19 @@ func getInstanceInfo(x *x11.Client, win xproto.Window) (InstanceInfo, bool, erro
 	}, true, nil
 }
 
+// getVersion extracts the game version from the provided window title.
+func getVersion(title string) (int, error) {
+	versionString := strings.Split(
+		strings.Split(title, " ")[1],
+		".",
+	)
+	if versionString[0] == "1" {
+		return strconv.Atoi(versionString[1])
+	} else {
+		return strconv.Atoi(versionString[0])
+	}
+}
+
 // hasModernWp determines whether or not the instance has a WorldPreview build
 // with wpstateout.txt.
 func hasModernWp(dir string) (bool, error) {
@@ -182,12 +192,14 @@ func isMinecraftWindow(x *x11.Client, win xproto.Window) bool {
 	// the executable is java, and that the process working directory is a
 	// valid Minecraft directory), but any false positives are weeded out when
 	// getting instance info.
-	class, err := x.GetWindowClass(win)
+	classes, err := x.GetWindowClasses(win)
 	if err != nil {
 		return false
 	}
-	if !strings.Contains(class, "Minecraft") {
-		return false
+	for _, class := range classes {
+		if strings.Contains(strings.ToLower(class), "minecraft") {
+			return true
+		}
 	}
-	return true
+	return false
 }
