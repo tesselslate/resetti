@@ -56,7 +56,13 @@ focus_gained = ""
 # - ingame_focus            Focus active instance.
 # - ingame_reset            Reset active instance.
 # - ingame_toggle_res(n)    Toggle resolution N for the active instance.
-#                           The list of alternate resolutions starts with N=0.
+#                           The list of alternate resolutions starts with N=1.
+#     Sample config illustrating 1-based index:
+#       Tall for Stronghold (S for Stronghold)
+#       "Alt-s"             = ["ingame_toggle_res(1)"]
+#       Wide for nether (W for wide)
+#       "Alt-w"             = ["ingame_toggle_res(2)"]
+
 [keybinds]
 "Ctrl-Shift-D"      = ["ingame_reset"]
 "Ctrl-Shift-F"      = ["ingame_focus"]
